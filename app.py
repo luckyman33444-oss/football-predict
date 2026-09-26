@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 st.set_page_config(page_title="每日足球比分预测", page_icon="⚽", layout="wide")
 
 BASE = "https://api.football-data.org/v4"
-# 免费版可用的联赛
 COMPS = {"英超":"PL","西甲":"PD","德甲":"BL1","意甲":"SA","法甲":"FL1"}
 
 try:
@@ -15,19 +14,16 @@ except Exception:
 
 # =========================================================
 # ★★★ 這裡是你自己的東西，隨便改 ★★★
-# 你覺得某隊最近狀態特別好/差，就在這裡給它加乘
-# 1.15 = 進攻 +15%，0.9 = 進攻 -10%
 ATTACK_BOOST = {
     # "Arsenal": 1.15,
     # "Chelsea": 0.85,
 }
-# 你覺得今天整體會特別多/少球，在這裡調（預設 1.0）
 GOAL_TWEAK = 1.0
 # =========================================================
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch(code):
-r = requests.get(f"{BASE}/competitions/{code}/matches?season=2026",
+    r = requests.get(f"{BASE}/competitions/{code}/matches?season=2026",
                      headers={"X-Auth-Token": TOKEN}, timeout=25)
     r.raise_for_status()
     return r.json()
@@ -80,7 +76,6 @@ def predict(M, hid, aid):
     aw = sum(p for (h,a),p in m.items() if h<a)
     ov = sum(p for (h,a),p in m.items() if h+a>=3)
     bt = sum(p for (h,a),p in m.items() if h>=1 and a>=1)
-    # 只取前 2 个最可能比分
     top = sorted(m.items(), key=lambda x:-x[1])[:2]
     return lh, la, hw, d, aw, ov, bt, top
 
@@ -90,7 +85,6 @@ if not TOKEN:
     st.error("未设定 API Token，请检查 Secrets 设置。")
     st.stop()
 
-# 选择联赛
 comp_label = st.selectbox("选择联赛", list(COMPS.keys()))
 
 try:
@@ -109,7 +103,6 @@ st.caption(f"模型基于本赛季 {M['n']} 场完场赛事｜主场场均 {M['L
 
 def dt(s): return datetime.fromisoformat(s.replace("Z","+00:00"))
 
-# 只筛选今天的比赛（UTC 时间）
 now = datetime.now(timezone.utc)
 start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
 end_of_day = start_of_day + timedelta(days=1)
@@ -121,7 +114,6 @@ if not up:
     st.info("今天没有该联赛的赛程。")
     st.stop()
 
-# 表格行
 rows = []
 details = []
 for m in sorted(up, key=lambda x:x["utcDate"]):
@@ -129,10 +121,9 @@ for m in sorted(up, key=lambda x:x["utcDate"]):
     hn = M["names"].get(hid, m["homeTeam"]["name"])
     an = M["names"].get(aid, m["awayTeam"]["name"])
     lh, la, hw, d, aw, ov, bt, top = predict(M, hid, aid)
-
-    # 取前两个比分，用斜杠分隔
+    
     score_str = " / ".join([f"{h}-{a}" for (h,a),p in top])
-
+    
     rows.append({
         "时间(UTC)": dt(m["utcDate"]).strftime("%H:%M"),
         "主队": hn,
