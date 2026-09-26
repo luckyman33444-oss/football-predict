@@ -283,7 +283,6 @@ def fmt_odds(o):
     try: return f"{float(o):.2f}"
     except: return "—"
 
-# ============ 盘口变动分析 ============
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_event_odds_full(event_id):
     if not event_id: return None
@@ -324,16 +323,14 @@ def analyze_line_movement(odds_data):
     away_sig = signals.get("1x2_AWAY", {}).get("signal", "中性")
     over_sig = signals.get("over_under_25_over", {}).get("signal", "中性")
     conf_scores = [abs(v["change_pct"]) for v in signals.values() if v["change_pct"] is not None]
-    confidence = min(100, sum(conf_scores) * 5) if conf_scores else 0
+    # ★ 修复：用最大变动幅度 × 20，5% 变动 = 100 信心
+    confidence = min(100, max(conf_scores) * 20) if conf_scores else 0
     return {"home_signal": home_sig, "draw_signal": draw_sig,
             "away_signal": away_sig, "over_signal": over_sig,
             "confidence": confidence, "signals": signals}
 
-# ============ 伤停详细信息 ============
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_injury_info(event_id):
-    """返回 {"home": [{"name":..., "position":..., "status":...}], "away": [...]}
-    同时返回 home_weight, away_weight（用于可选降权）"""
     try:
         r = requests.get(f"{BSD_BASE}/events/{event_id}/lineups/", headers=BSD_HEADERS, timeout=15)
         if r.status_code != 200: return None
@@ -359,7 +356,6 @@ def get_injury_info(event_id):
     home_list = parse_side(data.get("home", {}))
     away_list = parse_side(data.get("away", {}))
 
-    # 按位置统计
     def count_by_pos(lst):
         cnt = {"门将": 0, "后卫": 0, "中场": 0, "前锋": 0, "其他": 0}
         for p in lst:
@@ -372,53 +368,31 @@ def get_injury_info(event_id):
         return cnt
 
     return {
-        "home_list": home_list,
-        "away_list": away_list,
-        "home_count": len(home_list),
-        "away_count": len(away_list),
-        "home_by_pos": count_by_pos(home_list),
-        "away_by_pos": count_by_pos(away_list),
+        "home_list": home_list, "away_list": away_list,
+        "home_count": len(home_list), "away_count": len(away_list),
+        "home_by_pos": count_by_pos(home_list), "away_by_pos": count_by_pos(away_list),
     }
 
-def injury_weight_from_info(info):
-    """从伤停信息计算降权系数（可选）"""
-    if not info: return 1.0, 1.0
-    def w(n): return max(0.70, 1.0 - n * 0.05)
-    return w(info["home_count"]), w(info["away_count"])
-
-# ============ 一致性判断（核心）============
 def judge_consistency(model_pick, market_signal):
-    """
-    model_pick: "主胜" / "和局" / "客胜" / "大球(2.5+)" / "小球(2.5-)"
-    market_signal: "看多" / "看淡" / "中性" / ""
-    返回: {"tag": "一致"/"冲突"/"中性", "emoji": "✅/⚠️/➖", "note": "..."}
-    """
     if not market_signal or market_signal in ("", "—", "中性"):
         return {"tag": "中性", "emoji": "➖", "note": "市场无明显变动"}
-
-    # 判断模型推荐对应市场信号的方向
     if model_pick in ("主胜", "大球(2.5+)"):
         if market_signal == "看多":
             return {"tag": "一致", "emoji": "✅", "note": f"模型推荐{model_pick}，市场也看多"}
         elif market_signal == "看淡":
             return {"tag": "冲突", "emoji": "⚠️", "note": f"模型推荐{model_pick}，但市场看淡"}
-    elif model_pick in ("客胜", "小球(2.5-)"):
-        # 客胜：如果客胜赔率看多 → 一致
-        # 小球：如果大球赔率看淡 → 一致（大球看淡=市场认为小球）
-        if model_pick == "客胜":
-            if market_signal == "看多": return {"tag": "一致", "emoji": "✅", "note": "模型推荐客胜，市场看多客胜"}
-            elif market_signal == "看淡": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐客胜，但市场看淡客胜"}
-        else:  # 小球
-            if market_signal == "看淡": return {"tag": "一致", "emoji": "✅", "note": "模型推荐小球，市场看淡大球"}
-            elif market_signal == "看多": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐小球，但市场看多大球"}
+    elif model_pick == "客胜":
+        if market_signal == "看多": return {"tag": "一致", "emoji": "✅", "note": "模型推荐客胜，市场看多客胜"}
+        elif market_signal == "看淡": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐客胜，但市场看淡客胜"}
+    elif model_pick == "小球(2.5-)":
+        # ★ 修复：小球传入的是大球走势，所以「看淡」= 一致
+        if market_signal == "看淡": return {"tag": "一致", "emoji": "✅", "note": "模型推荐小球，市场看淡大球"}
+        elif market_signal == "看多": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐小球，但市场看多大球"}
     elif model_pick == "和局":
-        if market_signal == "看多":
-            return {"tag": "一致", "emoji": "✅", "note": "模型推荐和局，市场看多和局"}
-        elif market_signal == "看淡":
-            return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐和局，但市场看淡和局"}
+        if market_signal == "看多": return {"tag": "一致", "emoji": "✅", "note": "模型推荐和局，市场看多和局"}
+        elif market_signal == "看淡": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐和局，但市场看淡和局"}
     return {"tag": "中性", "emoji": "➖", "note": ""}
 
-# ============ 数据获取 ============
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_all_predictions():
     all_results = []; offset = 0; limit = 100
@@ -733,8 +707,9 @@ with tab2:
                             opts.append(("大球(2.5+)", row["_prob_over_pct"] / 100, over_real or implied_odds(row["_prob_over_pct"]),
                                          over_real is not None, mv.get("over_signal", "")))
                         if row["_prob_under_pct"]:
+                            # ★ 修复：小球传入大球走势，让 consistency 能判断
                             opts.append(("小球(2.5-)", row["_prob_under_pct"] / 100, under_real or implied_odds(row["_prob_under_pct"]),
-                                         under_real is not None, "—"))
+                                         under_real is not None, mv.get("over_signal", "")))
                         opts.sort(key=lambda x: -x[1])
                         scores = row["_scores_list"] if row["_scores_list"] else []
                         main_s = scores[0] if len(scores) > 0 else ("—", 0)
@@ -748,7 +723,7 @@ with tab2:
                             "real_odds": o, "movement": mv, "injury": inj,
                         })
 
-                    # ============ 半自动情报面板（核心）============
+                    # ============ 半自动情报面板 ============
                     if enable_injury_info or enable_market_info:
                         st.subheader("🔍 半自动情报面板")
                         st.caption("模型推荐 vs 市场信号 vs 伤停情况。⚠️ 表示模型与市场冲突，需谨慎。")
@@ -759,8 +734,6 @@ with tab2:
                             mv = md.get("movement") or {}
                             best_opt = md["opts"][0]
                             model_pick = best_opt[0]
-
-                            # 伤停文本
                             home_inj = inj.get("home_count", 0) if inj else 0
                             away_inj = inj.get("away_count", 0) if inj else 0
                             def pos_summary(by_pos):
@@ -776,14 +749,11 @@ with tab2:
                             if home_inj == 0 and away_inj == 0:
                                 injury_str = "无伤停报告"
 
-                            # 市场信号（跟模型推荐对应的）
                             pick_name, _, _, is_real, movement = best_opt
-                            # 一致性判断
                             consistency = judge_consistency(pick_name, movement)
 
                             info_rows.append({
-                                "场次": i,
-                                "比赛": md["比赛"],
+                                "场次": i, "比赛": md["比赛"],
                                 "模型推荐": f"{pick_name} ({best_opt[1]*100:.1f}%)",
                                 "盘口走势": movement if movement else "—",
                                 "一致性": f"{consistency['emoji']} {consistency['tag']}",
@@ -793,7 +763,6 @@ with tab2:
                         info_df = pd.DataFrame(info_rows)
                         st.dataframe(info_df, use_container_width=True, hide_index=True)
 
-                        # 冲突提醒
                         conflicts = [r for r in info_rows if "冲突" in r["一致性"]]
                         if conflicts:
                             st.warning(f"⚠️ 发现 **{len(conflicts)}** 场模型与市场冲突，建议谨慎：")
@@ -1022,4 +991,20 @@ with tab4:
                             st.rerun()
 
 st.divider()
-st.caption("⚠️ 预测来自 Bzzoiro；赔率、盘口走势、伤停信息来自 Bzzoiro；半自动模式仅展示信息，不自动改预测；比分为 xG 泊松反推并按大小球方向筛选；时间为北京时间。")
+
+# ★ 修复：加调试面板查看伤停原始数据
+with st.expander("🔬 调试：查看一场比赛的伤停原始数据（确认 API 结构）"):
+    st.caption("如果伤停信息显示「无伤停报告」但你怀疑有伤停，用它看 Bzzoiro 到底返回什么")
+    debug_eid = st.text_input("输入 event_id（可从 Tab 2 的比赛信息里找，或直接输入）", value="216460", key="debug_injury_eid")
+    if st.button("查看原始 JSON", key="btn_debug_injury"):
+        try:
+            r = requests.get(f"{BSD_BASE}/events/{debug_eid}/lineups/", headers=BSD_HEADERS, timeout=15)
+            st.write(f"状态码：{r.status_code}")
+            if r.status_code == 200:
+                st.json(r.json())
+            else:
+                st.error(r.text)
+        except Exception as e:
+            st.error(f"错误：{e}")
+
+st.caption("⚠️ 预测来自 Bzzoiro；赔率为真实共识赔率；盘口走势来自 Bzzoiro movement 字段；伤停信息来自 Bzzoiro lineups；比分为 xG 泊松反推并按大小球方向筛选；时间为北京时间。")
