@@ -27,7 +27,7 @@ GOAL_TWEAK = 1.0
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch(code):
-    r = requests.get(f"{BASE}/competitions/{code}/matches",
+r = requests.get(f"{BASE}/competitions/{code}/matches?season=2026",
                      headers={"X-Auth-Token": TOKEN}, timeout=25)
     r.raise_for_status()
     return r.json()
