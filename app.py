@@ -12,7 +12,7 @@ try:
 except Exception:
     TOKEN = os.environ.get("FOOTBALL_DATA_TOKEN","")
 
-# ★★★ 你自己的调整区 ★★★
+# ★★★ 你自己的调整区（以后想改就改这里） ★★★
 ATTACK_BOOST = {
     # "Arsenal": 1.15,
     # "Chelsea": 0.85,
@@ -22,11 +22,30 @@ GOAL_TWEAK = 1.0
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch(code):
-    # 不加任何筛选参数，直接请求该联赛的所有比赛
+    """
+    带自动重试的 API 请求函数，尝试多种方式，直到成功。
+    """
+    # 尝试方案 1：直接请求，不加任何参数
     url = f"{BASE}/competitions/{code}/matches"
     r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
-    r.raise_for_status()
-    return r.json()
+    if r.status_code == 200:
+        return r.json()
+
+    # 尝试方案 2：加上赛季参数（2025 代表 2025/26 赛季）
+    url = f"{BASE}/competitions/{code}/matches?season=2025"
+    r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
+    if r.status_code == 200:
+        return r.json()
+
+    # 尝试方案 3：尝试上一个赛季
+    url = f"{BASE}/competitions/{code}/matches?season=2024"
+    r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
+    if r.status_code == 200:
+        return r.json()
+
+    # 如果全部失败，把 API 返回的真实错误信息显示出来，方便排查
+    st.error(f"API 请求失败 (状态码 {r.status_code})，返回内容：{r.text}")
+    st.stop()
 
 def pois(k, lam):
     return math.exp(-lam) * lam**k / math.factorial(k)
@@ -53,6 +72,7 @@ def build(ms):
         hs[h]+=hg; hp[h]+=1; hc[h]+=ag
         a_s[a]+=ag; ap[a]+=1; ac[a]+=hg
 
+    # 如果没有任何历史数据，用默认平均值兜底
     if n==0:
         st.warning("⚠️ 没有获取到历史比赛数据，将使用联赛平均值进行预测。")
         Lh, La = 1.5, 1.1
@@ -96,11 +116,8 @@ if not TOKEN:
 
 comp_label = st.selectbox("选择联赛", list(COMPS.keys()))
 
-try:
-    data = fetch(COMPS[comp_label])
-except Exception as e:
-    st.error(f"抓取数据失败：{e}")
-    st.stop()
+# 请求数据
+data = fetch(COMPS[comp_label])
 
 ms = data.get("matches", [])
 M = build(ms)
