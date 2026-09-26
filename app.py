@@ -7,10 +7,7 @@ st.set_page_config(page_title="每日足球比分预测", page_icon="⚽", layou
 BASE = "https://api.football-data.org/v4"
 COMPS = {"英超":"PL","西甲":"PD","德甲":"BL1","意甲":"SA","法甲":"FL1"}
 
-try:
-    TOKEN = st.secrets["FOOTBALL_DATA_TOKEN"]
-except Exception:
-    TOKEN = os.environ.get("FOOTBALL_DATA_TOKEN","")
+TOKEN = "76e5bbe2eda54736a17d920186d3b176"
 
 # ★★★ 你自己的调整区（以后想改就改这里） ★★★
 ATTACK_BOOST = {
