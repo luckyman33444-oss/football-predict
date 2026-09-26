@@ -7,9 +7,10 @@ st.set_page_config(page_title="每日足球比分预测", page_icon="⚽", layou
 BASE = "https://api.football-data.org/v4"
 COMPS = {"英超":"PL","西甲":"PD","德甲":"BL1","意甲":"SA","法甲":"FL1"}
 
+# ★★★ 你的 API 钥匙直接写在这里，不用再去 Streamlit 设置里弄了 ★★★
 TOKEN = "76e5bbe2eda54736a17d920186d3b176"
 
-# ★★★ 你自己的调整区（以后想改就改这里） ★★★
+# ★★★ 你自己的球队调整区（以后想改随时改这里） ★★★
 ATTACK_BOOST = {
     # "Arsenal": 1.15,
     # "Chelsea": 0.85,
@@ -19,28 +20,17 @@ GOAL_TWEAK = 1.0
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch(code):
-    """
-    带自动重试的 API 请求函数，尝试多种方式，直到成功。
-    """
-    # 尝试方案 1：直接请求，不加任何参数
+    # 尝试直接请求
     url = f"{BASE}/competitions/{code}/matches"
     r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
     if r.status_code == 200:
         return r.json()
-
-    # 尝试方案 2：加上赛季参数（2025 代表 2025/26 赛季）
+    # 如果直接请求失败，尝试加上赛季参数（2025代表2025/26赛季）
     url = f"{BASE}/competitions/{code}/matches?season=2025"
     r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
     if r.status_code == 200:
         return r.json()
-
-    # 尝试方案 3：尝试上一个赛季
-    url = f"{BASE}/competitions/{code}/matches?season=2024"
-    r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
-    if r.status_code == 200:
-        return r.json()
-
-    # 如果全部失败，把 API 返回的真实错误信息显示出来，方便排查
+    # 如果还是失败，显示错误信息
     st.error(f"API 请求失败 (状态码 {r.status_code})，返回内容：{r.text}")
     st.stop()
 
@@ -107,15 +97,9 @@ def predict(M, hid, aid):
 
 st.title("⚽ 今日足球比分预测")
 
-if not TOKEN:
-    st.error("未设定 API Token，请检查 Secrets 设置。")
-    st.stop()
-
 comp_label = st.selectbox("选择联赛", list(COMPS.keys()))
 
-# 请求数据
 data = fetch(COMPS[comp_label])
-
 ms = data.get("matches", [])
 M = build(ms)
 if M is None:
@@ -138,7 +122,6 @@ if not up:
     st.stop()
 
 rows = []
-details = []
 for m in sorted(up, key=lambda x:x["utcDate"]):
     hid, aid = m["homeTeam"]["id"], m["awayTeam"]["id"]
     hn = M["names"].get(hid, m["homeTeam"]["name"])
@@ -158,7 +141,6 @@ for m in sorted(up, key=lambda x:x["utcDate"]):
         "大2.5": f"{ov*100:.1f}%",
         "两队进球": f"{bt*100:.1f}%"
     })
-    details.append((f"{hn} vs {an}", lh, la, top))
 
 st.subheader("📅 今日预测")
 st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
