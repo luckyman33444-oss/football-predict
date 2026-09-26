@@ -8,7 +8,6 @@ BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
 BSD_HEADERS = {"Authorization": f"Token {BSD_TOKEN}"}
 
-# ============ 联赛中文对照 ============
 LEAGUE_CN = {
     "Premier League": "英超", "LaLiga": "西甲", "Serie A": "意甲",
     "Bundesliga": "德甲", "Ligue 1": "法甲", "Champions League": "欧冠",
@@ -24,10 +23,9 @@ LEAGUE_CN = {
     "Scottish Premiership": "苏超", "NWSL": "美国女足",
     "International": "国际赛", "Club Friendlies": "俱乐部友谊",
     "Coppa Italia": "意杯", "Copa del Rey": "国王杯",
-    "UEFA Nations League": "欧国联", "FIFA ASEAN Cup": "东盟杯",
+    "UEFA Nations League": "欧国联", "CONCACAF Nations League": "中北美国家联赛",
 }
 
-# ============ 球队中文对照 ============
 TEAM_CN = {
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
@@ -42,8 +40,7 @@ TEAM_CN = {
     "Real Betis": "皇家贝蒂斯", "Valencia": "瓦伦西亚",
     "Villarreal": "比利亚雷亚尔", "Athletic Bilbao": "毕尔巴鄂竞技",
     "Real Sociedad": "皇家社会", "Girona": "赫罗纳",
-    "Osasuna": "奥萨苏纳", "Elche": "埃尔切",
-    "Real Oviedo": "皇家奥维耶多",
+    "Osasuna": "奥萨苏纳", "Elche": "埃尔切", "Real Oviedo": "皇家奥维耶多",
     "Bayern Munich": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "莱比锡红牛", "Bayer Leverkusen": "勒沃库森",
     "Eintracht Frankfurt": "法兰克福", "Stuttgart": "斯图加特",
@@ -52,7 +49,6 @@ TEAM_CN = {
     "Napoli": "那不勒斯", "Roma": "罗马", "Lazio": "拉齐奥",
     "Atalanta": "亚特兰大", "Fiorentina": "佛罗伦萨", "Bologna": "博洛尼亚",
     "Torino": "都灵", "Udinese": "乌迪内斯", "Genoa": "热那亚",
-    "Empoli": "恩波利",
     "Paris Saint-Germain": "巴黎圣日耳曼", "Marseille": "马赛",
     "Lyon": "里昂", "Monaco": "摩纳哥", "Lille": "里尔",
     "Rennes": "雷恩", "Nice": "尼斯", "Lens": "朗斯",
@@ -81,13 +77,10 @@ TEAM_CN = {
     "North Macedonia": "北马其顿", "Switzerland": "瑞士",
     "Albania": "阿尔巴尼亚", "Belarus": "白俄罗斯",
     "Slovakia": "斯洛伐克", "Moldova": "摩尔多瓦",
-    "Georgia U21": "格鲁吉亚U21", "Greece U21": "希腊U21",
-    "Croatia U21": "克罗地亚U21", "Hungary U21": "匈牙利U21",
     "Pakistan": "巴基斯坦", "Thailand": "泰国",
     "Vietnam": "越南", "Philippines": "菲律宾",
     "Armenia": "亚美尼亚", "Latvia": "拉脱维亚",
     "Malawi": "马拉维", "South Sudan": "南苏丹",
-    "England U19": "英格兰U19", "Ireland U19": "爱尔兰U19",
 }
 
 def team_cn(name):
@@ -105,25 +98,17 @@ def league_cn(name):
         if k.lower() in name.lower() or name.lower() in k.lower(): return v
     return name
 
-# ============ 获取预测数据（支持自动翻页） ============
+# ============ 获取全部预测数据（自动翻页，不带日期） ============
 @st.cache_data(ttl=600, show_spinner=False)
-def fetch_predictions(date_str):
-    """
-    获取指定日期的全部预测数据。
-    自动翻页，直到拿到所有结果。
-    """
+def fetch_all_predictions():
+    """拉取 Bzzoiro 所有可用的预测，自动翻页"""
     all_results = []
     offset = 0
-    limit = 200  # API 最大限制
+    limit = 100
 
     while True:
         url = f"{BSD_BASE}/predictions/"
-        params = {
-            "date_from": date_str,
-            "date_to": date_str,
-            "limit": limit,
-            "offset": offset,
-        }
+        params = {"limit": limit, "offset": offset}
         try:
             r = requests.get(url, headers=BSD_HEADERS, params=params, timeout=25)
             if r.status_code == 401:
@@ -136,110 +121,133 @@ def fetch_predictions(date_str):
 
         results = data.get("results", [])
         if not results:
-            break  # 没有更多数据了
-
+            break
         all_results.extend(results)
 
-        # 检查是否还有下一页
         if data.get("next"):
             offset += limit
+            if offset > 2000:  # 安全上限
+                break
         else:
             break
 
     return all_results, None
 
+# ============ 解析一条预测 ============
+def parse_prediction(p):
+    ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
+    markets = p.get("markets", {}) if isinstance(p.get("markets"), dict) else {}
+
+    league_name = ev.get("league_name", "")
+    home_name = ev.get("home_team", "?")
+    away_name = ev.get("away_team", "?")
+    status = ev.get("status", "")
+    kickoff = ev.get("event_date", "")
+
+    event_date = ""
+    time_str = ""
+    if kickoff:
+        try:
+            dt = datetime.fromisoformat(kickoff.replace("Z", "+00:00"))
+            event_date = dt.strftime("%Y-%m-%d")
+            time_str = dt.strftime("%H:%M")
+        except:
+            event_date = str(kickoff)[:10]
+            time_str = str(kickoff)[11:16]
+
+    mr = markets.get("match_result", {})
+    score_block = markets.get("score", {})
+    eg = markets.get("expected_goals", {})
+    ou = markets.get("over_under", {})
+    btts_block = markets.get("btts", {})
+
+    def fmt_pct(v):
+        if v is None: return "—"
+        try: return f"{float(v):.1f}%"
+        except: return str(v)
+
+    def fmt_num(v, digits=2):
+        if v is None: return "—"
+        try: return f"{float(v):.{digits}f}"
+        except: return str(v)
+
+    result_map = {"H": "主胜", "D": "和局", "A": "客胜"}
+    predicted = mr.get("predicted", "")
+    status_map = {"finished": "已结束", "notstarted": "未开始",
+                  "upcoming": "未开始", "live": "进行中",
+                  "inprogress": "进行中", "postponed": "延期", "canceled": "取消"}
+
+    return {
+        "event_date": event_date,
+        "联赛": league_cn(league_name),
+        "联赛原名": league_name,
+        "时间": time_str,
+        "状态": status_map.get(status, status),
+        "主队": team_cn(home_name),
+        "客队": team_cn(away_name),
+        "预测比分": score_block.get("most_likely", "—"),
+        "预测结果": result_map.get(predicted, predicted or "—"),
+        "主胜": fmt_pct(mr.get("prob_home")),
+        "和局": fmt_pct(mr.get("prob_draw")),
+        "客胜": fmt_pct(mr.get("prob_away")),
+        "预期主队进球": fmt_num(eg.get("home")),
+        "预期客队进球": fmt_num(eg.get("away")),
+        "大2.5": fmt_pct(ou.get("prob_over_25")),
+        "两队进球": fmt_pct(btts_block.get("prob_yes")),
+    }
+
 # ============ 主界面 ============
 st.title("⚽ 足球预测（Bzzoiro 数据源）")
 
-sel_date = st.date_input("选择日期", value=date.today())
-target = sel_date.strftime("%Y-%m-%d")
-
-with st.spinner("正在获取预测数据（自动翻页）..."):
-    predictions, err = fetch_predictions(target)
+with st.spinner("正在获取全部预测数据（自动翻页）..."):
+    all_preds, err = fetch_all_predictions()
 
 if err:
     st.error(err)
-elif not predictions:
-    st.info(f"{target} 没有预测数据。试试换个日期。")
+    st.stop()
+
+if not all_preds:
+    st.warning("没有获取到任何预测数据。")
+    st.stop()
+
+# 解析所有预测
+parsed = [parse_prediction(p) for p in all_preds]
+df_all = pd.DataFrame(parsed)
+
+# 统计日期分布
+date_counts = df_all["event_date"].value_counts().sort_index()
+st.info(f"📊 Bzzoiro 当前共 **{len(df_all)}** 条预测，覆盖 **{len(date_counts)}** 个日期")
+
+with st.expander("📅 查看各日期预测数量分布"):
+    st.dataframe(
+        date_counts.rename_axis("日期").reset_index(name="预测场数"),
+        use_container_width=True, hide_index=True
+    )
+
+# 日期选择器：默认选有比赛最多的最近日期
+available_dates = sorted(df_all["event_date"].unique())
+if not available_dates:
+    st.warning("没有可用的比赛日期。")
+    st.stop()
+
+today_str = date.today().strftime("%Y-%m-%d")
+default_date = today_str if today_str in available_dates else available_dates[-1]
+
+sel_date = st.selectbox(
+    "选择日期",
+    available_dates,
+    index=available_dates.index(default_date) if default_date in available_dates else 0
+)
+
+# 筛选该日期的比赛
+df = df_all[df_all["event_date"] == sel_date].drop(columns=["event_date", "联赛原名"])
+
+st.success(f"**{sel_date}** 共 {len(df)} 场比赛预测")
+
+if len(df) == 0:
+    st.info("该日期没有预测数据。")
 else:
-    st.success(f"共获取 {len(predictions)} 场比赛预测")
-
-    rows = []
-    for p in predictions:
-        ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
-        markets = p.get("markets", {}) if isinstance(p.get("markets"), dict) else {}
-
-        league_name = ev.get("league_name", "")
-        home_name = ev.get("home_team", "?")
-        away_name = ev.get("away_team", "?")
-        status = ev.get("status", "")
-
-        kickoff = ev.get("event_date", "")
-        time_str = ""
-        if kickoff:
-            try:
-                time_str = datetime.fromisoformat(kickoff.replace("Z", "+00:00")).strftime("%H:%M")
-            except:
-                time_str = str(kickoff)[:5]
-
-        mr = markets.get("match_result", {})
-        prob_home = mr.get("prob_home")
-        prob_draw = mr.get("prob_draw")
-        prob_away = mr.get("prob_away")
-        predicted = mr.get("predicted", "")
-
-        score_block = markets.get("score", {})
-        most_likely = score_block.get("most_likely", "—")
-
-        eg = markets.get("expected_goals", {})
-        xg_home = eg.get("home")
-        xg_away = eg.get("away")
-
-        ou = markets.get("over_under", {})
-        prob_over25 = ou.get("prob_over_25")
-        btts_block = markets.get("btts", {})
-        prob_btts = btts_block.get("prob_yes")
-
-        def fmt_pct(v):
-            if v is None: return "—"
-            try: return f"{float(v):.1f}%"
-            except: return str(v)
-
-        def fmt_num(v, digits=2):
-            if v is None: return "—"
-            try: return f"{float(v):.{digits}f}"
-            except: return str(v)
-
-        result_map = {"H": "主胜", "D": "和局", "A": "客胜"}
-        result_label = result_map.get(predicted, predicted if predicted else "—")
-
-        status_map = {"finished": "已结束", "notstarted": "未开始",
-                      "upcoming": "未开始", "live": "进行中",
-                      "inprogress": "进行中", "postponed": "延期", "canceled": "取消"}
-        status_cn = status_map.get(status, status)
-
-        rows.append({
-            "联赛": league_cn(league_name),
-            "时间": time_str,
-            "状态": status_cn,
-            "主队": team_cn(home_name),
-            "客队": team_cn(away_name),
-            "预测比分": most_likely,
-            "预测结果": result_label,
-            "主胜": fmt_pct(prob_home),
-            "和局": fmt_pct(prob_draw),
-            "客胜": fmt_pct(prob_away),
-            "预期主队进球": fmt_num(xg_home),
-            "预期客队进球": fmt_num(xg_away),
-            "大2.5": fmt_pct(prob_over25),
-            "两队进球": fmt_pct(prob_btts),
-        })
-
-    df = pd.DataFrame(rows)
     st.dataframe(df, use_container_width=True, hide_index=True)
 
-    with st.expander("🔧 调试：查看 API 原始返回（前 3 条）"):
-        st.json(predictions[:3])
-
 st.divider()
-st.caption("⚠️ 预测来自 Bzzoiro Sports Data 的 CatBoost 模型，仅供参考，不构成投注建议。")
+st.caption("⚠️ 预测来自 Bzzoiro Sports Data，仅供参考，不构成投注建议。")
