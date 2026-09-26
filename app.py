@@ -54,7 +54,6 @@ LEAGUE_CN = {
 }
 
 TEAM_CN = {
-    # 英超
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
     "Chelsea": "切尔西", "Crystal Palace": "水晶宫", "Everton": "埃弗顿",
@@ -63,7 +62,6 @@ TEAM_CN = {
     "Newcastle": "纽卡斯尔联", "Nottingham Forest": "诺丁汉森林",
     "Sunderland": "桑德兰", "Tottenham": "托特纳姆热刺",
     "West Ham": "西汉姆联", "Wolves": "狼队",
-    # 西甲
     "Real Madrid": "皇家马德里", "Barcelona": "巴塞罗那",
     "Atletico Madrid": "马德里竞技", "Sevilla": "塞维利亚",
     "Real Betis": "皇家贝蒂斯", "Valencia": "瓦伦西亚",
@@ -74,26 +72,21 @@ TEAM_CN = {
     "CD Tenerife": "特内里费", "Celta Fortuna": "塞尔塔B队",
     "CE Sabadell": "萨瓦德尔", "Real Valladolid": "皇家巴利亚多利德",
     "Córdoba": "科尔多瓦", "SD Eibar": "埃瓦尔", "Real Oviedo": "皇家奥维耶多",
-    # 德甲
     "Bayern Munich": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "莱比锡红牛", "Bayer Leverkusen": "勒沃库森",
     "Eintracht Frankfurt": "法兰克福", "Stuttgart": "斯图加特",
     "Wolfsburg": "沃尔夫斯堡", "Union Berlin": "柏林联合", "Freiburg": "弗赖堡",
-    # 意甲
     "Inter": "国际米兰", "AC Milan": "AC米兰", "Juventus": "尤文图斯",
     "Napoli": "那不勒斯", "Roma": "罗马", "Lazio": "拉齐奥",
     "Atalanta": "亚特兰大", "Fiorentina": "佛罗伦萨", "Bologna": "博洛尼亚",
     "Torino": "都灵", "Udinese": "乌迪内斯", "Genoa": "热那亚",
-    # 法甲
     "Paris Saint-Germain": "巴黎圣日耳曼", "Marseille": "马赛",
     "Lyon": "里昂", "Monaco": "摩纳哥", "Lille": "里尔",
     "Rennes": "雷恩", "Nice": "尼斯", "Lens": "朗斯",
-    # 荷甲葡超苏超
     "Ajax": "阿贾克斯", "PSV": "埃因霍温", "Feyenoord": "费耶诺德",
     "Benfica": "本菲卡", "Porto": "波尔图", "Sporting CP": "葡萄牙体育",
     "Celtic": "凯尔特人", "Rangers": "流浪者",
     "Galatasaray": "加拉塔萨雷", "Fenerbahce": "费内巴切",
-    # 美洲
     "Flamengo": "弗拉门戈", "Palmeiras": "帕尔梅拉斯",
     "Boca Juniors": "博卡青年", "River Plate": "河床",
     "Criciúma": "克里西乌马", "Avaí": "阿瓦伊",
@@ -104,7 +97,6 @@ TEAM_CN = {
     "Goiás": "戈亚斯", "Atlético Goianiense": "戈亚尼亚竞技",
     "Deportivo Pereira": "佩雷拉", "Internacional de Bogotá": "波哥大国际",
     "Cúcuta Deportivo": "库库塔", "Llaneros FC": "亚诺罗斯",
-    # 美职联
     "Inter Miami": "迈阿密国际", "LA Galaxy": "洛杉矶银河",
     "LAFC": "洛杉矶FC", "Philadelphia Union": "费城联合",
     "Orlando City": "奥兰多城", "New York Red Bulls": "纽约红牛",
@@ -120,29 +112,23 @@ TEAM_CN = {
     "Toronto FC": "多伦多FC", "Vancouver Whitecaps": "温哥华白帽",
     "D.C. United": "华盛顿联", "Nashville SC": "纳什维尔SC",
     "San Jose Earthquakes": "圣何塞地震",
-    # 墨超
     "Cruz Azul": "蓝十字", "CD Toluca": "托卢卡",
     "CD Guadalajara": "瓜达拉哈拉", "Querétaro FC": "克雷塔罗",
     "Santos Laguna": "桑托斯拉古纳", "Pachuca": "帕丘卡",
     "Puebla": "普埃布拉", "Tigres UANL": "老虎大学",
-    # 亚洲
     "Shanghai Port": "上海海港", "Shandong Taishan": "山东泰山",
     "Beijing Guoan": "北京国安", "Shanghai Shenhua": "上海申花",
     "Gangwon FC": "江原FC", "Incheon United": "仁川联",
     "Al Hilal": "利雅得新月", "Al Nassr": "利雅得胜利",
-    # 摩洛哥甲
     "Union Touarga Sport": "图阿尔加体育", "Fath Union Sport": "法特联合",
     "Difaâ Hassani El-Jadidi": "迪法哈桑尼", "CODM Meknès": "梅克内斯",
     "Wydad Casablanca": "卡萨布兰卡维达德", "Widad Temara": "维达德特马拉",
-    # 女足
     "Kansas City Current": "堪萨斯城潮流", "Denver Summit FC": "丹佛峰会",
     "Washington Spirit": "华盛顿精神", "Angel City FC": "天使城FC",
     "NJ/NY Gotham FC": "哥谭FC", "Chicago Stars FC": "芝加哥星队",
     "Portland Thorns FC": "波特兰荆棘", "Houston Dash": "休斯顿冲刺",
     "Madrid CFF": "马德里CFF", "Deportivo Alavés": "阿拉维斯",
-    # 英乙
     "Oldham Athletic": "奥尔德姆", "Salford City": "索尔福德城",
-    # 美国 USL
     "Detroit City FC": "底特律城", "Colorado Springs Switchbacks FC": "科罗拉多泉",
     "Indy Eleven": "印地十一", "Miami FC": "迈阿密FC",
     "Charleston Battery": "查尔斯顿电池", "Rhode Island FC": "罗德岛FC",
@@ -156,7 +142,6 @@ TEAM_CN = {
     "Corpus Christi FC": "科珀斯克里斯蒂", "Athletic Club Boise": "博伊西竞技",
     "Monterey Bay": "蒙特雷湾", "Lexington": "莱克星顿",
     "Charlotte Independence": "夏洛特独立", "Fort Wayne": "韦恩堡",
-    # 尼日利亚超
     "Warri Wolves FC": "瓦里狼队", "Shooting Stars": "射击之星",
     "Abia Warriors": "阿比亚勇士", "Bendel Insurance FC": "本代尔保险",
     "Nasarawa United": "纳萨拉瓦联", "Niger Tornadoes": "尼日尔龙卷风",
@@ -166,19 +151,16 @@ TEAM_CN = {
     "Kun Khalifat FC": "昆哈利法特", "Kwara United": "夸拉联",
     "Plateau United": "高原联", "Inter Lagos FC": "拉各斯国际",
     "Sporting Lagos FC": "拉各斯体育", "Barau FC": "巴劳FC",
-    # 葡萄牙杯
     "Estrela Calheta FC": "卡拉埃塔之星", "CD Cinfães": "辛法埃斯",
     "AD Camacha": "卡马查", "Florgrade FC": "弗洛格拉德",
     "Amora FC": "阿莫拉", "JD Lajense": "拉延塞",
     "O Elvas CAD": "埃尔瓦斯", "Sertanense": "塞尔塔嫩塞",
     "SC Mineiro Aljustrelense": "阿朱斯特雷尔", "GD Alcochetense": "阿尔科切滕塞",
-    # 墨西哥低级别
     "Cruz Azul Hidalgo": "蓝十字伊达尔戈", "Leones Negros": "黑狮",
     "Venados FC": "贝纳多斯", "Club Atlético Morelia": "莫雷利亚",
     "Dorados de Sinaloa": "锡那罗亚金鱼", "Durango": "杜兰戈",
     "Tlaxcala FC": "特拉斯卡拉", "Cancún FC": "坎昆FC",
     "AFC Toronto": "多伦多AFC", "Ottawa Rapid FC": "渥太华快速",
-    # 国家队
     "England": "英格兰", "France": "法国", "Germany": "德国",
     "Spain": "西班牙", "Italy": "意大利", "Portugal": "葡萄牙",
     "Netherlands": "荷兰", "Belgium": "比利时", "Croatia": "克罗地亚",
@@ -474,7 +456,48 @@ with tab1:
 
 # ========== Tab 2：3串1核心 ==========
 with tab2:
-    st.caption("从按下按钮那一刻起 **2 小时内** 未开赛的比赛 + **进行中** 的比赛，生成 3串1 推荐")
+    now = datetime.now(CST)
+    end_window = now + timedelta(hours=2)
+
+    # ★ 实时状态栏（不需要点按钮）
+    st.markdown("### ⏰ 实时查询状态")
+    st.caption(f"当前北京时间：**{now.strftime('%Y-%m-%d %H:%M')}** ｜ 查询窗口：**{now.strftime('%H:%M')} ～ {end_window.strftime('%H:%M')}**")
+
+    if df_all.empty:
+        st.warning("没有数据可分析。")
+    else:
+        tmp = df_all[df_all["kickoff_dt"].notna()].copy()
+        # 未开始：kickoff 在 now ~ now+2h
+        mask_notstarted = (tmp["状态"] == "未开始") & \
+                          (tmp["kickoff_dt"] >= now) & \
+                          (tmp["kickoff_dt"] <= end_window)
+        # 进行中：不限时间
+        mask_live = tmp["状态"] == "进行中"
+        window_matches = tmp[mask_notstarted | mask_live].copy()
+
+        n_total = len(window_matches)
+        n_live = len(window_matches[window_matches["状态"] == "进行中"])
+        n_notstarted = n_total - n_live
+
+        # 突出显示统计
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            st.metric("候选比赛", f"{n_total} 场")
+        with col_b:
+            st.metric("2小时内未开始", f"{n_notstarted} 场")
+        with col_c:
+            st.metric("进行中", f"{n_live} 场")
+
+        if n_total == 0:
+            st.info("⏰ 当前 2 小时内没有未开始比赛，也没有进行中的比赛。")
+            st.caption("提示：比赛通常集中在晚上到凌晨（北京时间）。可以等有比赛时段再试。")
+        else:
+            # 显示当前候选列表
+            with st.expander(f"📋 查看当前候选 {n_total} 场", expanded=False):
+                show_cols = ["时间", "联赛", "状态", "主队", "客队", "主力比分", "预测结果"]
+                st.dataframe(window_matches[show_cols], use_container_width=True, hide_index=True)
+
+    st.divider()
 
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -490,194 +513,163 @@ with tab2:
     if st.button("🎯 生成 3串1 推荐", type="primary", key="btn_core"):
         if df_all.empty:
             st.warning("没有数据可分析。")
+        elif n_total == 0:
+            st.warning("当前 2 小时内没有可选比赛，请等有比赛时段。")
+        elif n_total < 3:
+            st.warning(f"当前只有 **{n_total}** 场比赛（2小时内未开始 + 进行中），不足 3 场无法组 3串1。")
         else:
-            now = datetime.now(CST)
-            end_window = now + timedelta(hours=2)
+            upcoming = window_matches.copy()
 
-            upcoming = df_all[df_all["kickoff_dt"].notna()].copy()
+            if st.session_state.core_matches:
+                core_ids = set(st.session_state.core_matches)
+                core_df = upcoming[upcoming["event_id"].isin(core_ids)]
+                other_df = upcoming[~upcoming["event_id"].isin(core_ids)]
+                upcoming = pd.concat([core_df, other_df]).sort_values("kickoff_dt")
 
-            # ★ 筛选：未开始(2小时内) + 进行中
-            mask_notstarted = (upcoming["状态"] == "未开始") & \
-                              (upcoming["kickoff_dt"] >= now) & \
-                              (upcoming["kickoff_dt"] <= end_window)
-            mask_live = upcoming["状态"] == "进行中"
-            upcoming = upcoming[mask_notstarted | mask_live].copy()
+            def calc_conf(row):
+                return max(
+                    row["_prob_home"] / 100 if row["_prob_home"] else 0,
+                    row["_prob_draw"] / 100 if row["_prob_draw"] else 0,
+                    row["_prob_away"] / 100 if row["_prob_away"] else 0,
+                    row["_prob_over"] if row["_prob_over"] else 0,
+                    row["_prob_under"] if row["_prob_under"] else 0,
+                )
+            upcoming = upcoming.copy()
+            upcoming["_conf"] = upcoming.apply(calc_conf, axis=1)
 
-            if upcoming.empty:
-                st.warning(f"⏰ 北京时间 {now.strftime('%H:%M')} 起 2 小时内，没有未开赛或进行中的比赛。")
-                st.caption(f"查询窗口：{now.strftime('%H:%M')} ～ {end_window.strftime('%H:%M')}")
-            else:
-                if st.session_state.core_matches:
-                    core_ids = set(st.session_state.core_matches)
-                    core_df = upcoming[upcoming["event_id"].isin(core_ids)]
-                    other_df = upcoming[~upcoming["event_id"].isin(core_ids)]
-                    upcoming = pd.concat([core_df, other_df]).sort_values("kickoff_dt")
-
-                def calc_conf(row):
-                    return max(
-                        row["_prob_home"] / 100 if row["_prob_home"] else 0,
-                        row["_prob_draw"] / 100 if row["_prob_draw"] else 0,
-                        row["_prob_away"] / 100 if row["_prob_away"] else 0,
-                        row["_prob_over"] if row["_prob_over"] else 0,
-                        row["_prob_under"] if row["_prob_under"] else 0,
-                    )
-                upcoming = upcoming.copy()
+            if use_manual:
+                prog = st.progress(0, text="正在获取阵容数据...")
+                updates = []
+                for i, (_, row) in enumerate(upcoming.iterrows()):
+                    eid = row.get("event_id")
+                    hw_, aw_ = calc_injury_weight(eid) if eid else (1.0, 1.0)
+                    updates.append((row.name, hw_, aw_))
+                    prog.progress((i + 1) / len(upcoming), text=f"处理 {i+1}/{len(upcoming)}")
+                prog.empty()
+                for idx, hw_, aw_ in updates:
+                    row = upcoming.loc[idx]
+                    new_xg_h = (row["_xg_h"] or 1.5) * hw_
+                    new_xg_a = (row["_xg_a"] or 1.2) * aw_
+                    new_pred = predict_full(new_xg_h, new_xg_a)
+                    if new_pred:
+                        top = new_pred["top_scores"]
+                        upcoming.at[idx, "主力比分"] = f"{top[0][0][0]}-{top[0][0][1]}"
+                        if len(top) > 1:
+                            upcoming.at[idx, "备选比分"] = f"{top[1][0][0]}-{top[1][0][1]}"
+                        m = score_matrix(new_xg_h, new_xg_a)
+                        upcoming.at[idx, "_prob_home"] = sum(p for (h, a), p in m.items() if h > a) * 100
+                        upcoming.at[idx, "_prob_draw"] = sum(p for (h, a), p in m.items() if h == a) * 100
+                        upcoming.at[idx, "_prob_away"] = sum(p for (h, a), p in m.items() if h < a) * 100
+                        upcoming.at[idx, "_prob_over"] = new_pred["over25"]
+                        upcoming.at[idx, "_prob_under"] = new_pred["under25"]
                 upcoming["_conf"] = upcoming.apply(calc_conf, axis=1)
 
-                if use_manual:
-                    prog = st.progress(0, text="正在获取阵容数据...")
-                    updates = []
-                    for i, (_, row) in enumerate(upcoming.iterrows()):
-                        eid = row.get("event_id")
-                        hw_, aw_ = calc_injury_weight(eid) if eid else (1.0, 1.0)
-                        updates.append((row.name, hw_, aw_))
-                        prog.progress((i + 1) / len(upcoming), text=f"处理 {i+1}/{len(upcoming)}")
-                    prog.empty()
-                    for idx, hw_, aw_ in updates:
-                        row = upcoming.loc[idx]
-                        new_xg_h = (row["_xg_h"] or 1.5) * hw_
-                        new_xg_a = (row["_xg_a"] or 1.2) * aw_
-                        new_pred = predict_full(new_xg_h, new_xg_a)
-                        if new_pred:
-                            top = new_pred["top_scores"]
-                            upcoming.at[idx, "主力比分"] = f"{top[0][0][0]}-{top[0][0][1]}"
-                            if len(top) > 1:
-                                upcoming.at[idx, "备选比分"] = f"{top[1][0][0]}-{top[1][0][1]}"
-                            m = score_matrix(new_xg_h, new_xg_a)
-                            upcoming.at[idx, "_prob_home"] = sum(p for (h, a), p in m.items() if h > a) * 100
-                            upcoming.at[idx, "_prob_draw"] = sum(p for (h, a), p in m.items() if h == a) * 100
-                            upcoming.at[idx, "_prob_away"] = sum(p for (h, a), p in m.items() if h < a) * 100
-                            upcoming.at[idx, "_prob_over"] = new_pred["over25"]
-                            upcoming.at[idx, "_prob_under"] = new_pred["under25"]
-                    upcoming["_conf"] = upcoming.apply(calc_conf, axis=1)
+            top_matches = upcoming.sort_values("_conf", ascending=False).head(3)
+            n_live_sel = sum(1 for _, r in top_matches.iterrows() if r["状态"] == "进行中")
 
-                top_matches = upcoming.sort_values("_conf", ascending=False).head(3)
+            st.success(
+                f"✅ 从候选 **{len(upcoming)}** 场（含进行中 {n_live_sel} 场）中选出信心最高的 3 场"
+            )
 
-                n_live = sum(1 for _, r in top_matches.iterrows() if r["状态"] == "进行中")
-                st.success(
-                    f"⏰ 查询窗口：**{now.strftime('%H:%M')} ～ {end_window.strftime('%H:%M')}** ｜ "
-                    f"候选 {len(upcoming)} 场（含进行中 {n_live} 场），选出 {len(top_matches)} 场"
-                )
+            matches_data = []
+            for _, row in top_matches.iterrows():
+                opts = []
+                if row["_prob_home"]: opts.append(("主胜", row["_prob_home"] / 100))
+                if row["_prob_draw"]: opts.append(("和局", row["_prob_draw"] / 100))
+                if row["_prob_away"]: opts.append(("客胜", row["_prob_away"] / 100))
+                if row["_prob_over"]: opts.append(("大球(2.5+)", row["_prob_over"]))
+                if row["_prob_under"]: opts.append(("小球(2.5-)", row["_prob_under"]))
+                opts.sort(key=lambda x: -x[1])
+                scores = row["_scores_list"] if row["_scores_list"] else []
+                main_s = scores[0] if len(scores) > 0 else ("—", 0)
+                alt_s = scores[1] if len(scores) > 1 else ("—", 0)
+                matches_data.append({
+                    "比赛": f"{row['主队']} vs {row['客队']}",
+                    "时间": row["时间"], "联赛": row["联赛"],
+                    "状态": row["状态"],
+                    "opts": opts,
+                    "main_score": main_s, "alt_score": alt_s,
+                })
 
-                matches_data = []
-                for _, row in top_matches.iterrows():
-                    opts = []
-                    if row["_prob_home"]: opts.append(("主胜", row["_prob_home"] / 100))
-                    if row["_prob_draw"]: opts.append(("和局", row["_prob_draw"] / 100))
-                    if row["_prob_away"]: opts.append(("客胜", row["_prob_away"] / 100))
-                    if row["_prob_over"]: opts.append(("大球(2.5+)", row["_prob_over"]))
-                    if row["_prob_under"]: opts.append(("小球(2.5-)", row["_prob_under"]))
-                    opts.sort(key=lambda x: -x[1])
-                    scores = row["_scores_list"] if row["_scores_list"] else []
-                    main_s = scores[0] if len(scores) > 0 else ("—", 0)
-                    alt_s = scores[1] if len(scores) > 1 else ("—", 0)
-                    matches_data.append({
-                        "比赛": f"{row['主队']} vs {row['客队']}",
-                        "时间": row["时间"], "联赛": row["联赛"],
-                        "状态": row["状态"],
-                        "opts": opts,
-                        "main_score": main_s, "alt_score": alt_s,
-                    })
+            # ===== 比分串 =====
+            st.subheader("🎲 比分串（3串1）")
 
-                # ===== 比分串 =====
-                st.subheader("🎲 比分串（3串1）")
+            best_idx = None; best_p = 0
+            for i, md in enumerate(matches_data):
+                mp = md["main_score"][1]; ap = md["alt_score"][1]
+                if mp > 0.15 and (ap == 0 or mp > ap * 1.4):
+                    if mp > best_p: best_p = mp; best_idx = i
 
-                # 判断是否有主胆
-                best_idx = None; best_p = 0
-                for i, md in enumerate(matches_data):
-                    mp = md["main_score"][1]; ap = md["alt_score"][1]
-                    if mp > 0.15 and (ap == 0 or mp > ap * 1.4):
-                        if mp > best_p: best_p = mp; best_idx = i
+            rows_for_table = []
+            for i, md in enumerate(matches_data):
+                main_str = f"{md['main_score'][0]} ({md['main_score'][1]*100:.1f}%)"
+                alt_str = f"{md['alt_score'][0]} ({md['alt_score'][1]*100:.1f}%)"
+                role = "**主胆**" if (best_idx == i) else "拖"
+                rows_for_table.append({
+                    "场次": i + 1, "时间": md["时间"], "比赛": md["比赛"],
+                    "状态": md["状态"], "比分1": main_str,
+                    "比分2": alt_str if best_idx != i else "—", "角色": role,
+                })
+            st.dataframe(pd.DataFrame(rows_for_table), use_container_width=True, hide_index=True)
 
-                # 表格展示每场的比分选项
-                rows_for_table = []
-                for i, md in enumerate(matches_data):
-                    main_str = f"{md['main_score'][0]} ({md['main_score'][1]*100:.1f}%)"
-                    alt_str = f"{md['alt_score'][0]} ({md['alt_score'][1]*100:.1f}%)"
-                    role = "**主胆**" if (best_idx == i) else "拖"
-                    rows_for_table.append({
-                        "场次": i + 1,
-                        "时间": md["时间"],
-                        "比赛": md["比赛"],
-                        "状态": md["状态"],
-                        "比分1": main_str,
-                        "比分2": alt_str if best_idx != i else "—",
-                        "角色": role,
-                    })
-                st.dataframe(pd.DataFrame(rows_for_table), use_container_width=True, hide_index=True)
+            if best_idx is not None:
+                st.markdown(f"**具体注单（共 4 注，1×2×2）：**")
+                other_idx = [i for i in range(3) if i != best_idx]
+                main_s_str = matches_data[best_idx]["main_score"][0]
+                o1_main = matches_data[other_idx[0]]["main_score"][0]
+                o1_alt = matches_data[other_idx[0]]["alt_score"][0]
+                o2_main = matches_data[other_idx[1]]["main_score"][0]
+                o2_alt = matches_data[other_idx[1]]["alt_score"][0]
 
-                # 具体注单
-                if best_idx is not None:
-                    st.markdown(f"**具体注单（共 4 注，1×2×2）：**")
-                    other_idx = [i for i in range(3) if i != best_idx]
-                    main_s_str = matches_data[best_idx]["main_score"][0]
-                    o1_main = matches_data[other_idx[0]]["main_score"][0]
-                    o1_alt = matches_data[other_idx[0]]["alt_score"][0]
-                    o2_main = matches_data[other_idx[1]]["main_score"][0]
-                    o2_alt = matches_data[other_idx[1]]["alt_score"][0]
+                bet_rows = []
+                for i1, s1 in enumerate([o1_main, o1_alt], 1):
+                    for i2, s2 in enumerate([o2_main, o2_alt], 1):
+                        bet_rows.append({
+                            "注单": f"注{(i1-1)*2+i2}",
+                            f"第{best_idx+1}场(主胆)": main_s_str,
+                            f"第{other_idx[0]+1}场": s1,
+                            f"第{other_idx[1]+1}场": s2,
+                        })
+                st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
+            else:
+                st.markdown("**具体注单（共 8 注，2×2×2）：**")
+                s1_list = [matches_data[0]["main_score"][0], matches_data[0]["alt_score"][0]]
+                s2_list = [matches_data[1]["main_score"][0], matches_data[1]["alt_score"][0]]
+                s3_list = [matches_data[2]["main_score"][0], matches_data[2]["alt_score"][0]]
+                bet_rows = []
+                n = 1
+                for a in s1_list:
+                    for b in s2_list:
+                        for c in s3_list:
+                            bet_rows.append({"注单": f"注{n}", "第1场": a, "第2场": b, "第3场": c})
+                            n += 1
+                st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
 
-                    bet_rows = []
-                    for i1, s1 in enumerate([o1_main, o1_alt], 1):
-                        for i2, s2 in enumerate([o2_main, o2_alt], 1):
-                            bet_rows.append({
-                                "注单": f"注{(i1-1)*2+i2}",
-                                f"第{best_idx+1}场(主胆)": main_s_str,
-                                f"第{other_idx[0]+1}场": s1,
-                                f"第{other_idx[1]+1}场": s2,
-                            })
-                    st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
-                else:
-                    st.markdown("**具体注单（共 8 注，2×2×2）：**")
-                    s1_list = [matches_data[0]["main_score"][0], matches_data[0]["alt_score"][0]]
-                    s2_list = [matches_data[1]["main_score"][0], matches_data[1]["alt_score"][0]]
-                    s3_list = [matches_data[2]["main_score"][0], matches_data[2]["alt_score"][0]]
+            st.divider()
 
-                    bet_rows = []
-                    n = 1
-                    for a in s1_list:
-                        for b in s2_list:
-                            for c in s3_list:
-                                bet_rows.append({
-                                    "注单": f"注{n}",
-                                    "第1场": a,
-                                    "第2场": b,
-                                    "第3场": c,
-                                })
-                                n += 1
-                    st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
+            st.subheader("🛡️ 稳健串（胜平负/大小球）")
+            combo = [(md, md["opts"][0][0], md["opts"][0][1]) for md in matches_data]
+            prob = 1
+            for _, _, p in combo: prob *= p
+            st.write(f"**命中概率：{prob*100:.1f}%**")
+            stable_rows = []
+            for i, (md, pick, p) in enumerate(combo, 1):
+                stable_rows.append({
+                    "场次": i, "时间": md["时间"], "比赛": md["比赛"],
+                    "状态": md["状态"], "推荐": pick, "概率": f"{p*100:.1f}%",
+                })
+            st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
 
-                st.divider()
+            st.divider()
 
-                # ===== 稳健串 =====
-                st.subheader("🛡️ 稳健串（胜平负/大小球）")
-                combo = [(md, md["opts"][0][0], md["opts"][0][1]) for md in matches_data]
-                prob = 1
-                for _, _, p in combo: prob *= p
-                st.write(f"**命中概率：{prob*100:.1f}%**")
-
-                stable_rows = []
-                for i, (md, pick, p) in enumerate(combo, 1):
-                    stable_rows.append({
-                        "场次": i,
-                        "时间": md["时间"],
-                        "比赛": md["比赛"],
-                        "状态": md["状态"],
-                        "推荐": pick,
-                        "概率": f"{p*100:.1f}%",
-                    })
-                st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
-
-                st.divider()
-
-                # ===== 最重心 =====
-                st.subheader("⭐ 最重心单场")
-                first = matches_data[0]
-                best_opt = first["opts"][0]
-                st.success(
-                    f"**{first['比赛']}** ｜ {first['联赛']} ｜ {first['时间']} ｜ {first['状态']}\n\n"
-                    f"推荐：**{best_opt[0]}**（{best_opt[1]*100:.1f}%）\n\n"
-                    f"比分参考：{first['main_score'][0]} / {first['alt_score'][0]}"
-                )
+            st.subheader("⭐ 最重心单场")
+            first = matches_data[0]
+            best_opt = first["opts"][0]
+            st.success(
+                f"**{first['比赛']}** ｜ {first['联赛']} ｜ {first['时间']} ｜ {first['状态']}\n\n"
+                f"推荐：**{best_opt[0]}**（{best_opt[1]*100:.1f}%）\n\n"
+                f"比分参考：{first['main_score'][0]} / {first['alt_score'][0]}"
+            )
 
 # ========== Tab 3 ==========
 with tab3:
@@ -739,7 +731,7 @@ with tab4:
             for _, row in result.iterrows():
                 c1, c2, c3 = st.columns([5, 2, 1])
                 with c1:
-                    st.write(f"**{row['主队']} vs {row['客队']}** ｜ {row['联赛']} ｜ {row['event_date']} {row['时间']} ｜ 比分 {row['主力比分']}")
+                    st.write(f"**{row['主队']} vs {row['客队']}** ｜ {row['联赛']} ｜ {row['event_date']} {row['时间']}")
                 with c2:
                     st.write(f"主 {row['主胜']} ｜ 和 {row['和局']} ｜ 客 {row['客胜']}")
                 with c3:
