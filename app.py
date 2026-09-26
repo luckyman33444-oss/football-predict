@@ -22,31 +22,30 @@ ESPN_LEAGUES = {
 
 TEAM_ALIASES = {
     "newyorkredbulls": "newyorkredbulls", "redbullnewyork": "newyorkredbulls",
-    "nyredbulls": "newyorkredbulls",
     "lafc": "lafc", "losangelesfc": "lafc",
     "lagalaxy": "lagalaxy", "losangelesgalaxy": "lagalaxy",
     "stlouiscity": "stlouiscity", "saintlouiscity": "stlouiscity",
     "cfmontreal": "cfmontreal", "montrealimpact": "cfmontreal",
-    "atlantaunited": "atlantaunited", "atlantaunitedfc": "atlantaunited",
-    "newyorkcity": "newyorkcity", "newyorkcityfc": "newyorkcity", "nycfc": "newyorkcity",
-    "orlandocity": "orlandocity", "orlandocitysc": "orlandocity",
-    "philadelphiaunion": "philadelphiaunion", "philadelphia": "philadelphiaunion",
-    "fccincinnati": "fccincinnati", "cincinnati": "fccincinnati",
-    "charlottefc": "charlottefc", "charlotte": "charlottefc",
-    "chicagofire": "chicagofire", "chicagofirefc": "chicagofire",
-    "houstondynamo": "houstondynamo", "houstondynamofc": "houstondynamo",
+    "atlantaunited": "atlantaunited",
+    "newyorkcity": "newyorkcity", "nycfc": "newyorkcity",
+    "orlandocity": "orlandocity",
+    "philadelphiaunion": "philadelphiaunion",
+    "fccincinnati": "fccincinnati",
+    "charlottefc": "charlottefc",
+    "chicagofire": "chicagofire",
+    "houstondynamo": "houstondynamo",
     "sportingkansascity": "sportingkansascity", "sportingkc": "sportingkansascity",
-    "fcdallas": "fcdallas", "dallas": "fcdallas",
+    "fcdallas": "fcdallas",
     "austinfc": "austinfc",
-    "sandiegofc": "sandiegofc", "sandiego": "sandiegofc",
-    "seattlesounders": "seattlesounders", "seattlesoundersfc": "seattlesounders",
-    "minnesotaunited": "minnesotaunited", "minnesotaunitedfc": "minnesotaunited",
-    "portlandtimbers": "portlandtimbers", "portlandtimbersfc": "portlandtimbers",
-    "coloradorapids": "coloradorapids", "colorado": "coloradorapids",
+    "sandiegofc": "sandiegofc",
+    "seattlesounders": "seattlesounders",
+    "minnesotaunited": "minnesotaunited",
+    "portlandtimbers": "portlandtimbers",
+    "coloradorapids": "coloradorapids",
     "realsaltlake": "realsaltlake",
-    "newenglandrevolution": "newenglandrevolution", "newengland": "newenglandrevolution",
-    "torontofc": "torontofc", "toronto": "torontofc",
-    "vancouverwhitecaps": "vancouverwhitecaps", "vancouver": "vancouverwhitecaps",
+    "newenglandrevolution": "newenglandrevolution",
+    "torontofc": "torontofc",
+    "vancouverwhitecaps": "vancouverwhitecaps",
     "dcunited": "dcunited", "washingtonunited": "dcunited",
 }
 
@@ -80,9 +79,12 @@ LEAGUE_CN = {
     "Copa America": "美洲杯", "Africa Cup of Nations": "非洲杯",
     "USL Championship": "美国USL", "United Soccer League": "美国USL",
     "Liga MX Apertura": "墨超",
+    "Campeonato de Portugal": "葡萄牙杯",
+    "Taça de Portugal": "葡萄牙杯",
 }
 
 TEAM_CN = {
+    # ===== 英超 =====
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
     "Chelsea": "切尔西", "Crystal Palace": "水晶宫", "Everton": "埃弗顿",
@@ -91,32 +93,44 @@ TEAM_CN = {
     "Newcastle": "纽卡斯尔联", "Nottingham Forest": "诺丁汉森林",
     "Sunderland": "桑德兰", "Tottenham": "托特纳姆热刺",
     "West Ham": "西汉姆联", "Wolves": "狼队",
+    # ===== 西甲 =====
     "Real Madrid": "皇家马德里", "Barcelona": "巴塞罗那",
     "Atletico Madrid": "马德里竞技", "Sevilla": "塞维利亚",
     "Real Betis": "皇家贝蒂斯", "Valencia": "瓦伦西亚",
     "Villarreal": "比利亚雷亚尔", "Athletic Bilbao": "毕尔巴鄂竞技",
-    "Real Sociedad": "皇家社会", "Girona": "赫罗纳",
-    "Osasuna": "奥萨苏纳", "Elche": "埃尔切", "Real Oviedo": "皇家奥维耶多",
+    "Athletic Club": "毕尔巴鄂竞技", "Real Sociedad": "皇家社会",
+    "Girona": "赫罗纳", "Osasuna": "奥萨苏纳", "Elche": "埃尔切",
+    "Real Oviedo": "皇家奥维耶多", "Real Valladolid": "皇家巴利亚多利德",
+    "Mallorca": "马洛卡", "Almería": "阿尔梅里亚",
+    "Córdoba": "科尔多瓦", "SD Eibar": "埃瓦尔",
     "Cádiz": "加的斯", "CD Tenerife": "特内里费",
     "Celta Fortuna": "塞尔塔B队", "CE Sabadell": "萨瓦德尔",
+    # ===== 德甲 =====
     "Bayern Munich": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "莱比锡红牛", "Bayer Leverkusen": "勒沃库森",
     "Eintracht Frankfurt": "法兰克福", "Stuttgart": "斯图加特",
     "Wolfsburg": "沃尔夫斯堡", "Union Berlin": "柏林联合", "Freiburg": "弗赖堡",
+    # ===== 意甲 =====
     "Inter": "国际米兰", "AC Milan": "AC米兰", "Juventus": "尤文图斯",
     "Napoli": "那不勒斯", "Roma": "罗马", "Lazio": "拉齐奥",
     "Atalanta": "亚特兰大", "Fiorentina": "佛罗伦萨", "Bologna": "博洛尼亚",
     "Torino": "都灵", "Udinese": "乌迪内斯", "Genoa": "热那亚",
+    # ===== 法甲 =====
     "Paris Saint-Germain": "巴黎圣日耳曼", "Marseille": "马赛",
     "Lyon": "里昂", "Monaco": "摩纳哥", "Lille": "里尔",
     "Rennes": "雷恩", "Nice": "尼斯", "Lens": "朗斯",
+    # ===== 荷甲葡超苏超土超比甲 =====
     "Ajax": "阿贾克斯", "PSV": "埃因霍温", "Feyenoord": "费耶诺德",
     "Benfica": "本菲卡", "Porto": "波尔图", "Sporting CP": "葡萄牙体育",
     "Celtic": "凯尔特人", "Rangers": "流浪者",
     "Galatasaray": "加拉塔萨雷", "Fenerbahce": "费内巴切",
+    # ===== 美洲 =====
     "Flamengo": "弗拉门戈", "Palmeiras": "帕尔梅拉斯",
     "Boca Juniors": "博卡青年", "River Plate": "河床",
-    # ===== 美职联（多种写法都收录）=====
+    "Criciúma": "克里西乌马", "Avaí": "阿瓦伊",
+    "Junior Barranquilla": "巴兰基亚青年",
+    "Independiente Medellín": "麦德林独立",
+    # ===== 美职联 =====
     "Inter Miami": "迈阿密国际", "Inter Miami CF": "迈阿密国际",
     "LA Galaxy": "洛杉矶银河", "Los Angeles Galaxy": "洛杉矶银河",
     "LAFC": "洛杉矶FC", "Los Angeles FC": "洛杉矶FC",
@@ -124,7 +138,7 @@ TEAM_CN = {
     "Orlando City": "奥兰多城", "Orlando City SC": "奥兰多城",
     "New York Red Bulls": "纽约红牛", "Red Bull New York": "纽约红牛",
     "St.Louis City": "圣路易斯城", "St. Louis City": "圣路易斯城",
-    "St. Louis City SC": "圣路易斯城", "St.Louis City SC": "圣路易斯城",
+    "St. Louis City SC": "圣路易斯城",
     "Atlanta United": "亚特兰大联", "Atlanta United FC": "亚特兰大联",
     "New York City FC": "纽约城", "New York City": "纽约城",
     "CF Montréal": "蒙特利尔CF", "CF Montreal": "蒙特利尔CF",
@@ -138,20 +152,69 @@ TEAM_CN = {
     "San Diego FC": "圣迭戈FC", "San Diego": "圣迭戈FC",
     "Seattle Sounders": "西雅图海湾人", "Seattle Sounders FC": "西雅图海湾人",
     "Minnesota United": "明尼苏达联", "Minnesota United FC": "明尼苏达联",
-    "Portland Timbers": "波特兰伐木者", "Portland Timbers FC": "波特兰伐木者",
+    "Portland Timbers": "波特兰伐木者",
     "Colorado Rapids": "科罗拉多急流",
     "Real Salt Lake": "皇家盐湖城",
     "New England Revolution": "新英格兰革命",
     "Toronto FC": "多伦多FC", "Toronto": "多伦多FC",
-    "Vancouver Whitecaps": "温哥华白帽", "Vancouver Whitecaps FC": "温哥华白帽",
+    "Vancouver Whitecaps": "温哥华白帽",
     "D.C. United": "华盛顿联", "DC United": "华盛顿联",
     "Nashville SC": "纳什维尔SC",
-    # ===== 其他 =====
-    "Shanghai Port": "上海海港", "Shandong Taishan": "山东泰山",
-    "Beijing Guoan": "北京国安", "Shanghai Shenhua": "上海申花",
-    "Al Hilal": "利雅得新月", "Al Nassr": "利雅得胜利",
+    "San Jose Earthquakes": "圣何塞地震",
+    # ===== 墨超 =====
     "Cruz Azul": "蓝十字", "CD Toluca": "托卢卡",
     "CD Guadalajara": "瓜达拉哈拉", "Querétaro FC": "克雷塔罗",
+    "Santos Laguna": "桑托斯拉古纳", "CF Pachuca": "帕丘卡",
+    "Pachuca": "帕丘卡", "Club Puebla": "普埃布拉", "Puebla": "普埃布拉",
+    "Tigres UANL": "老虎大学",
+    # ===== 亚洲 =====
+    "Shanghai Port": "上海海港", "Shandong Taishan": "山东泰山",
+    "Beijing Guoan": "北京国安", "Shanghai Shenhua": "上海申花",
+    "Gangwon FC": "江原FC", "Incheon United": "仁川联",
+    "Al Hilal": "利雅得新月", "Al Nassr": "利雅得胜利",
+    # ===== 美国 USL =====
+    "FC Tampa Bay Rowdies": "坦帕湾暴徒", "Tampa Bay Rowdies": "坦帕湾暴徒",
+    "Detroit City FC": "底特律城", "Colorado Springs Switchbacks FC": "科罗拉多泉",
+    "Indy Eleven": "印地十一", "Miami FC": "迈阿密FC",
+    "Charleston Battery": "查尔斯顿电池", "Rhode Island FC": "罗德岛FC",
+    "Sporting Jax": "杰克逊维尔体育", "Carolina Ascent FC": "卡罗来纳",
+    "Portland Hearts of Pine": "波特兰松心", "Sarasota Paradise": "萨拉索塔天堂",
+    "Forward Madison FC": "麦迪逊前进", "Spokane Velocity FC": "斯波坎速度",
+    "New Mexico United": "新墨西哥联", "Sacramento Republic FC": "萨克拉门托共和",
+    "Oakland Roots": "奥克兰根", "Phoenix Rising FC": "凤凰rising",
+    "Orange County SC": "橙县SC", "Pittsburgh Riverhounds": "匹兹堡猎犬",
+    "San Antonio FC": "圣安东尼奥FC",
+    "Corpus Christi FC": "科珀斯克里斯蒂", "Athletic Club Boise": "博伊西竞技",
+    "Portland Thorns FC": "波特兰荆棘", "Houston Dash": "休斯顿冲刺",
+    "Monterey Bay": "蒙特雷湾", "Lexington": "莱克星顿",
+    "Charlotte Independence": "夏洛特独立", "Fort Wayne": "韦恩堡",
+    # ===== 葡萄牙杯 =====
+    "Estrela Calheta FC": "卡拉埃塔之星", "CD Cinfães": "辛法埃斯",
+    "AD Camacha": "卡马查", "Florgrade FC": "弗洛格拉德",
+    "Amora FC": "阿莫拉", "JD Lajense": "拉延塞",
+    "O Elvas CAD": "埃尔瓦斯", "Sertanense": "塞尔塔嫩塞",
+    "SC Mineiro Aljustrelense": "阿朱斯特雷尔",
+    "GD Alcochetense": "阿尔科切滕塞",
+    # ===== 尼日利亚超 =====
+    "Warri Wolves FC": "瓦里狼队", "Shooting Stars": "射击之星",
+    "Abia Warriors": "阿比亚勇士", "Bendel Insurance FC": "本代尔保险",
+    "Nasarawa United": "纳萨拉瓦联", "Niger Tornadoes": "尼日尔龙卷风",
+    "Ikorodu City": "伊科罗杜城", "Enugu Rangers International": "埃努古流浪者",
+    "Katsina United": "卡齐纳联", "Doma United FC": "多马联",
+    "Kano Pillars": "卡诺支柱", "Enyimba": "恩因巴",
+    "Kun Khalifat FC": "昆哈利法特", "Kwara United": "夸拉联",
+    "Plateau United": "高原联", "Inter Lagos FC": "拉各斯国际",
+    # ===== 中北美 =====
+    "Sint Maarten": "荷属圣马丁", "Belize": "伯利兹",
+    "Saint Martin": "圣马丁", "US Virgin Islands": "美属维尔京群岛",
+    "Saint Vincent and the Grenadines": "圣文森特和格林纳丁斯",
+    "French Guiana": "法属圭亚那",
+    "Antigua and Barbuda": "安提瓜和巴布达", "Anguilla": "安圭拉",
+    "Montserrat": "蒙特塞拉特", "British Virgin Islands": "英属维尔京群岛",
+    "Barbados": "巴巴多斯", "Saint Lucia": "圣卢西亚",
+    "Bonaire": "博奈尔", "Saint Kitts and Nevis": "圣基茨和尼维斯",
+    "Jamaica": "牙买加", "Guatemala": "危地马拉",
+    # ===== 其他 =====
     "Oldham Athletic": "奥尔德姆", "Salford City": "索尔福德城",
     "Deportivo Alavés": "阿拉维斯", "Madrid CFF": "马德里CFF",
     "Sporting Lagos FC": "拉各斯体育", "Barau FC": "巴劳FC",
@@ -166,27 +229,15 @@ TEAM_CN = {
     "Kansas City Current": "堪萨斯城潮流", "Denver Summit FC": "丹佛峰会",
     "Washington Spirit": "华盛顿精神", "Angel City FC": "天使城FC",
     "NJ/NY Gotham FC": "哥谭FC", "Chicago Stars FC": "芝加哥星队",
-    "Detroit City FC": "底特律城", "Colorado Springs Switchbacks FC": "科罗拉多泉",
-    "Indy Eleven": "印地十一", "Miami FC": "迈阿密FC",
-    "Charleston Battery": "查尔斯顿电池", "Rhode Island FC": "罗德岛FC",
-    "Sporting Jax": "杰克逊维尔体育", "Carolina Ascent FC": "卡罗来纳",
-    "Portland Hearts of Pine": "波特兰松心", "Sarasota Paradise": "萨拉索塔天堂",
-    "Forward Madison FC": "麦迪逊前进", "Spokane Velocity FC": "斯波坎速度",
-    "New Mexico United": "新墨西哥联", "Sacramento Republic FC": "萨克拉门托共和",
-    "Oakland Roots": "奥克兰根", "Phoenix Rising FC": "凤凰rising",
-    "Orange County SC": "橙县SC", "Pittsburgh Riverhounds": "匹兹堡猎犬",
-    "San Antonio FC": "圣安东尼奥FC", "Tampa Bay Rowdies": "坦帕湾暴徒",
-    "Corpus Christi FC": "科珀斯克里斯蒂", "Athletic Club Boise": "博伊西竞技",
-    "Portland Thorns FC": "波特兰荆棘", "Houston Dash": "休斯顿冲刺",
-    "Monterey Bay": "蒙特雷湾", "Lexington": "莱克星顿",
-    "Charlotte Independence": "夏洛特独立", "Fort Wayne": "韦恩堡",
     "Cruz Azul Hidalgo": "蓝十字伊达尔戈", "Leones Negros": "黑狮",
     "AFC Toronto": "多伦多AFC", "Ottawa Rapid FC": "渥太华快速",
     "Venados FC": "贝纳多斯", "Club Atlético Morelia": "莫雷利亚",
     "Dorados de Sinaloa": "锡那罗亚金鱼", "Durango": "杜兰戈",
     "Tlaxcala FC": "特拉斯卡拉", "Cancún FC": "坎昆FC",
-    "Santos Laguna": "桑托斯拉古纳", "Pachuca": "帕丘卡",
-    "Puebla": "普埃布拉", "Tigres UANL": "老虎大学",
+    "Athletic Club": "毕尔巴鄂竞技",
+    "Club Atlético de Madrid": "马德里竞技",
+    "Costa Adeje Tenerife": "特内里费",
+    # ===== 国家队 =====
     "England": "英格兰", "France": "法国", "Germany": "德国",
     "Spain": "西班牙", "Italy": "意大利", "Portugal": "葡萄牙",
     "Netherlands": "荷兰", "Belgium": "比利时", "Croatia": "克罗地亚",
@@ -203,33 +254,22 @@ TEAM_CN = {
     "North Macedonia": "北马其顿", "Switzerland": "瑞士",
     "Albania": "阿尔巴尼亚", "Belarus": "白俄罗斯",
     "Slovakia": "斯洛伐克", "Moldova": "摩尔多瓦",
-    "Barbados": "巴巴多斯", "Saint Lucia": "圣卢西亚",
-    "Bonaire": "博奈尔", "Saint Kitts and Nevis": "圣基茨和尼维斯",
-    "Jamaica": "牙买加", "Guatemala": "危地马拉",
-    "Montserrat": "蒙特塞拉特", "British Virgin Islands": "英属维尔京群岛",
-    "Saint Martin": "圣马丁", "US Virgin Islands": "美属维尔京群岛",
-    "Saint Vincent and the Grenadines": "圣文森特和格林纳丁斯",
-    "French Guiana": "法属圭亚那",
-    "Antigua and Barbuda": "安提瓜和巴布达", "Anguilla": "安圭拉",
+    "New Zealand": "新西兰", "Seychelles": "塞舌尔",
+    "Sri Lanka": "斯里兰卡", "Lithuania": "立陶宛",
+    "Azerbaijan": "阿塞拜疆", "Colombia": "哥伦比亚",
 }
 
 def team_cn(name):
-    """队名 → 中文。支持模糊匹配：自动尝试加/去 FC、SC、United 等后缀"""
     if not name: return "?"
     base = name; suffix = ""
     for tag in [" U21", " U20", " U19", " U18", " U17", " U23"]:
         if name.endswith(tag):
             base = name[:-len(tag)]; suffix = " " + tag.strip(); break
-    # 直接匹配
     if base in TEAM_CN:
         return TEAM_CN[base] + suffix
-    # 尝试去后缀
     for suf in [" FC", " SC", " AFC", " CF", " AC", " United"]:
-        if base.endswith(suf):
-            stripped = base[:-len(suf)]
-            if stripped in TEAM_CN:
-                return TEAM_CN[stripped] + suffix
-    # 尝试加后缀
+        if base.endswith(suf) and base[:-len(suf)] in TEAM_CN:
+            return TEAM_CN[base[:-len(suf)]] + suffix
     for suf in [" FC", " SC", " AFC"]:
         if (base + suf) in TEAM_CN:
             return TEAM_CN[base + suf] + suffix
@@ -382,16 +422,13 @@ def fetch_espn_all(date_str):
         target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
     except:
         return []
-
     dates_to_fetch = [
         (target_date - timedelta(days=1)).strftime("%Y%m%d"),
         target_date.strftime("%Y%m%d"),
         (target_date + timedelta(days=1)).strftime("%Y%m%d"),
     ]
-
     all_events = []
     seen_ids = set()
-
     for date_param in dates_to_fetch:
         for code, cn_name in ESPN_LEAGUES.items():
             try:
@@ -426,7 +463,6 @@ def parse_espn_event(e):
     state_map = {"post": "已结束", "in": "进行中", "pre": "未开始"}
     actual = f"{hs}-{aws}" if state == "post" and hs != "" and aws != "" else "—"
 
-    # ★★★ 关键修复：主客队名转中文 ★★★
     return {
         "时间": to_cst_time(kickoff),
         "联赛": e.get("_league_cn", ""),
@@ -441,7 +477,7 @@ def parse_espn_event(e):
 # ============ 主界面 ============
 st.title("⚽ 足球预测")
 
-tab1, tab2, tab3 = st.tabs(["📅 今日预测（Bzzoiro）", "🌐 全部赛事（ESPN）", "🛠️ 调试"])
+tab1, tab2, tab3 = st.tabs(["📅 今日预测（Bzzoiro）", "🌐 全部赛事（合并）", "🛠️ 调试"])
 
 with st.spinner("正在获取 Bzzoiro 预测数据..."):
     all_preds, err = fetch_all_predictions()
@@ -460,6 +496,7 @@ else:
     df_all = pd.DataFrame()
     bsd_lookup = {}
 
+# -------- Tab 1 --------
 with tab1:
     if df_all.empty:
         st.warning("没有获取到 Bzzoiro 预测数据。")
@@ -475,7 +512,7 @@ with tab1:
             future = [i for i, d in enumerate(available_dates) if d >= today_str]
             default_idx = future[0] if future else len(available_dates) - 1
 
-        sel_label = st.selectbox("选择日期", date_options, index=default_idx)
+        sel_label = st.selectbox("选择日期", date_options, index=default_idx, key="date1")
         sel_date = sel_label.split("（")[0]
 
         df = df_all[df_all["event_date"] == sel_date].copy()
@@ -497,50 +534,89 @@ with tab1:
             dist_df = pd.DataFrame([{"日期": d, "比赛数": date_counts[d]} for d in available_dates])
             st.dataframe(dist_df, use_container_width=True, hide_index=True)
 
+# -------- Tab 2：合并视图 --------
 with tab2:
-    st.caption("从 ESPN 拉取主流联赛赛事，自动匹配 Bzzoiro 预测（北京时间）")
+    st.caption("合并 Bzzoiro 预测 + ESPN 赛事，显示当天所有比赛。有预测的显示预测，无预测的标注「暂无预测」。")
 
     espn_date = st.date_input("选择日期", value=date.today(), key="espn_date")
     espn_date_str = espn_date.strftime("%Y-%m-%d")
 
+    # 1. 拿 Bzzoiro 当天数据
+    bsd_today = df_all[df_all["event_date"] == espn_date_str] if not df_all.empty else pd.DataFrame()
+
+    # 2. 拿 ESPN 当天数据
     with st.spinner(f"正在获取 {espn_date_str} 的 ESPN 赛事..."):
         espn_events = fetch_espn_all(espn_date_str)
+    espn_rows = []
+    for e in espn_events:
+        row = parse_espn_event(e)
+        if row: espn_rows.append(row)
 
-    if not espn_events:
-        st.warning(f"{espn_date_str} ESPN 没有返回赛事。")
-    else:
-        espn_rows = []
-        for e in espn_events:
-            row = parse_espn_event(e)
-            if row: espn_rows.append(row)
+    # 3. 合并
+    bsd_keys = set()
+    merged = []
 
-        matched_count = 0
-        for row in espn_rows:
-            key = (row["_home_key"], row["_away_key"])
-            bsd = bsd_lookup.get(key)
-            if not bsd:
-                bsd = bsd_lookup.get((row["_away_key"], row["_home_key"]))
-            if bsd:
-                row["预测比分"] = bsd["预测比分"]
-                row["预测结果"] = bsd["预测结果"]
-                row["主胜"] = bsd["主胜"]
-                row["和局"] = bsd["和局"]
-                row["客胜"] = bsd["客胜"]
-                matched_count += 1
-            else:
-                row["预测比分"] = "—"
-                row["预测结果"] = "暂无预测"
-                row["主胜"] = "—"
-                row["和局"] = "—"
-                row["客胜"] = "—"
+    # 先放 Bzzoiro 全部预测
+    if not bsd_today.empty:
+        for _, r in bsd_today.iterrows():
+            bsd_keys.add((r["_home_key"], r["_away_key"]))
+            merged.append({
+                "时间": r["时间"],
+                "联赛": r["联赛"],
+                "状态": r["状态"],
+                "主队": r["主队"],
+                "客队": r["客队"],
+                "实际比分": "—",
+                "预测比分": r["预测比分"],
+                "预测结果": r["预测结果"],
+                "主胜": r["主胜"],
+                "和局": r["和局"],
+                "客胜": r["客胜"],
+                "来源": "Bzzoiro",
+            })
 
-        st.success(f"ESPN 共 {len(espn_rows)} 场，其中 {matched_count} 场有 Bzzoiro 预测")
+    # 再放 ESPN 中 Bzzoiro 没有的
+    espn_only = 0
+    for row in espn_rows:
+        key1 = (row["_home_key"], row["_away_key"])
+        key2 = (row["_away_key"], row["_home_key"])
+        if key1 in bsd_keys or key2 in bsd_keys:
+            continue
+        espn_only += 1
+        merged.append({
+            "时间": row["时间"],
+            "联赛": row["联赛"],
+            "状态": row["状态"],
+            "主队": row["主队"],
+            "客队": row["客队"],
+            "实际比分": row["实际比分"],
+            "预测比分": "—",
+            "预测结果": "暂无预测",
+            "主胜": "—",
+            "和局": "—",
+            "客胜": "—",
+            "来源": "ESPN",
+        })
 
-        espn_df = pd.DataFrame(espn_rows)
+    st.success(f"**{espn_date_str}** 共 {len(merged)} 场（Bzzoiro {len(bsd_today)} 场 + ESPN 补充 {espn_only} 场）")
+
+    if merged:
+        merged_df = pd.DataFrame(merged)
+        # 按时间排序
+        merged_df = merged_df.sort_values("时间")
+        # 联赛筛选
+        all_leagues2 = sorted(merged_df["联赛"].unique())
+        sel_leagues2 = st.multiselect("筛选联赛（不选则显示全部）", all_leagues2, default=[], key="lg2")
+        if sel_leagues2:
+            merged_df = merged_df[merged_df["联赛"].isin(sel_leagues2)]
+
         cols = ["时间", "联赛", "状态", "主队", "客队", "实际比分",
-                "预测比分", "预测结果", "主胜", "和局", "客胜"]
-        st.dataframe(espn_df[cols], use_container_width=True, hide_index=True)
+                "预测比分", "预测结果", "主胜", "和局", "客胜", "来源"]
+        st.dataframe(merged_df[cols], use_container_width=True, hide_index=True)
+    else:
+        st.info(f"{espn_date_str} 没有比赛数据。")
 
+# -------- Tab 3 --------
 with tab3:
     st.caption("查看原始数据，排查匹配问题")
     if st.button("🔬 Bzzoiro 前 3 条", key="dbg1"):
@@ -551,7 +627,7 @@ with tab3:
         if evs:
             st.json(evs[:2])
     st.divider()
-    st.caption("**队名匹配诊断**：检查某个队名是否能在对照表里找到")
+    st.caption("**队名匹配诊断**")
     test_name = st.text_input("输入队名测试", value="", key="test_name")
     if test_name:
         st.write(f"normalize → `{normalize(test_name)}`")
