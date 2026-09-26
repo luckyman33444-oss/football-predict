@@ -278,7 +278,20 @@ def implied_odds(prob_pct):
 
 def fmt_odds(o):
     if o is None: return "—"
-    return f"{o:.2f}"
+    try: return f"{float(o):.2f}"
+    except: return "—"
+
+# ★★★ 真实赔率接口 ★★★
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_event_odds(event_id):
+    """获取单场真实赔率（简化接口，返回 home_win/draw/away_win/over_25/under_25/btts 等）"""
+    if not event_id: return None
+    try:
+        r = requests.get(f"{BSD_BASE}/events/{event_id}/odds/",
+                         headers=BSD_HEADERS, timeout=15)
+        if r.status_code != 200: return None
+        return r.json().get("odds", {})
+    except: return None
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_event_lineups(event_id):
@@ -356,36 +369,28 @@ def parse_prediction(p):
     prob_draw = mr.get("prob_draw") or 0
     prob_away = mr.get("prob_away") or 0
 
-    # ★ 大小球：优先用 Bzzoiro 的 prob_over_25（百分数 0-100）
+    # 大小球：优先用 Bzzoiro 的 prob_over_25
     prob_over25_raw = ou.get("prob_over_25")
     if prob_over25_raw is not None:
-        try:
-            p_over = float(prob_over25_raw)
-        except:
-            p_over = None
+        try: p_over = float(prob_over25_raw)
+        except: p_over = None
     else:
         p_over = None
 
     if p_over is not None:
         if p_over >= 50:
-            over_label = "大球"
-            over_pct = p_over
+            over_label = "大球"; over_pct = p_over
         else:
-            over_label = "小球"
-            over_pct = 100 - p_over
+            over_label = "小球"; over_pct = 100 - p_over
     else:
-        # 没有直接用 xG 反推的
         if pred:
             p_over = pred["over25"] * 100
             if p_over >= 50:
-                over_label = "大球"
-                over_pct = p_over
+                over_label = "大球"; over_pct = p_over
             else:
-                over_label = "小球"
-                over_pct = 100 - p_over
+                over_label = "小球"; over_pct = 100 - p_over
         else:
-            over_label = "—"
-            over_pct = 0
+            over_label = "—"; over_pct = 0
 
     status_map = {"finished": "已结束", "notstarted": "未开始",
                   "upcoming": "未开始", "live": "进行中",
@@ -411,11 +416,6 @@ def parse_prediction(p):
         "大小球": f"{over_label} {over_pct:.1f}%",
         "预期主队进球": f"{xg_h:.2f}" if xg_h else "—",
         "预期客队进球": f"{xg_a:.2f}" if xg_a else "—",
-        "主胜赔率": fmt_odds(implied_odds(prob_home)),
-        "和局赔率": fmt_odds(implied_odds(prob_draw)),
-        "客胜赔率": fmt_odds(implied_odds(prob_away)),
-        "大球赔率": fmt_odds(implied_odds(p_over)) if p_over else "—",
-        "小球赔率": fmt_odds(implied_odds(100 - p_over)) if p_over else "—",
         "_prob_home": prob_home,
         "_prob_draw": prob_draw,
         "_prob_away": prob_away,
@@ -472,31 +472,6 @@ def parse_espn_event(e):
         "_home_key": canon(home_name), "_away_key": canon(away_name),
     }
 
-def test_odds_endpoints(event_id):
-    candidates = [
-        ("GET", f"{BSD_BASE}/events/{event_id}/odds/", None),
-        ("GET", f"{BSD_BASE}/events/{event_id}/odds", None),
-        ("GET", f"{BSD_BASE}/odds/?event_id={event_id}", None),
-        ("GET", f"{BSD_BASE}/odds/", {"event_id": event_id}),
-        ("GET", f"{BSD_BASE}/predictions/{event_id}/", None),
-    ]
-    results = []
-    for method, url, params in candidates:
-        try:
-            r = requests.get(url, headers=BSD_HEADERS, params=params, timeout=15)
-            results.append({
-                "URL": url,
-                "参数": str(params) if params else "",
-                "状态码": r.status_code,
-                "返回前 300 字": r.text[:300].replace("\n", " ") if r.text else "",
-            })
-        except Exception as e:
-            results.append({
-                "URL": url, "参数": str(params) if params else "",
-                "状态码": "错误", "返回前 300 字": str(e)[:300],
-            })
-    return results
-
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
@@ -541,11 +516,41 @@ with tab1:
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
 
         if not df.empty:
+            # 是否加载真实赔率
+            load_real = st.checkbox("💰 加载真实赔率（会调用 API，慢一些）", value=False, key="load_real_tab1")
+
             display_df = df[["时间", "联赛", "状态", "主队", "客队",
                              "主力比分", "备选比分", "预测结果",
                              "主胜", "和局", "客胜", "大小球"]].copy()
             display_df.insert(0, "加入核心",
                               df["event_id"].isin(st.session_state.core_matches).values)
+
+            # 加真实赔率列
+            if load_real:
+                real_odds_home = []
+                real_odds_draw = []
+                real_odds_away = []
+                real_odds_over = []
+                real_odds_under = []
+                for _, row in df.iterrows():
+                    o = fetch_event_odds(row["event_id"])
+                    if o:
+                        real_odds_home.append(fmt_odds(o.get("home_win")))
+                        real_odds_draw.append(fmt_odds(o.get("draw")))
+                        real_odds_away.append(fmt_odds(o.get("away_win")))
+                        real_odds_over.append(fmt_odds(o.get("over_25_goals")))
+                        real_odds_under.append(fmt_odds(o.get("under_25_goals")))
+                    else:
+                        real_odds_home.append("—")
+                        real_odds_draw.append("—")
+                        real_odds_away.append("—")
+                        real_odds_over.append("—")
+                        real_odds_under.append("—")
+                display_df["真主胜"] = real_odds_home
+                display_df["真和"] = real_odds_draw
+                display_df["真客胜"] = real_odds_away
+                display_df["真大球"] = real_odds_over
+                display_df["真小球"] = real_odds_under
 
             edited = st.data_editor(
                 display_df,
@@ -574,7 +579,7 @@ with tab1:
                 if st.session_state.core_matches:
                     st.info(f"📌 当前核心：**{len(st.session_state.core_matches)}** 场（Tab 2 优先使用）")
 
-            st.caption("💡 赔率由概率反推（十进制隐含赔率 = 100 ÷ 概率%），仅作参考。")
+            st.caption("💡 主胜/和局/客胜为模型概率；真主胜/真和/真客胜为 Bzzoiro 真实赔率（共识盘）。")
 
 # ========== Tab 2：3串1核心 ==========
 with tab2:
@@ -671,20 +676,32 @@ with tab2:
                                 selected.at[idx, "_prob_over"] = new_pred["over25"]
                                 selected.at[idx, "_prob_under"] = new_pred["under25"]
 
+                    # ★ 为选中的 3 场获取真实赔率
+                    with st.spinner("正在获取真实赔率..."):
+                        real_odds_map = {}
+                        for _, row in selected.iterrows():
+                            eid = row.get("event_id")
+                            real_odds_map[eid] = fetch_event_odds(eid) if eid else None
+
                     matches_data = []
                     for _, row in selected.iterrows():
                         is_core = row["event_id"] in core_ids
+                        o = real_odds_map.get(row["event_id"]) or {}
                         opts = []
+                        # 选项带真实赔率（如果有），否则用概率反推
+                        hw_real = o.get("home_win"); dr_real = o.get("draw"); aw_real = o.get("away_win")
+                        over_real = o.get("over_25_goals"); under_real = o.get("under_25_goals")
+
                         if row["_prob_home"]:
-                            opts.append(("主胜", row["_prob_home"] / 100, implied_odds(row["_prob_home"])))
+                            opts.append(("主胜", row["_prob_home"] / 100, hw_real or implied_odds(row["_prob_home"]), hw_real is not None))
                         if row["_prob_draw"]:
-                            opts.append(("和局", row["_prob_draw"] / 100, implied_odds(row["_prob_draw"])))
+                            opts.append(("和局", row["_prob_draw"] / 100, dr_real or implied_odds(row["_prob_draw"]), dr_real is not None))
                         if row["_prob_away"]:
-                            opts.append(("客胜", row["_prob_away"] / 100, implied_odds(row["_prob_away"])))
+                            opts.append(("客胜", row["_prob_away"] / 100, aw_real or implied_odds(row["_prob_away"]), aw_real is not None))
                         if row["_prob_over_pct"]:
-                            opts.append(("大球(2.5+)", row["_prob_over_pct"] / 100, implied_odds(row["_prob_over_pct"])))
+                            opts.append(("大球(2.5+)", row["_prob_over_pct"] / 100, over_real or implied_odds(row["_prob_over_pct"]), over_real is not None))
                         if row["_prob_under_pct"]:
-                            opts.append(("小球(2.5-)", row["_prob_under_pct"] / 100, implied_odds(row["_prob_under_pct"])))
+                            opts.append(("小球(2.5-)", row["_prob_under_pct"] / 100, under_real or implied_odds(row["_prob_under_pct"]), under_real is not None))
                         opts.sort(key=lambda x: -x[1])
                         scores = row["_scores_list"] if row["_scores_list"] else []
                         main_s = scores[0] if len(scores) > 0 else ("—", 0)
@@ -696,8 +713,10 @@ with tab2:
                             "是否核心": "⭐ 核心" if is_core else "自动",
                             "opts": opts,
                             "main_score": main_s, "alt_score": alt_s,
+                            "real_odds": o,
                         })
 
+                    # 比分串
                     st.subheader("🎲 比分串（3串1）")
                     best_idx = None; best_p = 0
                     for i, md in enumerate(matches_data):
@@ -709,8 +728,8 @@ with tab2:
                     for i, md in enumerate(matches_data):
                         mp = md["main_score"][1]
                         ap = md["alt_score"][1]
-                        main_str = f"{md['main_score'][0]} ({mp*100:.1f}% / 赔率{implied_odds(mp*100) or '—'})"
-                        alt_str = f"{md['alt_score'][0]} ({ap*100:.1f}% / 赔率{implied_odds(ap*100) or '—'})"
+                        main_str = f"{md['main_score'][0]} ({mp*100:.1f}%)"
+                        alt_str = f"{md['alt_score'][0]} ({ap*100:.1f}%)"
                         role = "**主胆**" if (best_idx == i) else "拖"
                         rows_for_table.append({
                             "场次": i + 1, "时间": md["时间"], "比赛": md["比赛"],
@@ -755,23 +774,25 @@ with tab2:
 
                     st.divider()
 
-                    st.subheader("🛡️ 稳健串（胜平负/大小球）")
+                    # 稳健串（用真实赔率）
+                    st.subheader("🛡️ 稳健串（胜平负/大小球，含真实赔率）")
                     combo = [(md, md["opts"][0]) for md in matches_data]
                     prob = 1; total_odds = 1
                     for _, opt in combo:
                         prob *= opt[1]
                         if opt[2]: total_odds *= opt[2]
-                    st.write(f"**命中概率：{prob*100:.1f}%** ｜ **总赔率（估算）：{total_odds:.2f}**")
+                    st.write(f"**命中概率：{prob*100:.1f}%** ｜ **总赔率：{total_odds:.2f}**")
 
                     stable_rows = []
                     for i, (md, opt) in enumerate(combo, 1):
-                        pick_name, pick_prob, pick_odds = opt
+                        pick_name, pick_prob, pick_odds, is_real = opt
                         stable_rows.append({
                             "场次": i, "时间": md["时间"], "比赛": md["比赛"],
                             "来源": md["是否核心"], "状态": md["状态"],
                             "推荐": pick_name,
                             "概率": f"{pick_prob*100:.1f}%",
                             "赔率": fmt_odds(pick_odds),
+                            "赔率来源": "真实" if is_real else "隐含",
                         })
                     st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
 
@@ -781,16 +802,17 @@ with tab2:
                     for _, opt in combo_b:
                         prob_b *= opt[1]
                         if opt[2]: total_odds_b *= opt[2]
-                    st.write(f"**命中概率：{prob_b*100:.1f}%** ｜ **总赔率（估算）：{total_odds_b:.2f}**")
+                    st.write(f"**命中概率：{prob_b*100:.1f}%** ｜ **总赔率：{total_odds_b:.2f}**")
                     stable_rows_b = []
                     for i, (md, opt) in enumerate(combo_b, 1):
-                        pick_name, pick_prob, pick_odds = opt
+                        pick_name, pick_prob, pick_odds, is_real = opt
                         stable_rows_b.append({
                             "场次": i, "时间": md["时间"], "比赛": md["比赛"],
                             "来源": md["是否核心"], "状态": md["状态"],
                             "推荐": pick_name,
                             "概率": f"{pick_prob*100:.1f}%",
                             "赔率": fmt_odds(pick_odds),
+                            "赔率来源": "真实" if is_real else "隐含",
                         })
                     st.dataframe(pd.DataFrame(stable_rows_b), use_container_width=True, hide_index=True)
 
@@ -798,9 +820,19 @@ with tab2:
                     st.subheader("⭐ 最重心单场")
                     first = matches_data[0]
                     best_opt = first["opts"][0]
+                    # 显示详细真实赔率
+                    o = first.get("real_odds", {})
+                    odds_line = ""
+                    if o:
+                        odds_line = (
+                            f"\n\n**真实赔率**：主胜 {fmt_odds(o.get('home_win'))} ｜ "
+                            f"和 {fmt_odds(o.get('draw'))} ｜ 客胜 {fmt_odds(o.get('away_win'))} ｜ "
+                            f"大2.5 {fmt_odds(o.get('over_25_goals'))} ｜ 小2.5 {fmt_odds(o.get('under_25_goals'))}"
+                        )
                     st.success(
                         f"**{first['比赛']}** ｜ {first['联赛']} ｜ {first['时间']} ｜ {first['状态']} ｜ {first['是否核心']}\n\n"
-                        f"推荐：**{best_opt[0]}**（概率 {best_opt[1]*100:.1f}%，隐含赔率 {fmt_odds(best_opt[2])}）\n\n"
+                        f"推荐：**{best_opt[0]}**（概率 {best_opt[1]*100:.1f}%，赔率 {fmt_odds(best_opt[2])}）"
+                        f"{odds_line}\n\n"
                         f"比分参考：{first['main_score'][0]} / {first['alt_score'][0]}"
                     )
 
@@ -866,7 +898,7 @@ with tab4:
                 with c1:
                     st.write(f"**{row['主队']} vs {row['客队']}** ｜ {row['联赛']} ｜ {row['event_date']} {row['时间']}")
                 with c2:
-                    st.write(f"主 {row['主胜']}({row['主胜赔率']}) ｜ 和 {row['和局']}({row['和局赔率']}) ｜ 客 {row['客胜']}({row['客胜赔率']})")
+                    st.write(f"主 {row['主胜']} ｜ 和 {row['和局']} ｜ 客 {row['客胜']}")
                 with c3:
                     is_core = row["event_id"] in st.session_state.core_matches
                     if is_core:
@@ -880,13 +912,13 @@ with tab4:
 
 # ========== Tab 5：接口测试 ==========
 with tab5:
-    st.caption("💰 Bzzoiro 赔率接口 —— 查看完整 JSON 结构，以便整合进预测")
+    st.caption("💰 Bzzoiro 赔率接口 —— 查看完整 JSON 结构")
 
     test_id = st.text_input("Event ID", value="216460", key="test_id")
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("📊 查看单场赔率 JSON", type="primary", key="btn_odds1"):
+        if st.button("📊 查看单场赔率（简化）", type="primary", key="btn_odds1"):
             try:
                 r = requests.get(f"{BSD_BASE}/events/{test_id}/odds/",
                                  headers=BSD_HEADERS, timeout=15)
@@ -899,11 +931,11 @@ with tab5:
                 st.error(f"错误：{e}")
 
     with col2:
-        if st.button("📊 查看赔率列表 JSON", key="btn_odds2"):
+        if st.button("📊 查看赔率明细（含变动）", key="btn_odds2"):
             try:
                 r = requests.get(f"{BSD_BASE}/odds/",
                                  headers=BSD_HEADERS,
-                                 params={"event_id": test_id},
+                                 params={"event_id": test_id, "limit": 100},
                                  timeout=15)
                 st.write(f"状态码：{r.status_code}")
                 if r.status_code == 200:
@@ -913,12 +945,5 @@ with tab5:
             except Exception as e:
                 st.error(f"错误：{e}")
 
-    st.divider()
-    st.caption("**批量测试所有可能端点**")
-    if st.button("🔍 测试所有赔率接口", key="btn_test_all"):
-        with st.spinner("测试中..."):
-            results = test_odds_endpoints(test_id)
-        st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
-
 st.divider()
-st.caption("⚠️ 预测来自 Bzzoiro；赔率为概率反推的隐含赔率（非真实盘口）；比分为 xG 泊松反推；时间为北京时间。")
+st.caption("⚠️ 预测来自 Bzzoiro；赔率为 Bzzoiro 真实共识赔率；比分为 xG 泊松反推；时间为北京时间。")
