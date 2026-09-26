@@ -23,6 +23,8 @@ LEAGUE_CN = {
     "K League 1": "韩K联", "A-League": "澳超", "Saudi Pro League": "沙特联",
     "Scottish Premiership": "苏超", "NWSL": "美国女足",
     "International": "国际赛", "Club Friendlies": "俱乐部友谊",
+    "Coppa Italia": "意杯", "Copa del Rey": "国王杯",
+    "UEFA Nations League": "欧国联", "FIFA ASEAN Cup": "东盟杯",
 }
 
 # ============ 球队中文对照 ============
@@ -40,6 +42,8 @@ TEAM_CN = {
     "Real Betis": "皇家贝蒂斯", "Valencia": "瓦伦西亚",
     "Villarreal": "比利亚雷亚尔", "Athletic Bilbao": "毕尔巴鄂竞技",
     "Real Sociedad": "皇家社会", "Girona": "赫罗纳",
+    "Osasuna": "奥萨苏纳", "Elche": "埃尔切",
+    "Real Oviedo": "皇家奥维耶多",
     "Bayern Munich": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "莱比锡红牛", "Bayer Leverkusen": "勒沃库森",
     "Eintracht Frankfurt": "法兰克福", "Stuttgart": "斯图加特",
@@ -48,6 +52,7 @@ TEAM_CN = {
     "Napoli": "那不勒斯", "Roma": "罗马", "Lazio": "拉齐奥",
     "Atalanta": "亚特兰大", "Fiorentina": "佛罗伦萨", "Bologna": "博洛尼亚",
     "Torino": "都灵", "Udinese": "乌迪内斯", "Genoa": "热那亚",
+    "Empoli": "恩波利",
     "Paris Saint-Germain": "巴黎圣日耳曼", "Marseille": "马赛",
     "Lyon": "里昂", "Monaco": "摩纳哥", "Lille": "里尔",
     "Rennes": "雷恩", "Nice": "尼斯", "Lens": "朗斯",
@@ -67,6 +72,22 @@ TEAM_CN = {
     "Brazil": "巴西", "Argentina": "阿根廷", "Japan": "日本",
     "South Korea": "韩国", "China": "中国", "USA": "美国",
     "Mexico": "墨西哥", "Canada": "加拿大", "Australia": "澳大利亚",
+    "Slovenia": "斯洛文尼亚", "Scotland": "苏格兰",
+    "San Marino": "圣马力诺", "Finland": "芬兰",
+    "Faroe Islands": "法罗群岛", "Kazakhstan": "哈萨克斯坦",
+    "Bulgaria": "保加利亚", "Luxembourg": "卢森堡",
+    "Iceland": "冰岛", "Estonia": "爱沙尼亚",
+    "Czech Republic": "捷克", "Czechia": "捷克",
+    "North Macedonia": "北马其顿", "Switzerland": "瑞士",
+    "Albania": "阿尔巴尼亚", "Belarus": "白俄罗斯",
+    "Slovakia": "斯洛伐克", "Moldova": "摩尔多瓦",
+    "Georgia U21": "格鲁吉亚U21", "Greece U21": "希腊U21",
+    "Croatia U21": "克罗地亚U21", "Hungary U21": "匈牙利U21",
+    "Pakistan": "巴基斯坦", "Thailand": "泰国",
+    "Vietnam": "越南", "Philippines": "菲律宾",
+    "Armenia": "亚美尼亚", "Latvia": "拉脱维亚",
+    "Malawi": "马拉维", "South Sudan": "南苏丹",
+    "England U19": "英格兰U19", "Ireland U19": "爱尔兰U19",
 }
 
 def team_cn(name):
@@ -84,23 +105,48 @@ def league_cn(name):
         if k.lower() in name.lower() or name.lower() in k.lower(): return v
     return name
 
-# ============ 获取预测数据 ============
+# ============ 获取预测数据（支持自动翻页） ============
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_predictions(date_str):
-    url = f"{BSD_BASE}/predictions/"
-    params = {"date_from": date_str, "date_to": date_str, "limit": 200}
-    try:
-        r = requests.get(url, headers=BSD_HEADERS, params=params, timeout=25)
-        if r.status_code == 401:
-            return [], "API Token 无效（401）"
-        if r.status_code != 200:
-            return [], f"API 请求失败 ({r.status_code})"
-        data = r.json()
-        if isinstance(data, dict):
-            return data.get("results", []), None
-        return (data if isinstance(data, list) else []), None
-    except Exception as e:
-        return [], f"请求出错：{e}"
+    """
+    获取指定日期的全部预测数据。
+    自动翻页，直到拿到所有结果。
+    """
+    all_results = []
+    offset = 0
+    limit = 200  # API 最大限制
+
+    while True:
+        url = f"{BSD_BASE}/predictions/"
+        params = {
+            "date_from": date_str,
+            "date_to": date_str,
+            "limit": limit,
+            "offset": offset,
+        }
+        try:
+            r = requests.get(url, headers=BSD_HEADERS, params=params, timeout=25)
+            if r.status_code == 401:
+                return [], "API Token 无效（401）"
+            if r.status_code != 200:
+                return [], f"API 请求失败 ({r.status_code})"
+            data = r.json()
+        except Exception as e:
+            return [], f"请求出错：{e}"
+
+        results = data.get("results", [])
+        if not results:
+            break  # 没有更多数据了
+
+        all_results.extend(results)
+
+        # 检查是否还有下一页
+        if data.get("next"):
+            offset += limit
+        else:
+            break
+
+    return all_results, None
 
 # ============ 主界面 ============
 st.title("⚽ 足球预测（Bzzoiro 数据源）")
@@ -108,7 +154,7 @@ st.title("⚽ 足球预测（Bzzoiro 数据源）")
 sel_date = st.date_input("选择日期", value=date.today())
 target = sel_date.strftime("%Y-%m-%d")
 
-with st.spinner("正在获取预测数据..."):
+with st.spinner("正在获取预测数据（自动翻页）..."):
     predictions, err = fetch_predictions(target)
 
 if err:
@@ -128,7 +174,6 @@ else:
         away_name = ev.get("away_team", "?")
         status = ev.get("status", "")
 
-        # 比赛时间
         kickoff = ev.get("event_date", "")
         time_str = ""
         if kickoff:
@@ -137,23 +182,19 @@ else:
             except:
                 time_str = str(kickoff)[:5]
 
-        # 从 markets.match_result 里取概率
         mr = markets.get("match_result", {})
         prob_home = mr.get("prob_home")
         prob_draw = mr.get("prob_draw")
         prob_away = mr.get("prob_away")
         predicted = mr.get("predicted", "")
 
-        # 最可能比分
         score_block = markets.get("score", {})
         most_likely = score_block.get("most_likely", "—")
 
-        # 预期进球
         eg = markets.get("expected_goals", {})
         xg_home = eg.get("home")
         xg_away = eg.get("away")
 
-        # 大2.5 和 两队进球
         ou = markets.get("over_under", {})
         prob_over25 = ou.get("prob_over_25")
         btts_block = markets.get("btts", {})
@@ -173,6 +214,7 @@ else:
         result_label = result_map.get(predicted, predicted if predicted else "—")
 
         status_map = {"finished": "已结束", "notstarted": "未开始",
+                      "upcoming": "未开始", "live": "进行中",
                       "inprogress": "进行中", "postponed": "延期", "canceled": "取消"}
         status_cn = status_map.get(status, status)
 
