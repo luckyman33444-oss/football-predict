@@ -3,15 +3,12 @@ from datetime import date, datetime, timezone, timedelta
 
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 
-# 中国时区
 CST = timezone(timedelta(hours=8))
 
-# ============ Bzzoiro API 配置 ============
 BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
 BSD_HEADERS = {"Authorization": f"Token {BSD_TOKEN}"}
 
-# ============ ESPN 主流联赛（C 方案用） ============
 ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 ESPN_LEAGUES = {
     "eng.1": "英超", "esp.1": "西甲", "ger.1": "德甲",
@@ -22,7 +19,6 @@ ESPN_LEAGUES = {
     "aus.1": "澳超", "sau.1": "沙特联",
 }
 
-# ============ 联赛中文对照 ============
 LEAGUE_CN = {
     "Premier League": "英超", "LaLiga": "西甲", "Serie A": "意甲",
     "Bundesliga": "德甲", "Ligue 1": "法甲", "Champions League": "欧冠",
@@ -55,7 +51,6 @@ LEAGUE_CN = {
     "Liga MX Apertura": "墨超",
 }
 
-# ============ 球队中文对照 ============
 TEAM_CN = {
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
@@ -175,7 +170,6 @@ def league_cn(name):
     return LEAGUE_CN.get(name, name)
 
 def to_cst_time(dt_str):
-    """把 UTC 时间字符串转成中国时间 HH:MM"""
     if not dt_str: return ""
     try:
         dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
@@ -184,7 +178,6 @@ def to_cst_time(dt_str):
         return str(dt_str)[11:16]
 
 def to_cst_date(dt_str):
-    """把 UTC 时间字符串转成中国日期 YYYY-MM-DD"""
     if not dt_str: return ""
     try:
         dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
@@ -192,7 +185,6 @@ def to_cst_date(dt_str):
     except:
         return str(dt_str)[:10]
 
-# ============ xG 反推比分 ============
 def pois(k, lam):
     return math.exp(-lam) * lam ** k / math.factorial(k)
 
@@ -214,7 +206,6 @@ def predict_scores_from_xg(xg_home, xg_away, max_goals=6, top_n=2):
     top = sorted(m.items(), key=lambda x: -x[1])[:top_n]
     return [(h, a, p) for (h, a), p in top]
 
-# ============ Bzzoiro ============
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_all_predictions():
     all_results = []
@@ -240,6 +231,16 @@ def fetch_all_predictions():
             if offset > 2000: break
         else: break
     return all_results, None
+
+def normalize(name):
+    if not name: return ""
+    s = name.lower().strip()
+    for suf in [" fc", " afc", " sc", " cf", " ac", " united", " city",
+                " club", " deportivo", " athletic"]:
+        if s.endswith(suf):
+            s = s[:-len(suf)]
+    s = "".join(c for c in s if c.isalnum())
+    return s
 
 def parse_prediction(p):
     ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
@@ -301,22 +302,8 @@ def parse_prediction(p):
         "两队进球": fp(btts.get("prob_yes")),
     }
 
-# ============ 队名标准化（用于匹配） ============
-def normalize(name):
-    if not name: return ""
-    s = name.lower().strip()
-    for suf in [" fc", " afc", " sc", " cf", " ac", " united", " city",
-                " club", " deportivo", " athletic"]:
-        if s.endswith(suf):
-            s = s[:-len(suf)]
-    # 去掉所有空格和标点
-    s = "".join(c for c in s if c.isalnum())
-    return s
-
-# ============ ESPN 当日全部赛事 ============
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_espn_all(date_str):
-    """从 ESPN 主流联赛接口拉当天赛事"""
     dates_param = date_str.replace("-", "")
     all_events = []
     for code, cn_name in ESPN_LEAGUES.items():
@@ -363,7 +350,6 @@ st.title("⚽ 足球预测")
 
 tab1, tab2, tab3 = st.tabs(["📅 今日预测（Bzzoiro）", "🌐 全部赛事（ESPN）", "🛠️ 调试"])
 
-# -------- 预加载 Bzzoiro 数据（给 Tab 1 和 Tab 2 用）--------
 with st.spinner("正在获取 Bzzoiro 预测数据..."):
     all_preds, err = fetch_all_predictions()
 
@@ -374,28 +360,36 @@ parsed = []
 if all_preds:
     parsed = [parse_prediction(p) for p in all_preds]
     df_all = pd.DataFrame(parsed)
-    # 建立 Bzzoiro 索引：按 (home_key, away_key) 匹配
     bsd_lookup = {}
     for p in parsed:
-        key = (p["_home_key"], p["_away_key"])
-        bsd_lookup[key] = p
+        bsd_lookup[(p["_home_key"], p["_away_key"])] = p
 else:
     df_all = pd.DataFrame()
     bsd_lookup = {}
 
-# -------- Tab 1：Bzzoiro 预测 --------
+# -------- Tab 1 --------
 with tab1:
     if df_all.empty:
         st.warning("没有获取到 Bzzoiro 预测数据。")
     else:
-        st.info(f"📊 共 **{len(df_all)}** 条预测，覆盖 **{df_all['event_date'].nunique()}** 个日期（时间为北京时间）")
+        # 按日期统计比赛数
+        date_counts = df_all.groupby("event_date").size().to_dict()
+        available_dates = sorted(date_counts.keys())
 
-        available_dates = sorted(df_all["event_date"].unique())
+        # 日期选项：显示"日期（N场）"
+        date_options = [f"{d}（{date_counts[d]}场）" for d in available_dates]
+
         today_str = datetime.now(CST).strftime("%Y-%m-%d")
-        default_date = today_str if today_str in available_dates else available_dates[-1]
+        # 默认选今天，否则选最近的有比赛的日期
+        if today_str in available_dates:
+            default_idx = available_dates.index(today_str)
+        else:
+            # 找今天之后最近的日期
+            future = [i for i, d in enumerate(available_dates) if d >= today_str]
+            default_idx = future[0] if future else len(available_dates) - 1
 
-        sel_date = st.selectbox("选择日期", available_dates,
-                                index=available_dates.index(default_date) if default_date in available_dates else 0)
+        sel_label = st.selectbox("选择日期（括号里是当天比赛数）", date_options, index=default_idx)
+        sel_date = sel_label.split("（")[0]
 
         df = df_all[df_all["event_date"] == sel_date].copy()
 
@@ -404,16 +398,24 @@ with tab1:
         if sel_leagues:
             df = df[df["联赛"].isin(sel_leagues)]
 
-        st.success(f"**{sel_date}** 共 {len(df)} 场比赛")
+        st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
+
         if not df.empty:
             cols = ["时间", "联赛", "状态", "主队", "客队", "预测比分", "预测结果",
                     "主胜", "和局", "客胜", "预期主队进球", "预期客队进球",
                     "大2.5", "两队进球"]
             st.dataframe(df[cols], use_container_width=True, hide_index=True)
 
-# -------- Tab 2：ESPN 全部赛事 + Bzzoiro 匹配 --------
+        # 显示所有日期的分布，方便跳转
+        with st.expander("📅 查看所有日期分布"):
+            dist_df = pd.DataFrame([
+                {"日期": d, "比赛数": date_counts[d]} for d in available_dates
+            ])
+            st.dataframe(dist_df, use_container_width=True, hide_index=True)
+
+# -------- Tab 2 --------
 with tab2:
-    st.caption("从 ESPN 拉取主流联赛当日全部赛事，自动匹配 Bzzoiro 预测（时间为北京时间）")
+    st.caption("从 ESPN 拉取主流联赛当日全部赛事，自动匹配 Bzzoiro 预测（北京时间）")
 
     espn_date = st.date_input("选择日期", value=date.today(), key="espn_date")
     espn_date_str = espn_date.strftime("%Y-%m-%d")
@@ -429,12 +431,10 @@ with tab2:
             row = parse_espn_event(e)
             if row: espn_rows.append(row)
 
-        # 匹配 Bzzoiro 预测
         matched_count = 0
         for row in espn_rows:
             key = (row["_home_key"], row["_away_key"])
             bsd = bsd_lookup.get(key)
-            # 如果精确匹配不到，尝试反向匹配（主客对调）
             if not bsd:
                 bsd = bsd_lookup.get((row["_away_key"], row["_home_key"]))
             if bsd:
@@ -458,17 +458,16 @@ with tab2:
                 "预测比分", "预测结果", "主胜", "和局", "客胜"]
         st.dataframe(espn_df[cols], use_container_width=True, hide_index=True)
 
-# -------- Tab 3：调试 --------
+# -------- Tab 3 --------
 with tab3:
-    st.caption("查看 Bzzoiro 和 ESPN 的原始返回")
-    if st.button("🔬 查看 Bzzoiro 前 3 条", key="dbg1"):
+    st.caption("查看原始数据")
+    if st.button("🔬 Bzzoiro 前 3 条", key="dbg1"):
         if all_preds:
             st.json(all_preds[:3])
-    if st.button("🔬 查看 ESPN 前 2 条", key="dbg2"):
-        espn_date = st.date_input("ESPN 日期", value=date.today(), key="dbg_date")
-        evs = fetch_espn_all(espn_date.strftime("%Y-%m-%d"))
+    if st.button("🔬 ESPN 前 2 条", key="dbg2"):
+        evs = fetch_espn_all(date.today().strftime("%Y-%m-%d"))
         if evs:
             st.json(evs[:2])
 
 st.divider()
-st.caption("⚠️ 预测来自 Bzzoiro Sports Data；比分由 xG 经泊松分布反推；时间已转北京时间。")
+st.caption("⚠️ 预测来自 Bzzoiro；比分由 xG 泊松反推；时间为北京时间。")
