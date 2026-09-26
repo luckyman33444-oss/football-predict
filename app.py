@@ -22,8 +22,8 @@ GOAL_TWEAK = 1.0
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch(code):
-    # 改用日期范围代替赛季，绕过免费版限制
-    url = f"{BASE}/competitions/{code}/matches?dateFrom=2025-07-01&dateTo=2026-12-31"
+    # 不加任何筛选参数，直接请求该联赛的所有比赛
+    url = f"{BASE}/competitions/{code}/matches"
     r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
     r.raise_for_status()
     return r.json()
@@ -53,7 +53,6 @@ def build(ms):
         hs[h]+=hg; hp[h]+=1; hc[h]+=ag
         a_s[a]+=ag; ap[a]+=1; ac[a]+=hg
 
-    # 安全网：如果没数据，用默认平均值
     if n==0:
         st.warning("⚠️ 没有获取到历史比赛数据，将使用联赛平均值进行预测。")
         Lh, La = 1.5, 1.1
