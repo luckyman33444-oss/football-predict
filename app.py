@@ -259,6 +259,15 @@ def predict_full(xg_h, xg_a):
     return {"top_scores": top, "hw": hw, "d": d, "aw": aw,
             "over25": ov25, "under25": un25, "h1": h1, "h2": h2}
 
+def implied_odds(prob_pct):
+    """从概率(%)反推隐含赔率（十进制），例如 62.4% → 1.60"""
+    if not prob_pct or prob_pct <= 0: return None
+    return round(100.0 / prob_pct, 2)
+
+def fmt_odds(o):
+    if o is None: return "—"
+    return f"{o:.2f}"
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_event_lineups(event_id):
     try:
@@ -331,6 +340,13 @@ def parse_prediction(p):
         scores_list = []; main_score = "—"; alt_score = "—"
         main_score_p = 0; alt_score_p = 0
         over_label = "—"; over_pct = 0; h1 = "—"; h2 = "—"
+
+    prob_home = mr.get("prob_home") or 0
+    prob_draw = mr.get("prob_draw") or 0
+    prob_away = mr.get("prob_away") or 0
+    prob_over = (pred["over25"] * 100) if pred else 0
+    prob_under = (pred["under25"] * 100) if pred else 0
+
     status_map = {"finished": "已结束", "notstarted": "未开始",
                   "upcoming": "未开始", "live": "进行中",
                   "inprogress": "进行中", "postponed": "延期", "canceled": "取消"}
@@ -351,14 +367,19 @@ def parse_prediction(p):
         "_scores_list": scores_list,
         "预测结果": result_map.get(mr.get("predicted", ""), "—"),
         "上半场": h1, "下半场": h2,
-        "主胜": fp(mr.get("prob_home")), "和局": fp(mr.get("prob_draw")),
-        "客胜": fp(mr.get("prob_away")),
-        "大小球": f"{over_label} {over_pct*100:.1f}%",
+        "主胜": fp(prob_home), "和局": fp(prob_draw), "客胜": fp(prob_away),
+        "大小球": f"{over_label} {over_pct:.1f}%",
         "预期主队进球": f"{xg_h:.2f}" if xg_h else "—",
         "预期客队进球": f"{xg_a:.2f}" if xg_a else "—",
-        "_prob_home": mr.get("prob_home") or 0,
-        "_prob_draw": mr.get("prob_draw") or 0,
-        "_prob_away": mr.get("prob_away") or 0,
+        # ★ 隐含赔率
+        "主胜赔率": fmt_odds(implied_odds(prob_home)),
+        "和局赔率": fmt_odds(implied_odds(prob_draw)),
+        "客胜赔率": fmt_odds(implied_odds(prob_away)),
+        "大球赔率": fmt_odds(implied_odds(prob_over)),
+        "小球赔率": fmt_odds(implied_odds(prob_under)),
+        "_prob_home": prob_home,
+        "_prob_draw": prob_draw,
+        "_prob_away": prob_away,
         "_prob_over": pred["over25"] if pred else 0,
         "_prob_under": pred["under25"] if pred else 0,
         "_xg_h": xg_h, "_xg_a": xg_a,
@@ -450,54 +471,34 @@ with tab1:
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
         if not df.empty:
-            cols = ["时间", "联赛", "状态", "主队", "客队", "主力比分", "备选比分",
-                    "预测结果", "上半场", "下半场", "主胜", "和局", "客胜", "大小球"]
+            cols = ["时间", "联赛", "状态", "主队", "客队",
+                    "主力比分", "备选比分", "预测结果",
+                    "上半场", "下半场",
+                    "主胜", "主胜赔率", "和局", "和局赔率",
+                    "客胜", "客胜赔率",
+                    "大小球", "大球赔率", "小球赔率"]
             st.dataframe(df[cols], use_container_width=True, hide_index=True)
+            st.caption("💡 赔率由概率反推（十进制隐含赔率 = 100 ÷ 概率%），仅作参考。")
 
 # ========== Tab 2：3串1核心 ==========
 with tab2:
     now = datetime.now(CST)
     end_window = now + timedelta(hours=2)
 
-    # ★ 实时状态栏（不需要点按钮）
-    st.markdown("### ⏰ 实时查询状态")
-    st.caption(f"当前北京时间：**{now.strftime('%Y-%m-%d %H:%M')}** ｜ 查询窗口：**{now.strftime('%H:%M')} ～ {end_window.strftime('%H:%M')}**")
+    # 顶部简短提示
+    st.caption(f"⏰ 当前北京时间 **{now.strftime('%H:%M')}** ｜ 查询窗口 **{now.strftime('%H:%M')} ～ {end_window.strftime('%H:%M')}** ｜ 只从 2 小时内未开赛 + 进行中的比赛里推荐")
 
     if df_all.empty:
         st.warning("没有数据可分析。")
     else:
         tmp = df_all[df_all["kickoff_dt"].notna()].copy()
-        # 未开始：kickoff 在 now ~ now+2h
         mask_notstarted = (tmp["状态"] == "未开始") & \
                           (tmp["kickoff_dt"] >= now) & \
                           (tmp["kickoff_dt"] <= end_window)
-        # 进行中：不限时间
         mask_live = tmp["状态"] == "进行中"
         window_matches = tmp[mask_notstarted | mask_live].copy()
-
         n_total = len(window_matches)
         n_live = len(window_matches[window_matches["状态"] == "进行中"])
-        n_notstarted = n_total - n_live
-
-        # 突出显示统计
-        col_a, col_b, col_c = st.columns(3)
-        with col_a:
-            st.metric("候选比赛", f"{n_total} 场")
-        with col_b:
-            st.metric("2小时内未开始", f"{n_notstarted} 场")
-        with col_c:
-            st.metric("进行中", f"{n_live} 场")
-
-        if n_total == 0:
-            st.info("⏰ 当前 2 小时内没有未开始比赛，也没有进行中的比赛。")
-            st.caption("提示：比赛通常集中在晚上到凌晨（北京时间）。可以等有比赛时段再试。")
-        else:
-            # 显示当前候选列表
-            with st.expander(f"📋 查看当前候选 {n_total} 场", expanded=False):
-                show_cols = ["时间", "联赛", "状态", "主队", "客队", "主力比分", "预测结果"]
-                st.dataframe(window_matches[show_cols], use_container_width=True, hide_index=True)
-
-    st.divider()
 
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -514,9 +515,10 @@ with tab2:
         if df_all.empty:
             st.warning("没有数据可分析。")
         elif n_total == 0:
-            st.warning("当前 2 小时内没有可选比赛，请等有比赛时段。")
+            st.warning(f"⏰ 当前 2 小时内没有未开赛比赛，也没有进行中的比赛。")
+            st.caption("提示：比赛通常集中在晚上到凌晨（北京时间）。")
         elif n_total < 3:
-            st.warning(f"当前只有 **{n_total}** 场比赛（2小时内未开始 + 进行中），不足 3 场无法组 3串1。")
+            st.warning(f"当前只有 **{n_total}** 场可选比赛，不足 3 场无法组 3串1。")
         else:
             upcoming = window_matches.copy()
 
@@ -565,20 +567,22 @@ with tab2:
                 upcoming["_conf"] = upcoming.apply(calc_conf, axis=1)
 
             top_matches = upcoming.sort_values("_conf", ascending=False).head(3)
-            n_live_sel = sum(1 for _, r in top_matches.iterrows() if r["状态"] == "进行中")
 
-            st.success(
-                f"✅ 从候选 **{len(upcoming)}** 场（含进行中 {n_live_sel} 场）中选出信心最高的 3 场"
-            )
+            st.success(f"✅ 从 {len(upcoming)} 场候选（含进行中 {n_live} 场）中选出信心最高的 3 场")
 
             matches_data = []
             for _, row in top_matches.iterrows():
                 opts = []
-                if row["_prob_home"]: opts.append(("主胜", row["_prob_home"] / 100))
-                if row["_prob_draw"]: opts.append(("和局", row["_prob_draw"] / 100))
-                if row["_prob_away"]: opts.append(("客胜", row["_prob_away"] / 100))
-                if row["_prob_over"]: opts.append(("大球(2.5+)", row["_prob_over"]))
-                if row["_prob_under"]: opts.append(("小球(2.5-)", row["_prob_under"]))
+                if row["_prob_home"]:
+                    opts.append(("主胜", row["_prob_home"] / 100, implied_odds(row["_prob_home"])))
+                if row["_prob_draw"]:
+                    opts.append(("和局", row["_prob_draw"] / 100, implied_odds(row["_prob_draw"])))
+                if row["_prob_away"]:
+                    opts.append(("客胜", row["_prob_away"] / 100, implied_odds(row["_prob_away"])))
+                if row["_prob_over"]:
+                    opts.append(("大球(2.5+)", row["_prob_over"], implied_odds(row["_prob_over"] * 100)))
+                if row["_prob_under"]:
+                    opts.append(("小球(2.5-)", row["_prob_under"], implied_odds(row["_prob_under"] * 100)))
                 opts.sort(key=lambda x: -x[1])
                 scores = row["_scores_list"] if row["_scores_list"] else []
                 main_s = scores[0] if len(scores) > 0 else ("—", 0)
@@ -602,8 +606,11 @@ with tab2:
 
             rows_for_table = []
             for i, md in enumerate(matches_data):
-                main_str = f"{md['main_score'][0]} ({md['main_score'][1]*100:.1f}%)"
-                alt_str = f"{md['alt_score'][0]} ({md['alt_score'][1]*100:.1f}%)"
+                # 比分隐含赔率 ≈ 100 ÷ 概率%
+                mp = md["main_score"][1]
+                ap = md["alt_score"][1]
+                main_str = f"{md['main_score'][0]} ({mp*100:.1f}% / 赔率{implied_odds(mp*100) or '—'})"
+                alt_str = f"{md['alt_score'][0]} ({ap*100:.1f}% / 赔率{implied_odds(ap*100) or '—'})"
                 role = "**主胆**" if (best_idx == i) else "拖"
                 rows_for_table.append({
                     "场次": i + 1, "时间": md["时间"], "比赛": md["比赛"],
@@ -647,27 +654,54 @@ with tab2:
 
             st.divider()
 
-            st.subheader("🛡️ 稳健串（胜平负/大小球）")
-            combo = [(md, md["opts"][0][0], md["opts"][0][1]) for md in matches_data]
-            prob = 1
-            for _, _, p in combo: prob *= p
-            st.write(f"**命中概率：{prob*100:.1f}%**")
+            # ===== 稳健串（含赔率）=====
+            st.subheader("🛡️ 稳健串（胜平负/大小球，含赔率）")
+            combo = [(md, md["opts"][0]) for md in matches_data]
+            prob = 1; total_odds = 1
+            for _, opt in combo:
+                prob *= opt[1]
+                if opt[2]: total_odds *= opt[2]
+            st.write(f"**命中概率：{prob*100:.1f}%** ｜ **总赔率（估算）：{total_odds:.2f}**")
+
             stable_rows = []
-            for i, (md, pick, p) in enumerate(combo, 1):
+            for i, (md, opt) in enumerate(combo, 1):
+                pick_name, pick_prob, pick_odds = opt
                 stable_rows.append({
                     "场次": i, "时间": md["时间"], "比赛": md["比赛"],
-                    "状态": md["状态"], "推荐": pick, "概率": f"{p*100:.1f}%",
+                    "状态": md["状态"], "推荐": pick_name,
+                    "概率": f"{pick_prob*100:.1f}%",
+                    "赔率": fmt_odds(pick_odds),
                 })
             st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
 
+            # 备选稳健串（每场取第二高）
+            st.markdown("**备选串（每场取第二高概率）：**")
+            combo_b = [(md, md["opts"][1] if len(md["opts"]) > 1 else md["opts"][0]) for md in matches_data]
+            prob_b = 1; total_odds_b = 1
+            for _, opt in combo_b:
+                prob_b *= opt[1]
+                if opt[2]: total_odds_b *= opt[2]
+            st.write(f"**命中概率：{prob_b*100:.1f}%** ｜ **总赔率（估算）：{total_odds_b:.2f}**")
+            stable_rows_b = []
+            for i, (md, opt) in enumerate(combo_b, 1):
+                pick_name, pick_prob, pick_odds = opt
+                stable_rows_b.append({
+                    "场次": i, "时间": md["时间"], "比赛": md["比赛"],
+                    "状态": md["状态"], "推荐": pick_name,
+                    "概率": f"{pick_prob*100:.1f}%",
+                    "赔率": fmt_odds(pick_odds),
+                })
+            st.dataframe(pd.DataFrame(stable_rows_b), use_container_width=True, hide_index=True)
+
             st.divider()
 
+            # ===== 最重心 =====
             st.subheader("⭐ 最重心单场")
             first = matches_data[0]
             best_opt = first["opts"][0]
             st.success(
                 f"**{first['比赛']}** ｜ {first['联赛']} ｜ {first['时间']} ｜ {first['状态']}\n\n"
-                f"推荐：**{best_opt[0]}**（{best_opt[1]*100:.1f}%）\n\n"
+                f"推荐：**{best_opt[0]}**（概率 {best_opt[1]*100:.1f}%，隐含赔率 {fmt_odds(best_opt[2])}）\n\n"
                 f"比分参考：{first['main_score'][0]} / {first['alt_score'][0]}"
             )
 
@@ -733,7 +767,7 @@ with tab4:
                 with c1:
                     st.write(f"**{row['主队']} vs {row['客队']}** ｜ {row['联赛']} ｜ {row['event_date']} {row['时间']}")
                 with c2:
-                    st.write(f"主 {row['主胜']} ｜ 和 {row['和局']} ｜ 客 {row['客胜']}")
+                    st.write(f"主 {row['主胜']}({row['主胜赔率']}) ｜ 和 {row['和局']}({row['和局赔率']}) ｜ 客 {row['客胜']}({row['客胜赔率']})")
                 with c3:
                     is_core = row["event_id"] in st.session_state.core_matches
                     if is_core:
@@ -746,4 +780,4 @@ with tab4:
                             st.rerun()
 
 st.divider()
-st.caption("⚠️ 预测来自 Bzzoiro；比分由 xG 泊松反推；时间为北京时间。")
+st.caption("⚠️ 预测来自 Bzzoiro；赔率为概率反推的隐含赔率（非真实盘口）；比分为 xG 泊松反推；时间为北京时间。")
