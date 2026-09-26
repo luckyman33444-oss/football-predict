@@ -12,8 +12,7 @@ try:
 except Exception:
     TOKEN = os.environ.get("FOOTBALL_DATA_TOKEN","")
 
-# =========================================================
-# ★★★ 這裡是你自己的東西，隨便改 ★★★
+# ★★★ 你自己的调整区 ★★★
 ATTACK_BOOST = {
     # "Arsenal": 1.15,
     # "Chelsea": 0.85,
@@ -23,8 +22,9 @@ GOAL_TWEAK = 1.0
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch(code):
-    r = requests.get(f"{BASE}/competitions/{code}/matches",
-                     headers={"X-Auth-Token": TOKEN}, timeout=25)
+    # 改用日期范围代替赛季，绕过免费版限制
+    url = f"{BASE}/competitions/{code}/matches?dateFrom=2025-07-01&dateTo=2026-12-31"
+    r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
     r.raise_for_status()
     return r.json()
 
@@ -52,7 +52,17 @@ def build(ms):
         n+=1; Lh+=hg; La+=ag
         hs[h]+=hg; hp[h]+=1; hc[h]+=ag
         a_s[a]+=ag; ap[a]+=1; ac[a]+=hg
-    if n==0: return None
+
+    # 安全网：如果没数据，用默认平均值
+    if n==0:
+        st.warning("⚠️ 没有获取到历史比赛数据，将使用联赛平均值进行预测。")
+        Lh, La = 1.5, 1.1
+        return {
+            "Lh": Lh, "La": La, "n": 0, "names": names,
+            "ha": {t: 1.0 for t in hp}, "hd": {t: 1.0 for t in hp},
+            "aa": {t: 1.0 for t in ap}, "ad": {t: 1.0 for t in ap}
+        }
+
     Lh/=n; La/=n
     K = 6
     def rate(tot, played, base):
