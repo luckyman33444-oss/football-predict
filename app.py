@@ -21,10 +21,8 @@ LEAGUE_CN = {
     "Liga Profesional Argentina": "阿甲", "MLS": "美职联", "Liga MX": "墨超",
     "Chinese Super League": "中超", "J1 League": "日职联",
     "K League 1": "韩K联", "A-League": "澳超", "Saudi Pro League": "沙特联",
-    "Scottish Premiership": "苏超", "International": "国际赛",
-    "Club Friendlies": "俱乐部友谊", "Primeira Liga (POR)": "葡超",
-    "Liga Portugal": "葡超", "Ekstraklasa": "波兰甲",
-    "Superliga (ROU)": "罗马尼亚甲", "Pro League (BEL)": "比甲",
+    "Scottish Premiership": "苏超", "NWSL": "美国女足",
+    "International": "国际赛", "Club Friendlies": "俱乐部友谊",
 }
 
 # ============ 球队中文对照 ============
@@ -116,60 +114,83 @@ with st.spinner("正在获取预测数据..."):
 if err:
     st.error(err)
 elif not predictions:
-    st.info(f"{target} 没有预测数据。试试换个日期（如周末或明天）。")
+    st.info(f"{target} 没有预测数据。试试换个日期。")
 else:
     st.success(f"共获取 {len(predictions)} 场比赛预测")
 
     rows = []
     for p in predictions:
-        # === 根据真实字段结构解析 ===
-        # event 嵌套对象包含比赛信息
         ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
+        markets = p.get("markets", {}) if isinstance(p.get("markets"), dict) else {}
 
-        league_name = ev.get("league_name", "") or ev.get("league", {}).get("name", "") if isinstance(ev.get("league"), dict) else ""
+        league_name = ev.get("league_name", "")
         home_name = ev.get("home_team", "?")
         away_name = ev.get("away_team", "?")
+        status = ev.get("status", "")
 
         # 比赛时间
-        kickoff = ev.get("event_date", ev.get("kickoff", ""))
+        kickoff = ev.get("event_date", "")
         time_str = ""
         if kickoff:
             try:
-                if "T" in kickoff:
-                    time_str = datetime.fromisoformat(kickoff.replace("Z", "+00:00")).strftime("%H:%M")
-                else:
-                    time_str = str(kickoff)[:5]
+                time_str = datetime.fromisoformat(kickoff.replace("Z", "+00:00")).strftime("%H:%M")
             except:
                 time_str = str(kickoff)[:5]
 
-        # 概率字段（0-100 范围）
-        prob_home = p.get("prob_home_win")
-        prob_draw = p.get("prob_draw")
-        prob_away = p.get("prob_away_win")
-        predicted_result = p.get("predicted_result", "")  # H / D / A
+        # 从 markets.match_result 里取概率
+        mr = markets.get("match_result", {})
+        prob_home = mr.get("prob_home")
+        prob_draw = mr.get("prob_draw")
+        prob_away = mr.get("prob_away")
+        predicted = mr.get("predicted", "")
 
-        # 格式化百分比
+        # 最可能比分
+        score_block = markets.get("score", {})
+        most_likely = score_block.get("most_likely", "—")
+
+        # 预期进球
+        eg = markets.get("expected_goals", {})
+        xg_home = eg.get("home")
+        xg_away = eg.get("away")
+
+        # 大2.5 和 两队进球
+        ou = markets.get("over_under", {})
+        prob_over25 = ou.get("prob_over_25")
+        btts_block = markets.get("btts", {})
+        prob_btts = btts_block.get("prob_yes")
+
         def fmt_pct(v):
             if v is None: return "—"
-            try:
-                f = float(v)
-                return f"{f:.1f}%"
+            try: return f"{float(v):.1f}%"
             except: return str(v)
 
-        # 预测比分（如果 API 有提供的话，否则用预测结果推导）
-        # Bzzoiro 可能不直接给具体比分，我们用 predicted_result 标注方向
+        def fmt_num(v, digits=2):
+            if v is None: return "—"
+            try: return f"{float(v):.{digits}f}"
+            except: return str(v)
+
         result_map = {"H": "主胜", "D": "和局", "A": "客胜"}
-        result_label = result_map.get(predicted_result, predicted_result)
+        result_label = result_map.get(predicted, predicted if predicted else "—")
+
+        status_map = {"finished": "已结束", "notstarted": "未开始",
+                      "inprogress": "进行中", "postponed": "延期", "canceled": "取消"}
+        status_cn = status_map.get(status, status)
 
         rows.append({
             "联赛": league_cn(league_name),
             "时间": time_str,
+            "状态": status_cn,
             "主队": team_cn(home_name),
             "客队": team_cn(away_name),
+            "预测比分": most_likely,
             "预测结果": result_label,
             "主胜": fmt_pct(prob_home),
             "和局": fmt_pct(prob_draw),
             "客胜": fmt_pct(prob_away),
+            "预期主队进球": fmt_num(xg_home),
+            "预期客队进球": fmt_num(xg_away),
+            "大2.5": fmt_pct(prob_over25),
+            "两队进球": fmt_pct(prob_btts),
         })
 
     df = pd.DataFrame(rows)
