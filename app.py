@@ -329,10 +329,10 @@ def analyze_line_movement(odds_data):
             "away_signal": away_sig, "over_signal": over_sig,
             "confidence": confidence, "signals": signals}
 
-# ★ 新函数：获取首发阵容
+# ★ 完整版：首发 + 替补 + 伤停
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_lineup_info(event_id):
-    """获取首发阵容（Bzzoiro 返回阵容，不返回伤停）"""
+    """获取首发阵容 + 替补 + 伤停（Bzzoiro lineups 接口）"""
     try:
         r = requests.get(f"{BSD_BASE}/events/{event_id}/lineups/", headers=BSD_HEADERS, timeout=15)
         if r.status_code != 200: return None
@@ -340,34 +340,42 @@ def get_lineup_info(event_id):
     except: return None
 
     lineups = data.get("lineups", {}) if isinstance(data.get("lineups"), dict) else {}
+    unavailable = data.get("unavailable_players", {}) if isinstance(data.get("unavailable_players"), dict) else {}
     status = data.get("lineup_status", "")
 
-    def parse_side(side_data):
-        if not isinstance(side_data, dict): return {"formation": "", "players": [], "team_name": ""}
-        players = side_data.get("players", []) or []
-        player_list = []
-        for p in players:
-            pos = p.get("position", "") or "?"
-            if pos in ("G", "GK"): pos_cn = "门将"
-            elif pos in ("D", "DEF", "CB", "LB", "RB"): pos_cn = "后卫"
-            elif pos in ("M", "MID", "CM", "DM", "AM"): pos_cn = "中场"
-            elif pos in ("F", "FW", "ST", "CF", "LW", "RW"): pos_cn = "前锋"
-            else: pos_cn = pos
-            player_list.append({
-                "name": p.get("short_name") or p.get("name", "?"),
-                "position": pos_cn,
-                "number": p.get("jersey_number", ""),
-            })
+    def pos_cn(pos):
+        if not pos: return "?"
+        if pos in ("G", "GK"): return "门将"
+        if pos in ("D", "DEF", "CB", "LB", "RB"): return "后卫"
+        if pos in ("M", "MID", "CM", "DM", "AM"): return "中场"
+        if pos in ("F", "FW", "ST", "CF", "LW", "RW"): return "前锋"
+        return pos
+
+    def parse_player(p):
+        return {
+            "name": p.get("short_name") or p.get("name", "?"),
+            "position": pos_cn(p.get("position", "")),
+            "number": p.get("jersey_number", ""),
+            "captain": p.get("captain", False),
+        }
+
+    def parse_side(side_data, unavail_list):
+        if not isinstance(side_data, dict): side_data = {}
+        players = [parse_player(p) for p in (side_data.get("players") or [])]
+        subs = [parse_player(p) for p in (side_data.get("substitutes") or [])]
+        injured = [parse_player(p) for p in (unavail_list or [])]
         return {
             "formation": side_data.get("formation", ""),
-            "players": player_list,
+            "players": players,
+            "substitutes": subs,
+            "injured": injured,
             "team_name": side_data.get("team_name", ""),
         }
 
     return {
         "status": status,
-        "home": parse_side(lineups.get("home", {})),
-        "away": parse_side(lineups.get("away", {})),
+        "home": parse_side(lineups.get("home", {}), unavailable.get("home", [])),
+        "away": parse_side(lineups.get("away", {}), unavailable.get("away", [])),
     }
 
 def judge_consistency(model_pick, market_signal):
@@ -606,7 +614,7 @@ with tab2:
 
     col1, col2 = st.columns([3, 1])
     with col1:
-        enable_lineup_info = st.checkbox("👥 显示首发阵容（半自动）", value=True, key="lineup_switch")
+        enable_lineup_info = st.checkbox("👥 显示首发阵容 + 伤停（半自动）", value=True, key="lineup_switch")
         enable_market_info = st.checkbox("📊 显示盘口走势（半自动）", value=True, key="market_switch")
     with col2:
         if st.button("🗑️ 清空核心", key="clear_core"):
@@ -620,8 +628,8 @@ with tab2:
     else:
         st.caption("📌 未手动加入核心。可在 **Tab 1** 勾选，或在 **Tab 4** 搜索后加入。")
 
-    st.caption("💡 **半自动模式**：模型只做推荐，**不自动改概率**。首发阵容和盘口信息会并排展示，你自己判断。")
-    st.caption("⚠️ 首发阵容赛前 1 小时才更新为「已确认」，之前显示「暂无」是正常的。")
+    st.caption("💡 **半自动模式**：模型只做推荐，**不自动改概率**。首发阵容、伤停、盘口信息会并排展示，你自己判断。")
+    st.caption("⚠️ 首发阵容和伤停赛前 1 小时才更新，之前显示「暂无」是正常的。")
 
     if st.button("🎯 生成 3串1 推荐", type="primary", key="btn_core"):
         if df_all.empty:
@@ -669,7 +677,7 @@ with tab2:
                 else:
                     st.success(note)
 
-                    with st.spinner("正在获取赔率、盘口走势和首发阵容..."):
+                    with st.spinner("正在获取赔率、盘口走势、首发阵容和伤停..."):
                         odds_map = {}
                         lineup_map = {}
                         movement_map = {}
@@ -722,7 +730,7 @@ with tab2:
                     # ============ 半自动情报面板 ============
                     if enable_lineup_info or enable_market_info:
                         st.subheader("🔍 半自动情报面板")
-                        st.caption("模型推荐 vs 市场信号 vs 首发阵容。⚠️ 表示模型与市场冲突，需谨慎。")
+                        st.caption("模型推荐 vs 市场信号 vs 阵容/伤停。⚠️ 表示模型与市场冲突，需谨慎。")
 
                         info_rows = []
                         for i, md in enumerate(matches_data, 1):
@@ -736,14 +744,23 @@ with tab2:
                             away_lu = lu.get("away", {}) if lu else {}
                             home_n = len(home_lu.get("players", []))
                             away_n = len(away_lu.get("players", []))
+                            home_sub = len(home_lu.get("substitutes", []))
+                            away_sub = len(away_lu.get("substitutes", []))
+                            home_inj = len(home_lu.get("injured", []))
+                            away_inj = len(away_lu.get("injured", []))
                             home_form = home_lu.get("formation", "")
                             away_form = away_lu.get("formation", "")
 
                             if home_n > 0 or away_n > 0:
                                 status_cn = {"confirmed": "已确认", "predicted": "预测"}.get(lineup_status, lineup_status)
-                                lineup_str = f"{status_cn} ｜ 主{home_n}人({home_form}) ｜ 客{away_n}人({away_form})"
+                                lineup_str = f"{status_cn} ｜ 主{home_n}人({home_form})/替{home_sub} ｜ 客{away_n}人({away_form})/替{away_sub}"
                             else:
                                 lineup_str = "暂无（赛前1小时更新）"
+
+                            if home_inj == 0 and away_inj == 0:
+                                injury_str = "无伤停报告"
+                            else:
+                                injury_str = f"主 {home_inj}人 ｜ 客 {away_inj}人"
 
                             pick_name, _, _, is_real, movement = best_opt
                             consistency = judge_consistency(pick_name, movement)
@@ -754,34 +771,57 @@ with tab2:
                                 "盘口走势": movement if movement else "—",
                                 "一致性": f"{consistency['emoji']} {consistency['tag']}",
                                 "首发阵容": lineup_str,
+                                "伤停": injury_str,
                                 "说明": consistency["note"],
                             })
                         info_df = pd.DataFrame(info_rows)
                         st.dataframe(info_df, use_container_width=True, hide_index=True)
 
-                        # 展开看具体首发
-                        with st.expander("📋 查看首发球员名单"):
-                            any_lineup = False
+                        # 展开：首发 + 替补 + 伤停
+                        with st.expander("📋 查看首发名单 / 替补 / 伤停详情"):
+                            any_data = False
                             for i, md in enumerate(matches_data, 1):
                                 lu = md.get("lineup") or {}
-                                if not lu or (not lu.get("home", {}).get("players") and not lu.get("away", {}).get("players")):
+                                if not lu: continue
+                                home_lu = lu.get("home", {}) or {}
+                                away_lu = lu.get("away", {}) or {}
+                                if not (home_lu.get("players") or away_lu.get("players")):
                                     continue
-                                any_lineup = True
-                                st.markdown(f"**第 {i} 场：{md['比赛']}**")
+                                any_data = True
+                                st.markdown(f"### 第 {i} 场：{md['比赛']}")
                                 col_h, col_a = st.columns(2)
                                 with col_h:
-                                    st.write(f"**主队** {lu.get('home', {}).get('team_name', '')} ｜ 阵型 {lu.get('home', {}).get('formation', '')}")
-                                    for p in lu.get('home', {}).get('players', []):
-                                        st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']})")
+                                    st.write(f"**主队 {home_lu.get('team_name', '')}** ｜ 阵型 {home_lu.get('formation', '')}")
+                                    st.write("**首发：**")
+                                    for p in home_lu.get("players", []):
+                                        cap = " (C)" if p.get("captain") else ""
+                                        st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']}){cap}")
+                                    if home_lu.get("substitutes"):
+                                        st.write("**替补：**")
+                                        for p in home_lu["substitutes"]:
+                                            st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']})")
+                                    if home_lu.get("injured"):
+                                        st.write("**伤停：**")
+                                        for p in home_lu["injured"]:
+                                            st.write(f"  {p['name']} ({p['position']})")
                                 with col_a:
-                                    st.write(f"**客队** {lu.get('away', {}).get('team_name', '')} ｜ 阵型 {lu.get('away', {}).get('formation', '')}")
-                                    for p in lu.get('away', {}).get('players', []):
-                                        st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']})")
+                                    st.write(f"**客队 {away_lu.get('team_name', '')}** ｜ 阵型 {away_lu.get('formation', '')}")
+                                    st.write("**首发：**")
+                                    for p in away_lu.get("players", []):
+                                        cap = " (C)" if p.get("captain") else ""
+                                        st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']}){cap}")
+                                    if away_lu.get("substitutes"):
+                                        st.write("**替补：**")
+                                        for p in away_lu["substitutes"]:
+                                            st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']})")
+                                    if away_lu.get("injured"):
+                                        st.write("**伤停：**")
+                                        for p in away_lu["injured"]:
+                                            st.write(f"  {p['name']} ({p['position']})")
                                 st.divider()
-                            if not any_lineup:
+                            if not any_data:
                                 st.info("当前所有比赛的首发阵容都还未公布（赛前1小时会更新）")
 
-                        # 冲突提醒
                         conflicts = [r for r in info_rows if "冲突" in r["一致性"]]
                         if conflicts:
                             st.warning(f"⚠️ 发现 **{len(conflicts)}** 场模型与市场冲突，建议谨慎：")
@@ -923,9 +963,13 @@ with tab2:
                     if lu:
                         home_n = len(lu.get("home", {}).get("players", []))
                         away_n = len(lu.get("away", {}).get("players", []))
+                        home_inj = len(lu.get("home", {}).get("injured", []))
+                        away_inj = len(lu.get("away", {}).get("injured", []))
                         if home_n > 0 or away_n > 0:
                             status_cn = {"confirmed": "已确认", "predicted": "预测"}.get(lu.get("status", ""), lu.get("status", ""))
                             lineup_line = f"\n\n**首发阵容**：{status_cn} ｜ 主 {home_n}人 ｜ 客 {away_n}人"
+                            if home_inj > 0 or away_inj > 0:
+                                lineup_line += f"\n**伤停**：主 {home_inj}人 ｜ 客 {away_inj}人"
                         else:
                             lineup_line = "\n\n**首发阵容**：暂无（赛前1小时更新）"
                     st.success(
@@ -1016,7 +1060,7 @@ st.divider()
 
 # ========== 底部：调试 / 下载 ==========
 with st.expander("🔬 调试：查看/下载比赛原始数据"):
-    st.caption("Bzzoiro 的 lineups 接口返回首发阵容（赛前1小时才更新为 confirmed）")
+    st.caption("Bzzoiro 的 lineups 接口返回首发阵容 + 替补 + 伤停（赛前1小时才更新为 confirmed）")
 
     debug_eid = st.text_input("输入 event_id", value="216460", key="debug_injury_eid")
 
@@ -1067,4 +1111,4 @@ with st.expander("🔬 调试：查看/下载比赛原始数据"):
             key="dl_odds",
         )
 
-st.caption("⚠️ 预测来自 Bzzoiro；赔率为真实共识赔率；盘口走势来自 movement 字段；首发阵容来自 lineups 接口；比分为 xG 泊松反推并按大小球方向筛选；时间为北京时间。")
+st.caption("⚠️ 预测来自 Bzzoiro；赔率为真实共识赔率；盘口走势来自 movement 字段；首发阵容/替补/伤停来自 lineups 接口；比分为 xG 泊松反推并按大小球方向筛选；时间为北京时间。")
