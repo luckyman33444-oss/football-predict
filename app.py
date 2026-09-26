@@ -16,9 +16,95 @@ ESPN_LEAGUES = {
     "uefa.europa": "欧联杯", "ned.1": "荷甲", "por.1": "葡超",
     "bra.1": "巴甲", "usa.1": "美职联", "mex.1": "墨超",
     "chn.1": "中超", "jpn.1": "日职联", "kor.1": "韩K联",
-    "aus.1": "澳超", "sau.1": "沙特联",
+    "aus.1": "澳超", "sau.1": "沙特联", "eng.2": "英冠",
+    "tur.1": "土超", "bel.1": "比甲", "sco.1": "苏超",
 }
 
+# ============ 队名别名表（解决 ESPN vs Bzzoiro 写法差异） ============
+# 左边是 normalize 后的名字，右边是统一的"标准名"
+TEAM_ALIASES = {
+    # 纽约红牛
+    "newyorkredbulls": "newyorkredbulls",
+    "redbullnewyork": "newyorkredbulls",
+    "nyredbulls": "newyorkredbulls",
+    # 洛杉矶FC
+    "lafc": "lafc",
+    "losangelesfc": "lafc",
+    # 洛杉矶银河
+    "lagalaxy": "lagalaxy",
+    "losangelesgalaxy": "lagalaxy",
+    # 圣路易斯城
+    "stlouiscity": "stlouiscity",
+    "saintlouiscity": "stlouiscity",
+    # 蒙特利尔
+    "cfmontreal": "cfmontreal",
+    "montrealimpact": "cfmontreal",
+    # 亚特兰大联
+    "atlantaunited": "atlantaunited",
+    "atlantaunitedfc": "atlantaunited",
+    # 纽约城
+    "newyorkcity": "newyorkcity",
+    "newyorkcityfc": "newyorkcity",
+    "nycfc": "newyorkcity",
+    # 奥兰多城
+    "orlandocity": "orlandocity",
+    "orlandocitysc": "orlandocity",
+    # 费城联合
+    "philadelphiaunion": "philadelphiaunion",
+    "philadelphia": "philadelphiaunion",
+    # 辛辛那提
+    "fccincinnati": "fccincinnati",
+    "cincinnati": "fccincinnati",
+    # 夏洛特
+    "charlottefc": "charlottefc",
+    "charlotte": "charlottefc",
+    # 芝加哥火焰
+    "chicagofire": "chicagofire",
+    "chicagofirefc": "chicagofire",
+    # 休斯顿迪纳摩
+    "houstondynamo": "houstondynamo",
+    "houstondynamofc": "houstondynamo",
+    # 堪萨斯城
+    "sportingkansascity": "sportingkansascity",
+    "sportingkc": "sportingkansascity",
+    # 达拉斯
+    "fcdallas": "fcdallas",
+    "dallas": "fcdallas",
+    # 奥斯汀
+    "austinfc": "austinfc",
+    "austinfc": "austinfc",
+    # 圣迭戈
+    "sandiegofc": "sandiegofc",
+    "sandiego": "sandiegofc",
+    # 西雅图
+    "seattlesounders": "seattlesounders",
+    "seattlesoundersfc": "seattlesounders",
+    # 明尼苏达联
+    "minnesotaunited": "minnesotaunited",
+    "minnesotaunitedfc": "minnesotaunited",
+    # 波特兰伐木者
+    "portlandtimbers": "portlandtimbers",
+    "portlandtimbersfc": "portlandtimbers",
+    # 科罗拉多急流
+    "coloradorapids": "coloradorapids",
+    "colorado": "coloradorapids",
+    # 皇家盐湖城
+    "realsaltlake": "realsaltlake",
+    # 新英格兰革命
+    "newenglandrevolution": "newenglandrevolution",
+    "newengland": "newenglandrevolution",
+    # 多伦多
+    "torontofc": "torontofc",
+    "toronto": "torontofc",
+    # 温哥华白帽
+    "vancouverwhitecaps": "vancouverwhitecaps",
+    "vancouver": "vancouverwhitecaps",
+    # 华盛顿联
+    "dcunited": "dcunited",
+    "washingtonunited": "dcunited",
+}
+
+# ============ 联赛中文对照 ============
 LEAGUE_CN = {
     "Premier League": "英超", "LaLiga": "西甲", "Serie A": "意甲",
     "Bundesliga": "德甲", "Ligue 1": "法甲", "Champions League": "欧冠",
@@ -87,10 +173,21 @@ TEAM_CN = {
     "Boca Juniors": "博卡青年", "River Plate": "河床",
     "Inter Miami": "迈阿密国际", "LA Galaxy": "洛杉矶银河",
     "Philadelphia Union": "费城联合", "Orlando City SC": "奥兰多城",
-    "New York Red Bulls": "纽约红牛", "St.Louis City": "圣路易斯城",
-    "Atlanta United": "亚特兰大联", "New York City FC": "纽约城",
-    "CF Montréal": "蒙特利尔CF", "FC Cincinnati": "辛辛那提FC",
+    "New York Red Bulls": "纽约红牛", "Red Bull New York": "纽约红牛",
+    "St.Louis City": "圣路易斯城", "St. Louis City": "圣路易斯城",
+    "Atlanta United": "亚特兰大联", "Atlanta United FC": "亚特兰大联",
+    "New York City FC": "纽约城", "CF Montréal": "蒙特利尔CF",
+    "CF Montreal": "蒙特利尔CF", "FC Cincinnati": "辛辛那提FC",
     "Charlotte FC": "夏洛特FC", "Chicago Fire": "芝加哥火焰",
+    "Chicago Fire FC": "芝加哥火焰", "Houston Dynamo FC": "休斯顿迪纳摩",
+    "Sporting Kansas City": "堪萨斯城竞技", "FC Dallas": "达拉斯FC",
+    "Austin FC": "奥斯汀FC", "San Diego FC": "圣迭戈FC",
+    "Seattle Sounders FC": "西雅图海湾人", "Minnesota United FC": "明尼苏达联",
+    "Portland Timbers": "波特兰伐木者", "Colorado Rapids": "科罗拉多急流",
+    "Real Salt Lake": "皇家盐湖城", "New England Revolution": "新英格兰革命",
+    "Toronto FC": "多伦多FC", "Vancouver Whitecaps": "温哥华白帽",
+    "D.C. United": "华盛顿联", "DC United": "华盛顿联",
+    "LAFC": "洛杉矶FC", "Los Angeles FC": "洛杉矶FC",
     "Shanghai Port": "上海海港", "Shandong Taishan": "山东泰山",
     "Beijing Guoan": "北京国安", "Shanghai Shenhua": "上海申花",
     "Al Hilal": "利雅得新月", "Al Nassr": "利雅得胜利",
@@ -185,6 +282,22 @@ def to_cst_date(dt_str):
     except:
         return str(dt_str)[:10]
 
+def normalize(name):
+    """标准化队名：去后缀、去标点、去空格"""
+    if not name: return ""
+    s = name.lower().strip()
+    for suf in [" fc", " afc", " sc", " cf", " ac", " united", " city",
+                " club", " deportivo", " athletic", " football club"]:
+        if s.endswith(suf):
+            s = s[:-len(suf)]
+    s = "".join(c for c in s if c.isalnum())
+    return s
+
+def canon(name):
+    """把队名标准化后再走别名表，得到统一的标准名"""
+    key = normalize(name)
+    return TEAM_ALIASES.get(key, key)
+
 def pois(k, lam):
     return math.exp(-lam) * lam ** k / math.factorial(k)
 
@@ -231,16 +344,6 @@ def fetch_all_predictions():
             if offset > 2000: break
         else: break
     return all_results, None
-
-def normalize(name):
-    if not name: return ""
-    s = name.lower().strip()
-    for suf in [" fc", " afc", " sc", " cf", " ac", " united", " city",
-                " club", " deportivo", " athletic"]:
-        if s.endswith(suf):
-            s = s[:-len(suf)]
-    s = "".join(c for c in s if c.isalnum())
-    return s
 
 def parse_prediction(p):
     ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
@@ -289,8 +392,8 @@ def parse_prediction(p):
         "状态": status_map.get(status, status),
         "主队": team_cn(home_name),
         "客队": team_cn(away_name),
-        "_home_key": normalize(home_name),
-        "_away_key": normalize(away_name),
+        "_home_key": canon(home_name),
+        "_away_key": canon(away_name),
         "预测比分": score_str,
         "预测结果": result_map.get(mr.get("predicted", ""), "—"),
         "主胜": fp(mr.get("prob_home")),
@@ -304,18 +407,41 @@ def parse_prediction(p):
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_espn_all(date_str):
-    dates_param = date_str.replace("-", "")
+    """
+    拉取指定北京时间日期的 ESPN 赛事。
+    策略：请求前一天、当天、后一天，再用北京时间过滤。
+    """
+    try:
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except:
+        return []
+
+    dates_to_fetch = [
+        (target_date - timedelta(days=1)).strftime("%Y%m%d"),
+        target_date.strftime("%Y%m%d"),
+        (target_date + timedelta(days=1)).strftime("%Y%m%d"),
+    ]
+
     all_events = []
-    for code, cn_name in ESPN_LEAGUES.items():
-        try:
-            url = f"{ESPN_BASE}/{code}/scoreboard"
-            r = requests.get(url, params={"dates": dates_param}, timeout=15)
-            if r.status_code != 200: continue
-            for e in r.json().get("events", []):
-                e["_league_cn"] = cn_name
-                all_events.append(e)
-        except Exception:
-            continue
+    seen_ids = set()
+
+    for date_param in dates_to_fetch:
+        for code, cn_name in ESPN_LEAGUES.items():
+            try:
+                url = f"{ESPN_BASE}/{code}/scoreboard"
+                r = requests.get(url, params={"dates": date_param}, timeout=15)
+                if r.status_code != 200: continue
+                for e in r.json().get("events", []):
+                    eid = e.get("id")
+                    if eid in seen_ids: continue
+                    seen_ids.add(eid)
+                    # 用北京时间过滤
+                    if to_cst_date(e.get("date", "")) != date_str:
+                        continue
+                    e["_league_cn"] = cn_name
+                    all_events.append(e)
+            except Exception:
+                continue
     return all_events
 
 def parse_espn_event(e):
@@ -341,8 +467,8 @@ def parse_espn_event(e):
         "主队": home_name,
         "客队": away_name,
         "实际比分": actual,
-        "_home_key": normalize(home_name),
-        "_away_key": normalize(away_name),
+        "_home_key": canon(home_name),
+        "_away_key": canon(away_name),
     }
 
 # ============ 主界面 ============
@@ -372,23 +498,18 @@ with tab1:
     if df_all.empty:
         st.warning("没有获取到 Bzzoiro 预测数据。")
     else:
-        # 按日期统计比赛数
         date_counts = df_all.groupby("event_date").size().to_dict()
         available_dates = sorted(date_counts.keys())
-
-        # 日期选项：显示"日期（N场）"
         date_options = [f"{d}（{date_counts[d]}场）" for d in available_dates]
 
         today_str = datetime.now(CST).strftime("%Y-%m-%d")
-        # 默认选今天，否则选最近的有比赛的日期
         if today_str in available_dates:
             default_idx = available_dates.index(today_str)
         else:
-            # 找今天之后最近的日期
             future = [i for i, d in enumerate(available_dates) if d >= today_str]
             default_idx = future[0] if future else len(available_dates) - 1
 
-        sel_label = st.selectbox("选择日期（括号里是当天比赛数）", date_options, index=default_idx)
+        sel_label = st.selectbox("选择日期", date_options, index=default_idx)
         sel_date = sel_label.split("（")[0]
 
         df = df_all[df_all["event_date"] == sel_date].copy()
@@ -406,21 +527,18 @@ with tab1:
                     "大2.5", "两队进球"]
             st.dataframe(df[cols], use_container_width=True, hide_index=True)
 
-        # 显示所有日期的分布，方便跳转
         with st.expander("📅 查看所有日期分布"):
-            dist_df = pd.DataFrame([
-                {"日期": d, "比赛数": date_counts[d]} for d in available_dates
-            ])
+            dist_df = pd.DataFrame([{"日期": d, "比赛数": date_counts[d]} for d in available_dates])
             st.dataframe(dist_df, use_container_width=True, hide_index=True)
 
 # -------- Tab 2 --------
 with tab2:
-    st.caption("从 ESPN 拉取主流联赛当日全部赛事，自动匹配 Bzzoiro 预测（北京时间）")
+    st.caption("从 ESPN 拉取主流联赛赛事，自动匹配 Bzzoiro 预测（北京时间）")
 
     espn_date = st.date_input("选择日期", value=date.today(), key="espn_date")
     espn_date_str = espn_date.strftime("%Y-%m-%d")
 
-    with st.spinner("正在获取 ESPN 赛事..."):
+    with st.spinner(f"正在获取 {espn_date_str} 的 ESPN 赛事..."):
         espn_events = fetch_espn_all(espn_date_str)
 
     if not espn_events:
@@ -460,7 +578,7 @@ with tab2:
 
 # -------- Tab 3 --------
 with tab3:
-    st.caption("查看原始数据")
+    st.caption("查看原始数据，排查匹配问题")
     if st.button("🔬 Bzzoiro 前 3 条", key="dbg1"):
         if all_preds:
             st.json(all_preds[:3])
@@ -468,6 +586,12 @@ with tab3:
         evs = fetch_espn_all(date.today().strftime("%Y-%m-%d"))
         if evs:
             st.json(evs[:2])
+    st.divider()
+    st.caption("**队名匹配诊断**：检查某个队名是否能在别名表中找到")
+    test_name = st.text_input("输入队名测试", value="", key="test_name")
+    if test_name:
+        st.write(f"normalize → `{normalize(test_name)}`")
+        st.write(f"canon → `{canon(test_name)}`")
 
 st.divider()
 st.caption("⚠️ 预测来自 Bzzoiro；比分由 xG 泊松反推；时间为北京时间。")
