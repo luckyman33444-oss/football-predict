@@ -2,13 +2,14 @@ import math, requests, pandas as pd, streamlit as st
 import json, sseclient
 from collections import defaultdict
 from datetime import date, datetime, timedelta
+from urllib.parse import urlparse
 
 st.set_page_config(page_title="足球预测 + 历史交锋", page_icon="⚽", layout="wide")
 
 # ============ LiveScore MCP 连接配置 ============
 MCP_SSE_URL = "https://livescoremcp.com/sse"
 
-# ============ 队名中文对照表（不够就自己加） ============
+# ============ 队名中文对照表 ============
 TEAM_CN = {
     "Arsenal FC": "阿森纳",
     "Aston Villa FC": "阿斯顿维拉",
@@ -47,7 +48,6 @@ TEAM_CN = {
 }
 
 def cn(name):
-    """英文队名 → 中文队名"""
     return TEAM_CN.get(name, name)
 
 # ★★★ 你自己的球队调整区（可以用中文名） ★★★
@@ -61,11 +61,45 @@ GOAL_TWEAK = 1.0
 # ============ 核心：通过 SSE 调用 MCP 工具 ============
 def call_mcp_tool(tool_name, arguments):
     """
-    通过 SSE 连接到 LiveScore MCP，调用指定的工具并返回结果。
+    通过 SSE 连接到 LiveScore MCP：
+    1. GET /sse 建立连接，拿到服务器分配的 POST 地址
+    2. POST 到该地址发送 JSON-RPC 请求
+    3. 解析响应
     """
     try:
         # 1. 建立 SSE 连接
-        # 这里使用 POST 请求来调用工具，并接收 SSE 流式响应
+        sse_response = requests.get(
+            MCP_SSE_URL,
+            headers={"Accept": "text/event-stream"},
+            stream=True,
+            timeout=30
+        )
+        sse_response.raise_for_status()
+
+        client = sseclient.SSEClient(sse_response)
+        post_url = None
+
+        # 2. 从 SSE 事件里提取 POST 地址
+        for event in client.events():
+            if event.event == "endpoint" and event.data:
+                post_url = event.data.strip()
+                if post_url.startswith("/"):
+                    parsed = urlparse(MCP_SSE_URL)
+                    post_url = f"{parsed.scheme}://{parsed.netloc}{post_url}"
+                break
+            elif event.data:
+                try:
+                    data = json.loads(event.data)
+                    if "endpoint" in data:
+                        post_url = data["endpoint"]
+                        break
+                except:
+                    pass
+
+        if not post_url:
+            return {"error": "未能从 SSE 获取 POST 地址"}
+
+        # 3. 发送 JSON-RPC 请求
         payload = {
             "jsonrpc": "2.0",
             "id": 1,
@@ -76,35 +110,39 @@ def call_mcp_tool(tool_name, arguments):
             }
         }
 
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-        }
-
         response = requests.post(
-            MCP_SSE_URL,
+            post_url,
             json=payload,
-            headers=headers,
-            stream=True,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            },
             timeout=30
         )
         response.raise_for_status()
 
-        # 2. 解析 SSE 流
-        client = sseclient.SSEClient(response)
-        for event in client.events():
-            if event.data:
-                try:
-                    data = json.loads(event.data)
-                    # 检查是否是工具调用结果
-                    if "result" in data:
-                        return data["result"]
-                    elif "error" in data:
-                        return {"error": data["error"]}
-                except json.JSONDecodeError:
-                    continue
-
-        return {"error": "未收到有效的 MCP 响应"}
+        # 4. 解析响应
+        content_type = response.headers.get("Content-Type", "")
+        if "text/event-stream" in content_type:
+            client2 = sseclient.SSEClient(response)
+            for ev in client2.events():
+                if ev.data:
+                    try:
+                        data = json.loads(ev.data)
+                        if "result" in data:
+                            return data["result"]
+                        elif "error" in data:
+                            return {"error": data["error"]}
+                    except json.JSONDecodeError:
+                        continue
+            return {"error": "SSE 流中没有有效响应"}
+        else:
+            data = response.json()
+            if "result" in data:
+                return data["result"]
+            elif "error" in data:
+                return {"error": data["error"]}
+            return data
 
     except Exception as e:
         return {"error": f"MCP 连接失败: {str(e)}"}
@@ -112,10 +150,6 @@ def call_mcp_tool(tool_name, arguments):
 # ============ 获取指定日期的赛程 ============
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_fixtures_by_date(date_str):
-    """
-    获取指定日期（YYYY-MM-DD）的所有比赛。
-    """
-    # LiveScore MCP 的 get_day_fixtures 工具接受 DD/MM/YYYY 格式
     try:
         d = datetime.strptime(date_str, "%Y-%m-%d")
         mcp_date = d.strftime("%d/%m/%Y")
@@ -128,25 +162,19 @@ def fetch_fixtures_by_date(date_str):
         st.error(f"获取赛程失败：{result['error']}")
         return []
 
-    # 解析返回的数据
     fixtures = result.get("content", result.get("data", result))
     if isinstance(fixtures, str):
         try:
             fixtures = json.loads(fixtures)
         except:
             return []
-
     if isinstance(fixtures, dict):
         fixtures = fixtures.get("fixtures", [])
-
     return fixtures if isinstance(fixtures, list) else []
 
 # ============ 获取比赛详情（含阵容、H2H） ============
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_match_detail(match_id):
-    """
-    获取单场比赛的详细信息，包括阵容、事件、统计和 H2H。
-    """
     result = call_mcp_tool("get_match", {"match_id": match_id, "include_h2h": True})
     if "error" in result:
         return None
@@ -162,14 +190,9 @@ def score_matrix(lh, la, mg=10):
     return {k:v/s for k,v in m.items()}
 
 def predict_from_odds(home_odds, draw_odds, away_odds):
-    """
-    根据赔率反推预期进球，再用泊松分布计算比分概率。
-    如果拿不到赔率，就用默认平均值。
-    """
-    # 简单的赔率→进球转换（实际使用时可以更精细）
     if home_odds and away_odds:
         try:
-            total_goals = 2.5  # 默认
+            total_goals = 2.5
             lh = total_goals * (1 / home_odds) / ((1/home_odds) + (1/away_odds))
             la = total_goals - lh
         except:
@@ -177,7 +200,6 @@ def predict_from_odds(home_odds, draw_odds, away_odds):
     else:
         lh, la = 1.5, 1.1
 
-    # 应用你自己的调整
     lh *= GOAL_TWEAK
     la *= GOAL_TWEAK
 
@@ -211,16 +233,14 @@ with tab1:
     else:
         rows = []
         for f in fixtures:
-            # 兼容不同的字段名
             home = f.get("homeTeam") or f.get("home") or f.get("team1", "?")
             away = f.get("awayTeam") or f.get("away") or f.get("team2", "?")
             league = f.get("league") or f.get("competition", "")
             time_str = f.get("time") or f.get("date", "")
 
-            # 如果有赔率，用来预测；没有就用默认值
-            home_odds = f.get("homeOdds") or f.get("odds", {}).get("home")
-            draw_odds = f.get("drawOdds") or f.get("odds", {}).get("draw")
-            away_odds = f.get("awayOdds") or f.get("odds", {}).get("away")
+            home_odds = f.get("homeOdds") or f.get("odds", {}).get("home") if isinstance(f.get("odds"), dict) else f.get("homeOdds")
+            draw_odds = f.get("drawOdds") or f.get("odds", {}).get("draw") if isinstance(f.get("odds"), dict) else f.get("drawOdds")
+            away_odds = f.get("awayOdds") or f.get("odds", {}).get("away") if isinstance(f.get("odds"), dict) else f.get("awayOdds")
 
             lh, la, hw, d, aw, ov, bt, top = predict_from_odds(home_odds, draw_odds, away_odds)
             score_str = " / ".join([f"{h}-{a}" for (h,a),p in top])
@@ -258,7 +278,6 @@ with tab2:
             else:
                 st.success("查询成功！")
 
-                # 阵容
                 st.subheader("👥 阵容")
                 lineups = detail.get("lineups", detail.get("lineup", {}))
                 if lineups:
@@ -266,7 +285,6 @@ with tab2:
                 else:
                     st.info("暂无阵容数据（比赛开始前30-60分钟才会公布）。")
 
-                # 历史交锋
                 st.subheader("🔁 历史交锋 (H2H)")
                 h2h = detail.get("headToHead", detail.get("h2h", {}))
                 if h2h:
@@ -274,7 +292,6 @@ with tab2:
                 else:
                     st.info("暂无历史交锋数据。")
 
-                # 原始数据
                 with st.expander("查看原始数据"):
                     st.json(detail)
 
