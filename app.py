@@ -3,35 +3,77 @@ from datetime import date, datetime
 
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 
-ESPN_URL = "https://site.api.espn.com/apis/site/v2/sports/soccer/all/scoreboard"
+ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 TSDB_KEY = "3"
 TSDB_BASE = f"https://www.thesportsdb.com/api/v1/json/{TSDB_KEY}"
 
+# 主流联赛的 ESPN 代码
+MAJOR_LEAGUES = {
+    "eng.1": "英超",
+    "esp.1": "西甲",
+    "ger.1": "德甲",
+    "ita.1": "意甲",
+    "fra.1": "法甲",
+    "uefa.champions": "欧冠",
+    "uefa.europa": "欧联杯",
+    "ned.1": "荷甲",
+    "por.1": "葡超",
+    "bra.1": "巴甲",
+    "usa.1": "美职联",
+    "mex.1": "墨超",
+    "chn.1": "中超",
+    "jpn.1": "日职联",
+    "kor.1": "韩K联",
+    "aus.1": "澳超",
+    "sau.1": "沙特联",
+}
+
+# 联赛中文对照（覆盖 ESPN 所有可能返回的名称）
 LEAGUE_CN = {
-    "English Premier League": "英超", "Spanish LALIGA": "西甲",
-    "German Bundesliga": "德甲", "Italian Serie A": "意甲",
-    "French Ligue 1": "法甲", "UEFA Champions League": "欧冠",
-    "UEFA Europa League": "欧联杯", "UEFA Europa Conference League": "欧会杯",
-    "English League Championship": "英冠", "Dutch Eredivisie": "荷甲",
-    "Portuguese Primeira Liga": "葡超", "Scottish Premiership": "苏超",
-    "Turkish Super Lig": "土超", "Belgian Pro League": "比甲",
-    "Greek Super League": "希腊超", "Russian Premier League": "俄超",
-    "Ukrainian Premier League": "乌超", "Austrian Bundesliga": "奥甲",
-    "Swiss Super League": "瑞士超", "Danish Superliga": "丹超",
-    "Swedish Allsvenskan": "瑞典超", "Norwegian Eliteserien": "挪超",
-    "Brazilian Serie A": "巴甲", "Argentine Liga Profesional": "阿甲",
-    "Major League Soccer": "美职联", "Liga MX": "墨西哥超",
-    "Chinese Super League": "中超", "Japanese J.League": "日职联",
-    "Korean K League 1": "韩K联", "Australian A-League": "澳超",
-    "Saudi Pro League": "沙特联", "FIFA World Cup": "世界杯",
-    "UEFA European Championship": "欧洲杯", "Copa America": "美洲杯",
-    "Africa Cup of Nations": "非洲杯", "UEFA Nations League": "欧国联",
-    "International Friendly": "国际友谊", "Club Friendly": "俱乐部友谊",
-    "UEFA European Under-21 Championship": "欧青U21",
+    "English Premier League": "英超",
+    "Spanish LALIGA": "西甲",
+    "German Bundesliga": "德甲",
+    "Italian Serie A": "意甲",
+    "French Ligue 1": "法甲",
+    "UEFA Champions League": "欧冠",
+    "UEFA Europa League": "欧联杯",
+    "UEFA Europa Conference League": "欧会杯",
+    "Dutch Eredivisie": "荷甲",
+    "Portuguese Primeira Liga": "葡超",
+    "Brazilian Serie A": "巴甲",
+    "Major League Soccer": "美职联",
+    "Liga MX": "墨超",
+    "Chinese Super League": "中超",
+    "Japanese J.League": "日职联",
+    "Korean K League 1": "韩K联",
+    "Australian A-League": "澳超",
+    "Saudi Pro League": "沙特联",
+    "English League Championship": "英冠",
+    "Scottish Premiership": "苏超",
+    "Turkish Super Lig": "土超",
+    "Belgian Pro League": "比甲",
+    "Greek Super League": "希腊超",
+    "Russian Premier League": "俄超",
+    "Ukrainian Premier League": "乌超",
+    "Austrian Bundesliga": "奥甲",
+    "Swiss Super League": "瑞士超",
+    "Danish Superliga": "丹超",
+    "Swedish Allsvenskan": "瑞典超",
+    "Norwegian Eliteserien": "挪超",
+    "Argentine Liga Profesional": "阿甲",
+    "FIFA World Cup": "世界杯",
+    "UEFA European Championship": "欧洲杯",
+    "Copa America": "美洲杯",
+    "Africa Cup of Nations": "非洲杯",
+    "UEFA Nations League": "欧国联",
+    "International Friendly": "国际友谊",
+    "Club Friendly": "俱乐部友谊",
+    "Women's International Friendly": "女足国际友谊",
+    "English Women's Super League": "英女超",
+    "Spanish Liga F": "西女甲",
 }
 
 TEAM_CN = {
-    # 英超
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton & Hove Albion": "布莱顿", "Burnley": "伯恩利",
     "Chelsea": "切尔西", "Crystal Palace": "水晶宫", "Everton": "埃弗顿",
@@ -42,7 +84,6 @@ TEAM_CN = {
     "West Ham United": "西汉姆联", "Wolverhampton Wanderers": "狼队",
     "Leicester City": "莱斯特城", "Southampton": "南安普顿",
     "Ipswich Town": "伊普斯维奇", "Sheffield United": "谢菲尔德联",
-    # 西甲
     "Real Madrid": "皇家马德里", "Barcelona": "巴塞罗那",
     "Atletico Madrid": "马德里竞技", "Sevilla": "塞维利亚",
     "Real Betis": "皇家贝蒂斯", "Valencia": "瓦伦西亚",
@@ -51,7 +92,6 @@ TEAM_CN = {
     "Celta Vigo": "塞尔塔", "Getafe": "赫塔菲", "Osasuna": "奥萨苏纳",
     "Mallorca": "马洛卡", "Rayo Vallecano": "巴列卡诺", "Alaves": "阿拉维斯",
     "Las Palmas": "拉斯帕尔马斯", "Espanyol": "西班牙人",
-    # 德甲
     "Bayern Munich": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "莱比锡红牛", "Bayer Leverkusen": "勒沃库森",
     "Eintracht Frankfurt": "法兰克福", "VfB Stuttgart": "斯图加特",
@@ -60,7 +100,6 @@ TEAM_CN = {
     "Werder Bremen": "云达不莱梅", "Mainz 05": "美因茨",
     "Augsburg": "奥格斯堡", "Hoffenheim": "霍芬海姆",
     "Heidenheim": "海登海姆", "St. Pauli": "圣保利",
-    # 意甲
     "Inter Milan": "国际米兰", "AC Milan": "AC米兰",
     "Juventus": "尤文图斯", "Napoli": "那不勒斯",
     "Roma": "罗马", "Lazio": "拉齐奥", "Atalanta": "亚特兰大",
@@ -69,19 +108,16 @@ TEAM_CN = {
     "Lecce": "莱切", "Cagliari": "卡利亚里", "Verona": "维罗纳",
     "Empoli": "恩波利", "Parma": "帕尔马", "Como": "科莫",
     "Venezia": "威尼斯",
-    # 法甲
     "Paris Saint-Germain": "巴黎圣日耳曼", "Marseille": "马赛",
     "Lyon": "里昂", "Monaco": "摩纳哥", "Lille": "里尔",
     "Rennes": "雷恩", "Nice": "尼斯", "Lens": "朗斯",
     "Strasbourg": "斯特拉斯堡", "Nantes": "南特", "Reims": "兰斯",
     "Montpellier": "蒙彼利埃", "Toulouse": "图卢兹",
     "Brest": "布雷斯特", "Le Havre": "勒阿弗尔",
-    # 荷甲葡超
     "Ajax": "阿贾克斯", "PSV Eindhoven": "埃因霍温", "Feyenoord": "费耶诺德",
     "AZ Alkmaar": "阿尔克马尔", "FC Twente": "特温特", "FC Utrecht": "乌得勒支",
     "Benfica": "本菲卡", "Porto": "波尔图", "Sporting CP": "葡萄牙体育",
     "Braga": "布拉加",
-    # 其他欧洲
     "Celtic": "凯尔特人", "Rangers": "流浪者", "Aberdeen": "阿伯丁",
     "Hearts": "哈茨", "Hibernian": "希伯尼安",
     "Galatasaray": "加拉塔萨雷", "Fenerbahce": "费内巴切",
@@ -92,7 +128,6 @@ TEAM_CN = {
     "AEK Athens": "雅典AEK", "PAOK": "塞萨洛尼基",
     "Zenit St. Petersburg": "泽尼特", "CSKA Moscow": "莫斯科中央陆军",
     "Spartak Moscow": "莫斯科斯巴达", "Lokomotiv Moscow": "莫斯科火车头",
-    # 美洲
     "Flamengo": "弗拉门戈", "Palmeiras": "帕尔梅拉斯",
     "Sao Paulo": "圣保罗", "Corinthians": "科林蒂安",
     "Fluminense": "弗鲁米嫩塞", "Botafogo": "博塔弗戈",
@@ -102,7 +137,6 @@ TEAM_CN = {
     "Boca Juniors": "博卡青年", "River Plate": "河床",
     "Racing Club": "竞赛俱乐部", "Independiente": "独立",
     "San Lorenzo": "圣洛伦索", "Velez Sarsfield": "萨斯菲尔德",
-    # 美职联
     "Inter Miami": "迈阿密国际", "LA Galaxy": "洛杉矶银河",
     "LAFC": "洛杉矶FC", "Seattle Sounders FC": "西雅图海湾人",
     "Atlanta United FC": "亚特兰大联", "Portland Timbers": "波特兰伐木者",
@@ -117,12 +151,10 @@ TEAM_CN = {
     "CF Montréal": "蒙特利尔CF", "Vancouver Whitecaps": "温哥华白帽",
     "Charlotte FC": "夏洛特FC", "St. Louis CITY SC": "圣路易斯城",
     "San Diego FC": "圣迭戈FC", "D.C. United": "华盛顿联",
-    # 墨西哥
     "Cruz Azul": "蓝十字", "Toluca": "托卢卡", "Guadalajara": "瓜达拉哈拉",
     "Club America": "墨西哥美洲", "Tigres UANL": "老虎大学",
     "Monterrey": "蒙特雷", "Pachuca": "帕丘卡", "Puebla": "普埃布拉",
     "Queretaro": "克雷塔罗", "Santos Laguna": "桑托斯拉古纳",
-    # 中超日韩
     "Shanghai Port": "上海海港", "Shandong Taishan": "山东泰山",
     "Beijing Guoan": "北京国安", "Shanghai Shenhua": "上海申花",
     "Chengdu Rongcheng": "成都蓉城", "Zhejiang FC": "浙江队",
@@ -135,16 +167,13 @@ TEAM_CN = {
     "Sanfrecce Hiroshima": "广岛三箭", "Nagoya Grampus": "名古屋鲸八",
     "Jeonbuk Motors": "全北现代", "Ulsan Hyundai": "蔚山现代",
     "FC Seoul": "FC首尔", "Pohang Steelers": "浦项制铁",
-    # 沙特
     "Al Hilal": "利雅得新月", "Al Nassr": "利雅得胜利",
     "Al Ittihad": "吉达联合", "Al Ahli": "吉达国民",
-    # 澳超
     "Melbourne City": "墨尔本城", "Melbourne Victory": "墨尔本胜利",
     "Sydney FC": "悉尼FC", "Western Sydney Wanderers": "西悉尼流浪者",
     "Central Coast Mariners": "中央海岸水手", "Adelaide United": "阿德莱德联",
     "Perth Glory": "珀斯光荣", "Brisbane Roar": "布里斯班狮吼",
     "Wellington Phoenix": "惠灵顿凤凰", "Macarthur FC": "麦克阿瑟FC",
-    # 国家队
     "England": "英格兰", "France": "法国", "Germany": "德国",
     "Spain": "西班牙", "Italy": "意大利", "Portugal": "葡萄牙",
     "Netherlands": "荷兰", "Belgium": "比利时", "Croatia": "克罗地亚",
@@ -189,60 +218,75 @@ def team_cn(name):
 
 def league_cn(name):
     if not name: return "其他"
+    if name in LEAGUE_CN: return LEAGUE_CN[name]
     for k, v in LEAGUE_CN.items():
         if k.lower() == name.lower(): return v
     for k, v in LEAGUE_CN.items():
         if k.lower() in name.lower() or name.lower() in k.lower(): return v
     return name
 
-# 手动微调
 MANUAL_TWEAK = {}
 GOAL_TWEAK = 1.0
 
-# ESPN 名字 → TheSportsDB 名字对照（可选补充）
 ESPN_TO_TSDB = {
-    "Brighton & Hove Albion": "Brighton",
-    "Tottenham Hotspur": "Tottenham",
-    "Wolverhampton Wanderers": "Wolves",
-    "Newcastle United": "Newcastle",
-    "Leeds United": "Leeds",
-    "West Ham United": "West Ham",
-    "Paris Saint-Germain": "Paris SG",
-    "PSV Eindhoven": "PSV",
-    "Sporting CP": "Sporting CP",
+    "Brighton & Hove Albion": "Brighton", "Tottenham Hotspur": "Tottenham",
+    "Wolverhampton Wanderers": "Wolves", "Newcastle United": "Newcastle",
+    "Leeds United": "Leeds", "West Ham United": "West Ham",
+    "Paris Saint-Germain": "Paris SG", "PSV Eindhoven": "PSV",
 }
 
-# ============ 多路解析联赛名 ============
+# ============ 联赛名解析：优先联赛字段，不用 season.slug ============
 def get_league_name(e):
-    lg = e.get("league")
-    if isinstance(lg, dict) and lg.get("name"):
-        return lg["name"]
-    lgs = e.get("leagues")
-    if isinstance(lgs, list) and lgs:
-        first = lgs[0]
-        if isinstance(first, dict) and first.get("name"):
-            return first["name"]
-        if isinstance(first, str):
-            return first
-    if isinstance(lgs, dict) and lgs.get("name"):
-        return lgs["name"]
+    # 1. competitions[0].league.name —— 最优先
     comps = e.get("competitions") or []
     for c in comps:
         clg = c.get("league")
         if isinstance(clg, dict) and clg.get("name"):
             return clg["name"]
+    # 2. e.league.name
+    lg = e.get("league")
+    if isinstance(lg, dict) and lg.get("name"):
+        return lg["name"]
+    # 3. e.leagues[0].name
+    lgs = e.get("leagues")
+    if isinstance(lgs, list) and lgs:
+        first = lgs[0]
+        if isinstance(first, dict) and first.get("name"):
+            return first["name"]
+    # 4. season.name（不要用 slug）
     season = e.get("season")
-    if isinstance(season, dict) and season.get("slug"):
-        return season["slug"]
+    if isinstance(season, dict) and season.get("name"):
+        return season["name"]
     return ""
 
 # ============ ESPN 抓取 ============
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_today_espn(date_str):
+def fetch_major(date_str):
+    """从各主流联赛专属接口拉数据，返回合并后的事件列表"""
     dates_param = date_str.replace("-", "")
-    r = requests.get(ESPN_URL, params={"dates": dates_param}, timeout=25)
+    all_events = []
+    for code, cn_name in MAJOR_LEAGUES.items():
+        try:
+            url = f"{ESPN_BASE}/{code}/scoreboard"
+            r = requests.get(url, params={"dates": dates_param}, timeout=15)
+            if r.status_code != 200:
+                continue
+            events = r.json().get("events", [])
+            for e in events:
+                e["_league_cn"] = cn_name
+            all_events.extend(events)
+        except Exception:
+            continue
+    return all_events
+
+@st.cache_data(ttl=300, show_spinner=False)
+def fetch_all(date_str):
+    """从 all 接口拉全部比赛"""
+    dates_param = date_str.replace("-", "")
+    r = requests.get(f"{ESPN_BASE}/all/scoreboard",
+                     params={"dates": dates_param}, timeout=25)
     r.raise_for_status()
-    return r.json()
+    return r.json().get("events", [])
 
 # ============ TheSportsDB ============
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -261,7 +305,6 @@ def search_teams(query):
         return []
 
 def resolve_team(name):
-    """多种名字变体尝试，返回 (id, matched_name) 或 (None, None)"""
     if not name: return None, None
     variants = [name]
     if name in ESPN_TO_TSDB:
@@ -284,7 +327,6 @@ def resolve_team(name):
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_team_form(team_id, team_name):
-    """返回 (场均进球, 场均失球, 样本数, 比赛列表)"""
     if not team_id: return None, None, 0, []
     try:
         r = requests.get(f"{TSDB_BASE}/eventslast.php",
@@ -320,7 +362,6 @@ def get_team_form(team_id, team_name):
     except Exception:
         return None, None, 0, []
 
-# 批量缓存，减少 API 请求
 @st.cache_data(ttl=1800, show_spinner=False)
 def batch_resolve(names_tuple):
     return {n: resolve_team(n) for n in names_tuple}
@@ -369,43 +410,38 @@ tab1, tab2, tab3, tab4 = st.tabs(["📅 今日赛程", "🔍 搜索球队", "⚙
 
 # -------- Tab 1 --------
 with tab1:
-    sel_date = st.date_input("选择日期", value=date.today(), key="date1")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        sel_date = st.date_input("选择日期", value=date.today(), key="date1")
+    with col2:
+        mode = st.radio("数据源", ["主流联赛", "全部赛事"], horizontal=True, key="mode")
+
     target = sel_date.strftime("%Y-%m-%d")
 
-    with st.spinner("正在获取当日赛程..."):
+    with st.spinner("正在获取赛程..."):
         try:
-            espn_data = fetch_today_espn(target)
+            if mode == "主流联赛":
+                events = fetch_major(target)
+            else:
+                events = fetch_all(target)
         except Exception as e:
-            st.error(f"ESPN 抓取失败：{e}")
+            st.error(f"抓取失败：{e}")
             st.stop()
-
-    events = espn_data.get("events", [])
 
     if not events:
         st.info(f"{target} 没有比赛数据。")
     else:
-        # 收集联赛和球队
-        all_leagues = set()
-        for e in events:
-            lg = get_league_name(e)
-            if lg: all_leagues.add(lg)
-        all_leagues = sorted(all_leagues)
+        st.success(f"共找到 {len(events)} 场比赛")
 
-        major_keys = ["English Premier League", "Spanish LALIGA", "German Bundesliga",
-                      "Italian Serie A", "French Ligue 1", "UEFA Champions League",
-                      "UEFA Europa League", "Chinese Super League"]
-        default_leagues = [l for l in all_leagues if l in major_keys]
-
+        # 联赛筛选
+        all_leagues = sorted(set(get_league_name(e) for e in events if get_league_name(e)))
         sel_leagues = st.multiselect(
-            "筛选联赛（不选则显示全部）",
-            all_leagues,
-            default=default_leagues if default_leagues else all_leagues[:5],
-            format_func=league_cn, key="leagues1"
+            "筛选联赛（不选则显示全部）", all_leagues,
+            default=[], format_func=league_cn, key="leagues1"
         )
-
         filtered = [e for e in events if not sel_leagues or get_league_name(e) in sel_leagues]
 
-        # 收集所有涉及到的球队
+        # 收集球队
         unique_teams = set()
         for e in filtered:
             comp = (e.get("competitions") or [{}])[0]
@@ -413,21 +449,18 @@ with tab1:
                 tn = c.get("team", {}).get("displayName", "")
                 if tn: unique_teams.add(tn)
 
-        # 批量解析
-        with st.spinner(f"正在解析 {len(unique_teams)} 支球队 ID..."):
+        with st.spinner(f"解析 {len(unique_teams)} 支球队 ID..."):
             resolved = batch_resolve(tuple(sorted(unique_teams)))
 
-        # 批量获取战绩
         pairs = []
         for name in sorted(unique_teams):
             tid, _ = resolved.get(name, (None, None))
-            if tid:
-                pairs.append((tid, name))
+            if tid: pairs.append((tid, name))
 
-        with st.spinner(f"正在获取 {len(pairs)} 支球队的战绩..."):
+        with st.spinner(f"获取 {len(pairs)} 支球队战绩..."):
             forms = batch_forms(tuple(pairs))
 
-        st.success(f"共 {len(filtered)} 场 ｜ 匹配到战绩的球队：{len(pairs)}/{len(unique_teams)}")
+        st.info(f"匹配战绩：{len(pairs)}/{len(unique_teams)} 支球队")
 
         rows = []
         for e in sorted(filtered, key=lambda x: x.get("date", "")):
@@ -474,13 +507,13 @@ with tab1:
 
         if rows:
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-            st.caption("「数据」列：**完整**=两队都有≥3场近期数据；**部分**=只有一队有；**默认值**=都没数据，用联赛平均。")
+            st.caption("「数据」列：**完整**=两队都有≥3场近期数据；**部分**=只有一队有；**默认值**=都没数据。")
         else:
             st.warning("没有比赛。")
 
 # -------- Tab 2 --------
 with tab2:
-    st.caption("输入球队名称搜索 TheSportsDB 的战绩")
+    st.caption("搜索 TheSportsDB 的球队战绩")
     query = st.text_input("搜索球队", value="", placeholder="例如 Arsenal、Barcelona", key="search1")
     if st.button("🔍 搜索", type="primary", key="btn_search"):
         if not query:
@@ -489,7 +522,7 @@ with tab2:
             with st.spinner("正在搜索..."):
                 teams = search_teams(query)
             if not teams:
-                st.info(f"没有找到「{query}」。试试英文名。")
+                st.info(f"没有找到「{query}」。")
             else:
                 st.success(f"找到 {len(teams)} 支球队")
                 for t in teams[:10]:
@@ -497,7 +530,6 @@ with tab2:
                         st.write(f"**球队ID**：{t['id']}")
                         st.write(f"**联赛**：{t['league']}")
                         st.write(f"**国家**：{t['country']}")
-                        st.write(f"**主场**：{t.get('stadium', '—')}")
                         if st.button("查看最近5场战绩", key=f"form_{t['id']}"):
                             att, deff, n, matches = get_team_form(t["id"], t["name"])
                             if n == 0:
@@ -544,31 +576,34 @@ with tab3:
         st.dataframe(pd.DataFrame([{"比分": f"{h}-{a}", "概率": f"{p*100:.1f}%"} for (h,a),p in top]),
                      use_container_width=True, hide_index=True)
 
-# -------- Tab 4：调试 --------
+# -------- Tab 4 --------
 with tab4:
-    st.caption("查看 ESPN 原始返回，用于诊断联赛名/字段问题")
+    st.caption("诊断：查看 ESPN 原始返回和联赛名解析")
     sel_date2 = st.date_input("选择日期", value=date.today(), key="date_debug")
     target2 = sel_date2.strftime("%Y-%m-%d")
     if st.button("🔬 拉取原始数据", key="btn_debug"):
         with st.spinner("正在拉取..."):
             try:
-                d = fetch_today_espn(target2)
-                events_d = d.get("events", [])
-                st.write(f"共 {len(events_d)} 个事件")
-                if events_d:
-                    st.subheader("第 1 个事件的完整 JSON")
-                    st.json(events_d[0])
-                    st.subheader("所有事件的联赛名解析结果")
-                    lg_rows = []
-                    for e in events_d[:30]:
-                        lg_rows.append({
+                d = fetch_all(target2)
+                st.write(f"共 {len(d)} 个事件")
+                if d:
+                    st.subheader("第 1 个事件")
+                    st.json(d[0])
+                    st.subheader("联赛名解析结果（前 30 条）")
+                    rows_d = []
+                    for e in d[:30]:
+                        rows_d.append({
                             "event 名": e.get("name", ""),
-                            "league 字段": str(e.get("league", ""))[:80],
-                            "leagues 字段": str(e.get("leagues", ""))[:80],
-                            "competitions[0].league": str((e.get("competitions") or [{}])[0].get("league", ""))[:80],
+                            "competitions[0].league.name": str(
+                                ((e.get("competitions") or [{}])[0].get("league") or {}).get("name", "")
+                            ),
+                            "league.name": str((e.get("league") or {}).get("name", "")) if isinstance(e.get("league"), dict) else "",
+                            "leagues[0].name": (e.get("leagues") or [{}])[0].get("name", "") if (e.get("leagues") and isinstance(e.get("leagues")[0], dict)) else "",
+                            "season.name": str((e.get("season") or {}).get("name", "")),
+                            "season.slug": str((e.get("season") or {}).get("slug", "")),
                             "解析结果": get_league_name(e),
                         })
-                    st.dataframe(pd.DataFrame(lg_rows), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(rows_d), use_container_width=True, hide_index=True)
             except Exception as e:
                 st.error(f"拉取失败：{e}")
 
