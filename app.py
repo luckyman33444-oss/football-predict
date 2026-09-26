@@ -4,7 +4,6 @@ from datetime import date
 
 st.set_page_config(page_title="足球预测 + 历史交锋", page_icon="⚽", layout="wide")
 
-# 免费开源数据源（OpenFootball），无需任何 API 密钥
 COMPS = {
     "英超": "en.1",
     "西甲": "es.1",
@@ -28,6 +27,28 @@ def fetch(code):
     r.raise_for_status()
     return r.json()
 
+def extract_score(sc):
+    """从各种可能的数据格式里提取 (home_goals, away_goals)"""
+    if sc is None:
+        return None
+    # 格式 1：列表 [2, 1]
+    if isinstance(sc, list) and len(sc) >= 2:
+        try:
+            return int(sc[0]), int(sc[1])
+        except:
+            return None
+    # 格式 2：字典 {"ft": [2, 1]} 或 {"ht": [...], "ft": [2, 1]}
+    if isinstance(sc, dict):
+        for key in ["ft", "final", "score"]:
+            if key in sc:
+                v = sc[key]
+                if isinstance(v, list) and len(v) >= 2:
+                    try:
+                        return int(v[0]), int(v[1])
+                    except:
+                        pass
+    return None
+
 def pois(k, lam):
     return math.exp(-lam) * lam**k / math.factorial(k)
 
@@ -41,11 +62,14 @@ def build(ms):
     a_s,ap,ac = defaultdict(int),defaultdict(int),defaultdict(int)
     Lh = La = 0.0; n = 0
     for m in ms:
-        if "score" not in m: continue
-        sc = m.get("score")
-        if not sc or len(sc) < 2: continue
-        hg, ag = sc[0], sc[1]
-        h, a = m["team1"], m["team2"]
+        sc = extract_score(m.get("score"))
+        if sc is None:
+            continue
+        hg, ag = sc
+        h = m.get("team1") or m.get("home")
+        a = m.get("team2") or m.get("away")
+        if not h or not a:
+            continue
         n += 1; Lh += hg; La += ag
         hs[h]+=hg; hp[h]+=1; hc[h]+=ag
         a_s[a]+=ag; ap[a]+=1; ac[a]+=hg
@@ -93,7 +117,6 @@ st.title("⚽ 足球预测 + 历史交锋")
 
 tab1, tab2 = st.tabs(["📅 比分预测", "🔁 历史交锋查询"])
 
-# -------- Tab 1：比分预测 --------
 with tab1:
     comp_label = st.selectbox("选择联赛", list(COMPS.keys()))
     try:
@@ -106,28 +129,31 @@ with tab1:
     M = build(ms)
     st.caption(f"模型基于 {M['n']} 场已完场比赛｜主场场均 {M['Lh']:.2f}，客场 {M['La']:.2f}")
 
-    # 日期选择器：默认选数据里第一场有比分的日期
     all_dates = sorted(set(m.get("date") for m in ms if m.get("date")))
     default_date = None
     for d in all_dates:
-        if any(m.get("date")==d and "score" in m for m in ms):
+        if any(m.get("date")==d and extract_score(m.get("score")) for m in ms):
             default_date = d
             break
 
     sel_date = st.date_input(
-        "选择日期（默认显示数据源里第一场已完赛的日期）",
+        "选择日期",
         value=date.fromisoformat(default_date) if default_date else date.today()
     )
     target = sel_date.strftime("%Y-%m-%d")
 
     up = [m for m in ms if m.get("date") == target]
     if not up:
-        st.info(f"{target} 没有该联赛的赛程。可以换个日期试试。")
-        st.caption(f"提示：本数据源目前包含的日期范围：{all_dates[0]} ～ {all_dates[-1]}")
+        st.info(f"{target} 没有该联赛的赛程，换个日期试试。")
+        if all_dates:
+            st.caption(f"数据源包含的日期范围：{all_dates[0]} ～ {all_dates[-1]}")
     else:
         rows = []
         for m in sorted(up, key=lambda x:x["date"]):
-            hn, an = m["team1"], m["team2"]
+            hn = m.get("team1") or m.get("home")
+            an = m.get("team2") or m.get("away")
+            if not hn or not an:
+                continue
             lh, la, hw, d, aw, ov, bt, top = predict(M, hn, an)
             score_str = " / ".join([f"{h}-{a}" for (h,a),p in top])
             rows.append({
@@ -139,10 +165,8 @@ with tab1:
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-# -------- Tab 2：历史交锋 --------
 with tab2:
-    st.caption("数据来自 Sofascore（通过 datafc 获取，无需 API 密钥）")
-
+    st.caption("数据来自 Sofascore（通过 datafc 获取）")
     col1, col2, col3 = st.columns(3)
     with col1:
         tid = st.number_input("Tournament ID", value=17, step=1,
@@ -151,7 +175,7 @@ with tab2:
         sid = st.number_input("Season ID", value=61627, step=1,
                               help="2024/25 赛季 = 61627")
     with col3:
-        wk = st.number_input("轮次 (Week)", value=1, step=1, min_value=1)
+        wk = st.number_input("轮次", value=1, step=1, min_value=1)
 
     if st.button("🔍 获取数据", type="primary"):
         with st.spinner("正在从 Sofascore 获取..."):
