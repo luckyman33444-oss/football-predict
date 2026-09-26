@@ -239,7 +239,6 @@ def canon(name):
 def pois(k, lam): return math.exp(-lam) * lam ** k / math.factorial(k)
 
 def score_matrix_full(lh, la, max_goals=8):
-    """返回完整比分概率矩阵"""
     m = {}
     for h in range(max_goals + 1):
         for a in range(max_goals + 1):
@@ -262,24 +261,25 @@ def predict_full(xg_h, xg_a):
     ov25 = sum(p for (h, a), p in m.items() if h + a >= 3)
     un25 = 1 - ov25
 
-    # ★ 按大小球分类的比分
+    # 按大小球分类的比分
     over_scores = sorted(
         [(h, a, p) for (h, a), p in m.items() if h + a >= 3],
         key=lambda x: -x[2]
-    )[:4]  # 大球方向的 top 4
+    )[:4]
     under_scores = sorted(
         [(h, a, p) for (h, a), p in m.items() if h + a <= 2],
         key=lambda x: -x[2]
-    )[:4]  # 小球方向的 top 4
+    )[:4]
+    top = sorted(m.items(), key=lambda x: -x[1])[:4]
 
-    top = sorted(m.items(), key=lambda x: -x[1])[:4]  # 不分方向的 top 4（备用）
-
-    # 上下半场
+    # 上半场
     m1 = score_matrix_full(xg_h * 0.45, xg_a * 0.45)
     h1_hw = sum(p for (h, a), p in m1.items() if h > a)
     h1_d = sum(p for (h, a), p in m1.items() if h == a)
     h1_aw = sum(p for (h, a), p in m1.items() if h < a)
     h1 = "主胜" if h1_hw >= max(h1_d, h1_aw) else ("和局" if h1_d >= h1_aw else "客胜")
+
+    # 下半场
     m2 = score_matrix_full(xg_h * 0.55, xg_a * 0.55)
     h2_hw = sum(p for (h, a), p in m2.items() if h > a)
     h2_d = sum(p for (h, a), p in m2.items() if h == a)
@@ -374,7 +374,6 @@ def parse_prediction(p):
     prob_draw = mr.get("prob_draw") or 0
     prob_away = mr.get("prob_away") or 0
 
-    # 大小球方向
     prob_over25_raw = ou.get("prob_over_25")
     if prob_over25_raw is not None:
         try: p_over = float(prob_over25_raw)
@@ -397,7 +396,6 @@ def parse_prediction(p):
         else:
             over_label = "—"; over_pct = 0
 
-    # ★ 根据大小球方向，选出对应方向的比分
     if pred:
         if over_label == "大球":
             chosen_scores = pred["over_scores"]
@@ -501,8 +499,8 @@ if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
 st.title("⚽ 足球预测")
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "🛠️ 接口测试"]
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名"]
 )
 
 with st.spinner("正在获取 Bzzoiro 预测数据..."):
@@ -571,15 +569,10 @@ with tab1:
                 display_df["真小球"] = real_odds_under
 
             edited = st.data_editor(
-                display_df,
-                use_container_width=True,
-                hide_index=True,
+                display_df, use_container_width=True, hide_index=True,
                 column_config={
                     "加入核心": st.column_config.CheckboxColumn(
-                        "加入核心",
-                        help="勾选后点下方按钮保存到核心列表",
-                        default=False,
-                    )
+                        "加入核心", help="勾选后点下方按钮保存到核心列表", default=False)
                 },
                 key="editor_tab1",
             )
@@ -683,7 +676,6 @@ with tab2:
                             new_xg_a = (row["_xg_a"] or 1.2) * aw_
                             new_pred = predict_full(new_xg_h, new_xg_a)
                             if new_pred:
-                                # 重新按大小球方向选比分
                                 if row["_prob_over_pct"] >= 50:
                                     chosen = new_pred["over_scores"]
                                 else:
@@ -738,13 +730,23 @@ with tab2:
                             "real_odds": o,
                         })
 
-                    # 比分串
+                    # ===== 比分串 =====
                     st.subheader("🎲 比分串（3串1）")
-                    best_idx = None; best_p = 0
+
+                    # ★ 修复：主胆判断用相对判断（比第二高 30% 以上，且本身概率 > 8%）
+                    best_idx = None; best_ratio = 0
                     for i, md in enumerate(matches_data):
-                        mp = md["main_score"][1]; ap = md["alt_score"][1]
-                        if mp > 0.15 and (ap == 0 or mp > ap * 1.4):
-                            if mp > best_p: best_p = mp; best_idx = i
+                        mp = md["main_score"][1]
+                        ap = md["alt_score"][1]
+                        if mp < 0.08:  # 概率太低，不能当主胆
+                            continue
+                        if ap == 0:
+                            ratio = 999  # 没有备选，稳做主胆
+                        else:
+                            ratio = mp / ap if ap > 0 else 999
+                        if ratio >= 1.3 and ratio > best_ratio:
+                            best_ratio = ratio
+                            best_idx = i
 
                     rows_for_table = []
                     for i, md in enumerate(matches_data):
@@ -764,6 +766,8 @@ with tab2:
                     st.dataframe(pd.DataFrame(rows_for_table), use_container_width=True, hide_index=True)
 
                     if best_idx is not None:
+                        ratio_str = f"{best_ratio:.2f}倍" if best_ratio < 900 else "无备选"
+                        st.markdown(f"**策略：第 {best_idx+1} 场做主胆**（比分1概率是比分2的 {ratio_str}）")
                         st.markdown(f"**具体注单（共 4 注，1×2×2）：**")
                         other_idx = [i for i in range(3) if i != best_idx]
                         main_s_str = matches_data[best_idx]["main_score"][0]
@@ -782,6 +786,7 @@ with tab2:
                                 })
                         st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     else:
+                        st.markdown("**策略：三场无明显主胆，每场选 2 个比分覆盖**")
                         st.markdown("**具体注单（共 8 注，2×2×2）：**")
                         s1_list = [matches_data[0]["main_score"][0], matches_data[0]["alt_score"][0]]
                         s2_list = [matches_data[1]["main_score"][0], matches_data[1]["alt_score"][0]]
@@ -797,6 +802,7 @@ with tab2:
 
                     st.divider()
 
+                    # 稳健串
                     st.subheader("🛡️ 稳健串（胜平负/大小球，含真实赔率）")
                     combo = [(md, md["opts"][0]) for md in matches_data]
                     prob = 1; total_odds = 1
@@ -933,32 +939,6 @@ with tab4:
                         if st.button("加入核心", key=f"add_{row['event_id']}"):
                             st.session_state.core_matches.append(row["event_id"])
                             st.rerun()
-
-# ========== Tab 5 ==========
-with tab5:
-    st.caption("💰 Bzzoiro 赔率接口 —— 查看完整 JSON 结构")
-    test_id = st.text_input("Event ID", value="216460", key="test_id")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📊 查看单场赔率（简化）", type="primary", key="btn_odds1"):
-            try:
-                r = requests.get(f"{BSD_BASE}/events/{test_id}/odds/",
-                                 headers=BSD_HEADERS, timeout=15)
-                st.write(f"状态码：{r.status_code}")
-                if r.status_code == 200: st.json(r.json())
-                else: st.error(r.text)
-            except Exception as e:
-                st.error(f"错误：{e}")
-    with col2:
-        if st.button("📊 查看赔率明细（含变动）", key="btn_odds2"):
-            try:
-                r = requests.get(f"{BSD_BASE}/odds/", headers=BSD_HEADERS,
-                                 params={"event_id": test_id, "limit": 100}, timeout=15)
-                st.write(f"状态码：{r.status_code}")
-                if r.status_code == 200: st.json(r.json())
-                else: st.error(r.text)
-            except Exception as e:
-                st.error(f"错误：{e}")
 
 st.divider()
 st.caption("⚠️ 预测来自 Bzzoiro；赔率为 Bzzoiro 真实共识赔率；比分为 xG 泊松反推并按大小球方向筛选；时间为北京时间。")
