@@ -12,10 +12,74 @@ COMPS = {
     "法甲": "fr.1",
 }
 
-# ★★★ 你自己的球队调整区 ★★★
+# ============ 队名中文对照表（不够就自己加） ============
+TEAM_CN = {
+    # 英超
+    "Arsenal FC": "阿森纳",
+    "Aston Villa FC": "阿斯顿维拉",
+    "AFC Bournemouth": "伯恩茅斯",
+    "Brentford FC": "布伦特福德",
+    "Brighton & Hove Albion FC": "布莱顿",
+    "Burnley FC": "伯恩利",
+    "Chelsea FC": "切尔西",
+    "Crystal Palace FC": "水晶宫",
+    "Everton FC": "埃弗顿",
+    "Fulham FC": "富勒姆",
+    "Leeds United FC": "利兹联",
+    "Liverpool FC": "利物浦",
+    "Manchester City FC": "曼城",
+    "Manchester United FC": "曼联",
+    "Newcastle United FC": "纽卡斯尔联",
+    "Nottingham Forest FC": "诺丁汉森林",
+    "Sunderland AFC": "桑德兰",
+    "Tottenham Hotspur FC": "托特纳姆热刺",
+    "West Ham United FC": "西汉姆联",
+    "Wolverhampton Wanderers FC": "狼队",
+    # 西甲
+    "Real Madrid CF": "皇家马德里",
+    "FC Barcelona": "巴塞罗那",
+    "Atletico de Madrid": "马德里竞技",
+    "Sevilla FC": "塞维利亚",
+    "Real Betis Balompie": "皇家贝蒂斯",
+    "Valencia CF": "瓦伦西亚",
+    "Villarreal CF": "比利亚雷亚尔",
+    "Athletic Club": "毕尔巴鄂竞技",
+    "Real Sociedad": "皇家社会",
+    # 德甲
+    "FC Bayern Munich": "拜仁慕尼黑",
+    "Borussia Dortmund": "多特蒙德",
+    "RB Leipzig": "莱比锡红牛",
+    "Bayer 04 Leverkusen": "勒沃库森",
+    "Eintracht Frankfurt": "法兰克福",
+    "VfB Stuttgart": "斯图加特",
+    "Borussia Monchengladbach": "门兴格拉德巴赫",
+    "VfL Wolfsburg": "沃尔夫斯堡",
+    # 意甲
+    "Inter Milan": "国际米兰",
+    "AC Milan": "AC米兰",
+    "Juventus FC": "尤文图斯",
+    "SSC Napoli": "那不勒斯",
+    "AS Roma": "罗马",
+    "SS Lazio": "拉齐奥",
+    "Atalanta BC": "亚特兰大",
+    "ACF Fiorentina": "佛罗伦萨",
+    # 法甲
+    "Paris Saint-Germain FC": "巴黎圣日耳曼",
+    "Olympique de Marseille": "马赛",
+    "Olympique Lyonnais": "里昂",
+    "AS Monaco FC": "摩纳哥",
+    "LOSC Lille": "里尔",
+    "Stade Rennais FC": "雷恩",
+}
+
+def cn(name):
+    """英文队名 → 中文队名，找不到就返回原文"""
+    return TEAM_CN.get(name, name)
+
+# ★★★ 你自己的球队调整区（可以用中文名） ★★★
 ATTACK_BOOST = {
-    # "Arsenal": 1.15,
-    # "Chelsea": 0.85,
+    # "阿森纳": 1.15,
+    # "曼联": 0.85,
 }
 GOAL_TWEAK = 1.0
 # =========================================================
@@ -28,16 +92,13 @@ def fetch(code):
     return r.json()
 
 def extract_score(sc):
-    """从各种可能的数据格式里提取 (home_goals, away_goals)"""
     if sc is None:
         return None
-    # 格式 1：列表 [2, 1]
     if isinstance(sc, list) and len(sc) >= 2:
         try:
             return int(sc[0]), int(sc[1])
         except:
             return None
-    # 格式 2：字典 {"ft": [2, 1]} 或 {"ht": [...], "ft": [2, 1]}
     if isinstance(sc, dict):
         for key in ["ft", "final", "score"]:
             if key in sc:
@@ -88,11 +149,17 @@ def build(ms):
             "aa":{t:rate(a_s[t],ap[t],La) for t in ap},
             "ad":{t:rate(ac[t],ap[t],Lh) for t in ap}}
 
+def get_boost(team_en):
+    """先查英文名，再查中文名，都找不到返回 1.0"""
+    if team_en in ATTACK_BOOST:
+        return ATTACK_BOOST[team_en]
+    return ATTACK_BOOST.get(cn(team_en), 1.0)
+
 def predict(M, hn, an):
     lh = M["ha"].get(hn,1.0) * M["ad"].get(an,1.0) * M["Lh"] * GOAL_TWEAK
     la = M["aa"].get(an,1.0) * M["hd"].get(hn,1.0) * M["La"] * GOAL_TWEAK
-    lh *= ATTACK_BOOST.get(hn, 1.0)
-    la *= ATTACK_BOOST.get(an, 1.0)
+    lh *= get_boost(hn)
+    la *= get_boost(an)
     m = matrix(lh, la)
     hw = sum(p for (h,a),p in m.items() if h>a)
     d  = sum(p for (h,a),p in m.items() if h==a)
@@ -130,9 +197,11 @@ with tab1:
     st.caption(f"模型基于 {M['n']} 场已完场比赛｜主场场均 {M['Lh']:.2f}，客场 {M['La']:.2f}")
 
     all_dates = sorted(set(m.get("date") for m in ms if m.get("date")))
+
+    # 默认选最新的一天（从后往前找）
     default_date = None
-    for d in all_dates:
-        if any(m.get("date")==d and extract_score(m.get("score")) for m in ms):
+    for d in reversed(all_dates):
+        if any(m.get("date")==d for m in ms):
             default_date = d
             break
 
@@ -150,17 +219,21 @@ with tab1:
     else:
         rows = []
         for m in sorted(up, key=lambda x:x["date"]):
-            hn = m.get("team1") or m.get("home")
-            an = m.get("team2") or m.get("away")
-            if not hn or not an:
+            hn_en = m.get("team1") or m.get("home")
+            an_en = m.get("team2") or m.get("away")
+            if not hn_en or not an_en:
                 continue
-            lh, la, hw, d, aw, ov, bt, top = predict(M, hn, an)
+            lh, la, hw, d, aw, ov, bt, top = predict(M, hn_en, an_en)
             score_str = " / ".join([f"{h}-{a}" for (h,a),p in top])
             rows.append({
                 "日期": m["date"],
-                "主队": hn, "客队": an, "预测比分": score_str,
-                "主胜": f"{hw*100:.1f}%", "和局": f"{d*100:.1f}%",
-                "客胜": f"{aw*100:.1f}%", "大2.5": f"{ov*100:.1f}%",
+                "主队": cn(hn_en),
+                "客队": cn(an_en),
+                "预测比分": score_str,
+                "主胜": f"{hw*100:.1f}%",
+                "和局": f"{d*100:.1f}%",
+                "客胜": f"{aw*100:.1f}%",
+                "大2.5": f"{ov*100:.1f}%",
                 "两队进球": f"{bt*100:.1f}%"
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
