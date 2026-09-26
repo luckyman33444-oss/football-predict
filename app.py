@@ -75,10 +75,10 @@ GOAL_TWEAK = 1.0
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_today(date_str):
     dates_param = date_str.replace("-", "")
+    # 不加自定义 User-Agent，避免被 ESPN 的 WAF 拦截
     r = requests.get(
         ESPN_URL,
         params={"dates": dates_param},
-        headers={"User-Agent": "Mozilla/5.0"},
         timeout=25
     )
     r.raise_for_status()
@@ -129,7 +129,6 @@ if not events:
 else:
     st.success(f"共找到 {len(events)} 场比赛")
 
-    # 联赛筛选
     all_leagues = sorted(set(e.get("league", {}).get("name", "") for e in events if e.get("league")))
     default_leagues = [l for l in all_leagues if any(k in l for k in [
         "English Premier League", "Spanish LaLiga", "German Bundesliga",
