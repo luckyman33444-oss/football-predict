@@ -4,7 +4,7 @@ from datetime import date, datetime
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 
 # ============ Bzzoiro API 配置 ============
-BSD_TOKEN = "你的Token"
+BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
 BSD_HEADERS = {"Authorization": f"Token {BSD_TOKEN}"}
 
@@ -25,7 +25,7 @@ LEAGUE_CN = {
     "Club Friendlies": "俱乐部友谊",
 }
 
-# ============ 球队中文对照（持续补充） ============
+# ============ 球队中文对照 ============
 TEAM_CN = {
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
@@ -87,96 +87,132 @@ def league_cn(name):
 # ============ 获取预测数据 ============
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_predictions(date_str):
-    """从 Bzzoiro 获取指定日期的预测数据"""
+    """从 Bzzoiro 获取指定日期的预测数据。返回 (数据列表, 错误信息)"""
     url = f"{BSD_BASE}/predictions/"
     params = {"date_from": date_str, "date_to": date_str}
     try:
         r = requests.get(url, headers=BSD_HEADERS, params=params, timeout=25)
         if r.status_code == 401:
-            st.error("API Token 无效，请检查第一步的 Token 是否正确。")
-            return []
+            return [], "API Token 无效（401），请检查 Token"
+        if r.status_code == 403:
+            return [], "无权限访问（403），可能账号未激活"
         if r.status_code != 200:
-            st.error(f"API 请求失败 ({r.status_code})")
-            return []
+            return [], f"API 请求失败 ({r.status_code})：{r.text[:200]}"
         data = r.json()
-        # 兼容不同的返回结构
         if isinstance(data, dict):
-            return data.get("results", data.get("predictions", data.get("events", [])))
-        return data if isinstance(data, list) else []
+            return data.get("results", data.get("predictions", data.get("events", []))), None
+        return (data if isinstance(data, list) else []), None
     except Exception as e:
-        st.error(f"请求出错：{e}")
-        return []
+        return [], f"请求出错：{e}"
+
+# ============ 调试：直接试探 API ============
+def debug_api():
+    """尝试多个可能的 endpoint，看看哪个能通"""
+    candidates = [
+        (f"{BSD_BASE}/predictions/", {"date_from": date.today().isoformat()}),
+        (f"{BSD_BASE}/events/", {"date_from": date.today().isoformat()}),
+        (f"{BSD_BASE}/matches/", {"date_from": date.today().isoformat()}),
+        (f"{BSD_BASE}/predictions/", {}),
+        (f"{BSD_BASE}/events/", {}),
+    ]
+    results = []
+    for url, params in candidates:
+        try:
+            r = requests.get(url, headers=BSD_HEADERS, params=params, timeout=15)
+            results.append({
+                "URL": url,
+                "参数": str(params),
+                "状态码": r.status_code,
+                "返回前200字": r.text[:200].replace("\n", " "),
+            })
+        except Exception as e:
+            results.append({
+                "URL": url, "参数": str(params),
+                "状态码": "错误", "返回前200字": str(e)[:200],
+            })
+    return results
 
 # ============ 主界面 ============
 st.title("⚽ 足球预测（Bzzoiro 数据源）")
 
-sel_date = st.date_input("选择日期", value=date.today())
-target = sel_date.strftime("%Y-%m-%d")
+tab1, tab2 = st.tabs(["📅 今日预测", "🛠️ API 调试"])
 
-with st.spinner("正在获取预测数据..."):
-    predictions = fetch_predictions(target)
+with tab1:
+    sel_date = st.date_input("选择日期", value=date.today())
+    target = sel_date.strftime("%Y-%m-%d")
 
-if not predictions:
-    st.info(f"{target} 没有预测数据，或 API Token 未配置。")
-    st.caption("提示：Bzzoiro 覆盖 30+ 主流联赛，试试换个比赛日的日期。")
-else:
-    st.success(f"共获取 {len(predictions)} 场比赛预测")
+    with st.spinner("正在获取预测数据..."):
+        predictions, err = fetch_predictions(target)
 
-    rows = []
-    for p in predictions:
-        # Bzzoiro 字段名兼容
-        league = p.get("league", {})
-        league_name = league.get("name", "") if isinstance(league, dict) else str(league)
-        home = p.get("home_team", p.get("home", {}))
-        away = p.get("away_team", p.get("away", {}))
-        home_name = home.get("name", "?") if isinstance(home, dict) else str(home)
-        away_name = away.get("name", "?") if isinstance(away, dict) else str(away)
+    if err:
+        st.error(err)
+        st.info("请去 **🛠️ API 调试** 标签页查看详情。")
+    elif not predictions:
+        st.info(f"{target} 没有预测数据。")
+        st.caption("提示：试试换个日期（如周末或明天）。也可以去 API 调试页排查。")
+    else:
+        st.success(f"共获取 {len(predictions)} 场比赛预测")
 
-        kickoff = p.get("kickoff", p.get("date", p.get("start_time", "")))
-        time_str = ""
-        if kickoff:
-            try:
-                if "T" in kickoff:
-                    time_str = datetime.fromisoformat(kickoff.replace("Z", "+00:00")).strftime("%H:%M")
-                else:
+        rows = []
+        for p in predictions:
+            league = p.get("league", {})
+            league_name = league.get("name", "") if isinstance(league, dict) else str(league)
+            home = p.get("home_team", p.get("home", {}))
+            away = p.get("away_team", p.get("away", {}))
+            home_name = home.get("name", "?") if isinstance(home, dict) else str(home)
+            away_name = away.get("name", "?") if isinstance(away, dict) else str(away)
+
+            kickoff = p.get("kickoff", p.get("date", p.get("start_time", "")))
+            time_str = ""
+            if kickoff:
+                try:
+                    if "T" in kickoff:
+                        time_str = datetime.fromisoformat(kickoff.replace("Z", "+00:00")).strftime("%H:%M")
+                    else:
+                        time_str = str(kickoff)[:5]
+                except:
                     time_str = str(kickoff)[:5]
-            except:
-                time_str = str(kickoff)[:5]
 
-        # 预测数据
-        pred = p.get("prediction", p)
-        home_prob = pred.get("home_win_prob", pred.get("prob_home", pred.get("home_probability")))
-        draw_prob = pred.get("draw_prob", pred.get("prob_draw", pred.get("draw_probability")))
-        away_prob = pred.get("away_win_prob", pred.get("prob_away", pred.get("away_probability")))
-        score = pred.get("predicted_score", pred.get("correct_score", pred.get("score")))
-        over25 = pred.get("over_25_prob", pred.get("over_2_5"))
-        btts = pred.get("btts_prob", pred.get("both_teams_to_score"))
+            pred = p.get("prediction", p)
+            home_prob = pred.get("home_win_prob", pred.get("prob_home", pred.get("home_probability")))
+            draw_prob = pred.get("draw_prob", pred.get("prob_draw", pred.get("draw_probability")))
+            away_prob = pred.get("away_win_prob", pred.get("prob_away", pred.get("away_probability")))
+            score = pred.get("predicted_score", pred.get("correct_score", pred.get("score")))
+            over25 = pred.get("over_25_prob", pred.get("over_2_5"))
+            btts = pred.get("btts_prob", pred.get("both_teams_to_score"))
 
-        # 格式化
-        def fmt_pct(v):
-            if v is None: return "—"
-            try:
-                f = float(v)
-                return f"{f*100:.1f}%" if f <= 1 else f"{f:.1f}%"
-            except: return str(v)
+            def fmt_pct(v):
+                if v is None: return "—"
+                try:
+                    f = float(v)
+                    return f"{f*100:.1f}%" if f <= 1 else f"{f:.1f}%"
+                except: return str(v)
 
-        rows.append({
-            "联赛": league_cn(league_name),
-            "时间": time_str,
-            "主队": team_cn(home_name),
-            "客队": team_cn(away_name),
-            "预测比分": score if score else "—",
-            "主胜": fmt_pct(home_prob),
-            "和局": fmt_pct(draw_prob),
-            "客胜": fmt_pct(away_prob),
-            "大2.5": fmt_pct(over25),
-            "两队进球": fmt_pct(btts),
-        })
+            rows.append({
+                "联赛": league_cn(league_name),
+                "时间": time_str,
+                "主队": team_cn(home_name),
+                "客队": team_cn(away_name),
+                "预测比分": score if score else "—",
+                "主胜": fmt_pct(home_prob),
+                "和局": fmt_pct(draw_prob),
+                "客胜": fmt_pct(away_prob),
+                "大2.5": fmt_pct(over25),
+                "两队进球": fmt_pct(btts),
+            })
 
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
-    with st.expander("🔧 调试：查看 API 原始返回（前 3 条）"):
-        st.json(predictions[:3])
+        with st.expander("🔧 调试：查看 API 原始返回（前 3 条）"):
+            st.json(predictions[:3])
+
+with tab2:
+    st.caption("这里会尝试多种 API 路径，帮我们定位正确的接口")
+    if st.button("🚀 开始测试", type="primary"):
+        with st.spinner("正在测试多个 endpoint..."):
+            results = debug_api()
+        st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
+        st.caption("把这张表截图发给我，我就能帮你定位正确的接口和字段。")
 
 st.divider()
-st.caption("⚠️ 预测来自 Bzzoiro Sports Data 的 CatBoost 模型，仅供参考。")
+st.caption("⚠️ 预测来自 Bzzoiro Sports Data，仅供参考，不构成投注建议。")
