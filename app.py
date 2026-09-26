@@ -329,7 +329,6 @@ def analyze_line_movement(odds_data):
             "away_signal": away_sig, "over_signal": over_sig,
             "confidence": confidence, "signals": signals}
 
-# ★ 完整版：首发 + 替补 + 伤停
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_lineup_info(event_id):
     """获取首发阵容 + 替补 + 伤停（Bzzoiro lineups 接口）"""
@@ -342,6 +341,7 @@ def get_lineup_info(event_id):
     lineups = data.get("lineups", {}) if isinstance(data.get("lineups"), dict) else {}
     unavailable = data.get("unavailable_players", {}) if isinstance(data.get("unavailable_players"), dict) else {}
     status = data.get("lineup_status", "")
+    has_data = bool(lineups.get("home") or lineups.get("away"))
 
     def pos_cn(pos):
         if not pos: return "?"
@@ -374,6 +374,7 @@ def get_lineup_info(event_id):
 
     return {
         "status": status,
+        "has_data": has_data,
         "home": parse_side(lineups.get("home", {}), unavailable.get("home", [])),
         "away": parse_side(lineups.get("away", {}), unavailable.get("away", [])),
     }
@@ -551,9 +552,8 @@ parsed = []
 if all_preds:
     parsed = [parse_prediction(p) for p in all_preds]
     df_all = pd.DataFrame(parsed)
-    bsd_lookup = {(p["_home_key"], p["_away_key"]): p for p in parsed}
 else:
-    df_all = pd.DataFrame(); bsd_lookup = {}
+    df_all = pd.DataFrame()
 
 # ========== Tab 1 ==========
 with tab1:
@@ -740,6 +740,7 @@ with tab2:
                             model_pick = best_opt[0]
 
                             lineup_status = lu.get("status", "") if lu else ""
+                            has_data = lu.get("has_data", False) if lu else False
                             home_lu = lu.get("home", {}) if lu else {}
                             away_lu = lu.get("away", {}) if lu else {}
                             home_n = len(home_lu.get("players", []))
@@ -757,7 +758,10 @@ with tab2:
                             else:
                                 lineup_str = "暂无（赛前1小时更新）"
 
-                            if home_inj == 0 and away_inj == 0:
+                            # 伤停：区分「无数据」vs「无伤停」
+                            if not has_data:
+                                injury_str = "数据未公布"
+                            elif home_inj == 0 and away_inj == 0:
                                 injury_str = "无伤停报告"
                             else:
                                 injury_str = f"主 {home_inj}人 ｜ 客 {away_inj}人"
@@ -857,6 +861,7 @@ with tab2:
                         })
                     st.dataframe(pd.DataFrame(rows_for_table), use_container_width=True, hide_index=True)
 
+                    bet_rows = []
                     if best_idx is not None:
                         st.markdown(f"**策略：第 {best_idx+1} 场做主胆**（比分1概率是比分2的 {best_ratio:.2f} 倍）")
                         st.markdown(f"**具体注单（共 4 注，1×2×2）：**")
@@ -866,7 +871,6 @@ with tab2:
                         o1_alt = matches_data[other_idx[0]]["alt_score"][0]
                         o2_main = matches_data[other_idx[1]]["main_score"][0]
                         o2_alt = matches_data[other_idx[1]]["alt_score"][0]
-                        bet_rows = []
                         for i1, s1 in enumerate([o1_main, o1_alt], 1):
                             for i2, s2 in enumerate([o2_main, o2_alt], 1):
                                 bet_rows.append({
@@ -882,7 +886,6 @@ with tab2:
                         s1_list = [matches_data[0]["main_score"][0], matches_data[0]["alt_score"][0]]
                         s2_list = [matches_data[1]["main_score"][0], matches_data[1]["alt_score"][0]]
                         s3_list = [matches_data[2]["main_score"][0], matches_data[2]["alt_score"][0]]
-                        bet_rows = []
                         n = 1
                         for a in s1_list:
                             for b in s2_list:
@@ -981,6 +984,51 @@ with tab2:
                         + (f" — {consistency['note']}" if consistency['note'] else "")
                         + f"\n\n比分参考：{first['main_score'][0]} / {first['alt_score'][0]}（已按大小球方向筛选）"
                     )
+
+                    # ============ 保存/下载功能 ============
+                    st.divider()
+                    st.subheader("💾 保存本次推荐")
+                    today_str = datetime.now(CST).strftime("%Y%m%d")
+
+                    col_dl1, col_dl2, col_dl3 = st.columns(3)
+
+                    with col_dl1:
+                        if bet_rows:
+                            bet_df = pd.DataFrame(bet_rows)
+                            st.download_button(
+                                label="📥 下载比分串注单 CSV",
+                                data=bet_df.to_csv(index=False).encode("utf-8-sig"),
+                                file_name=f"比分串_{today_str}.csv",
+                                mime="text/csv",
+                                key="dl_bets",
+                            )
+
+                    with col_dl2:
+                        if stable_rows or stable_rows_b:
+                            combined = []
+                            for r in stable_rows: combined.append({"类型": "稳健串", **r})
+                            for r in stable_rows_b: combined.append({"类型": "备选串", **r})
+                            stable_df = pd.DataFrame(combined)
+                            st.download_button(
+                                label="📥 下载稳健串 CSV",
+                                data=stable_df.to_csv(index=False).encode("utf-8-sig"),
+                                file_name=f"稳健串_{today_str}.csv",
+                                mime="text/csv",
+                                key="dl_stable",
+                            )
+
+                    with col_dl3:
+                        if 'info_rows' in locals() and info_rows:
+                            info_df_save = pd.DataFrame(info_rows)
+                            st.download_button(
+                                label="📥 下载情报面板 CSV",
+                                data=info_df_save.to_csv(index=False).encode("utf-8-sig"),
+                                file_name=f"情报面板_{today_str}.csv",
+                                mime="text/csv",
+                                key="dl_info",
+                            )
+
+                    st.caption("💡 下载后保存到本地。跑几周后回看准确率。")
 
 # ========== Tab 3 ==========
 with tab3:
