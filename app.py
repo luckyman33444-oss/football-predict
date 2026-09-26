@@ -98,8 +98,9 @@ TEAM_CN = {
     "Deportivo Pereira": "佩雷拉", "Internacional de Bogotá": "波哥大国际",
     "Cúcuta Deportivo": "库库塔", "Llaneros FC": "亚诺罗斯",
     "Inter Miami": "迈阿密国际", "LA Galaxy": "洛杉矶银河",
-    "LAFC": "洛杉矶FC", "Philadelphia Union": "费城联合",
-    "Orlando City": "奥兰多城", "New York Red Bulls": "纽约红牛",
+    "LAFC": "洛杉矶FC", "Los Angeles FC": "洛杉矶FC",
+    "Philadelphia Union": "费城联合", "Orlando City": "奥兰多城",
+    "New York Red Bulls": "纽约红牛", "Red Bull New York": "纽约红牛",
     "St.Louis City": "圣路易斯城", "Atlanta United": "亚特兰大联",
     "New York City FC": "纽约城", "CF Montréal": "蒙特利尔CF",
     "FC Cincinnati": "辛辛那提FC", "Charlotte FC": "夏洛特FC",
@@ -110,12 +111,13 @@ TEAM_CN = {
     "Portland Timbers": "波特兰伐木者", "Colorado Rapids": "科罗拉多急流",
     "Real Salt Lake": "皇家盐湖城", "New England Revolution": "新英格兰革命",
     "Toronto FC": "多伦多FC", "Vancouver Whitecaps": "温哥华白帽",
-    "D.C. United": "华盛顿联", "Nashville SC": "纳什维尔SC",
-    "San Jose Earthquakes": "圣何塞地震",
+    "D.C. United": "华盛顿联", "DC United": "华盛顿联",
+    "Nashville SC": "纳什维尔SC", "San Jose Earthquakes": "圣何塞地震",
     "Cruz Azul": "蓝十字", "CD Toluca": "托卢卡",
     "CD Guadalajara": "瓜达拉哈拉", "Querétaro FC": "克雷塔罗",
-    "Santos Laguna": "桑托斯拉古纳", "Pachuca": "帕丘卡",
-    "Puebla": "普埃布拉", "Tigres UANL": "老虎大学",
+    "Santos Laguna": "桑托斯拉古纳", "CF Pachuca": "帕丘卡",
+    "Pachuca": "帕丘卡", "Club Puebla": "普埃布拉", "Puebla": "普埃布拉",
+    "Tigres UANL": "老虎大学",
     "Shanghai Port": "上海海港", "Shandong Taishan": "山东泰山",
     "Beijing Guoan": "北京国安", "Shanghai Shenhua": "上海申花",
     "Gangwon FC": "江原FC", "Incheon United": "仁川联",
@@ -138,7 +140,8 @@ TEAM_CN = {
     "New Mexico United": "新墨西哥联", "Sacramento Republic FC": "萨克拉门托共和",
     "Oakland Roots": "奥克兰根", "Phoenix Rising FC": "菲尼克斯崛起",
     "Orange County SC": "橙县SC", "Pittsburgh Riverhounds": "匹兹堡猎犬",
-    "San Antonio FC": "圣安东尼奥FC", "Tampa Bay Rowdies": "坦帕湾暴徒",
+    "San Antonio FC": "圣安东尼奥FC",
+    "FC Tampa Bay Rowdies": "坦帕湾暴徒", "Tampa Bay Rowdies": "坦帕湾暴徒",
     "Corpus Christi FC": "科珀斯克里斯蒂", "Athletic Club Boise": "博伊西竞技",
     "Monterey Bay": "蒙特雷湾", "Lexington": "莱克星顿",
     "Charlotte Independence": "夏洛特独立", "Fort Wayne": "韦恩堡",
@@ -161,13 +164,21 @@ TEAM_CN = {
     "Dorados de Sinaloa": "锡那罗亚金鱼", "Durango": "杜兰戈",
     "Tlaxcala FC": "特拉斯卡拉", "Cancún FC": "坎昆FC",
     "AFC Toronto": "多伦多AFC", "Ottawa Rapid FC": "渥太华快速",
+    "Costa Adeje Tenerife": "特内里费",
+    "Club Atlético de Madrid": "马德里竞技",
+    "Montserrat": "蒙特塞拉特", "British Virgin Islands": "英属维尔京群岛",
+    "Saint Martin": "圣马丁", "US Virgin Islands": "美属维尔京群岛",
+    "Saint Vincent and the Grenadines": "圣文森特和格林纳丁斯",
+    "French Guiana": "法属圭亚那", "Antigua and Barbuda": "安提瓜和巴布达",
+    "Anguilla": "安圭拉", "Sint Maarten": "荷属圣马丁", "Belize": "伯利兹",
     "England": "英格兰", "France": "法国", "Germany": "德国",
     "Spain": "西班牙", "Italy": "意大利", "Portugal": "葡萄牙",
     "Netherlands": "荷兰", "Belgium": "比利时", "Croatia": "克罗地亚",
     "Brazil": "巴西", "Argentina": "阿根廷", "Japan": "日本",
     "South Korea": "韩国", "China": "中国", "USA": "美国",
     "United States": "美国", "Peru": "秘鲁", "Chile": "智利",
-    "Mexico": "墨西哥", "Canada": "加拿大", "Australia": "澳大利亚",
+    "Mexico": "墨西哥", "Colombia": "哥伦比亚", "Canada": "加拿大",
+    "Australia": "澳大利亚", "New Zealand": "新西兰",
     "Slovenia": "斯洛文尼亚", "Scotland": "苏格兰",
     "San Marino": "圣马力诺", "Finland": "芬兰",
     "Faroe Islands": "法罗群岛", "Kazakhstan": "哈萨克斯坦",
@@ -177,6 +188,8 @@ TEAM_CN = {
     "North Macedonia": "北马其顿", "Switzerland": "瑞士",
     "Albania": "阿尔巴尼亚", "Belarus": "白俄罗斯",
     "Slovakia": "斯洛伐克", "Moldova": "摩尔多瓦",
+    "Lithuania": "立陶宛", "Azerbaijan": "阿塞拜疆",
+    "Seychelles": "塞舌尔", "Sri Lanka": "斯里兰卡",
 }
 
 def team_cn(name):
@@ -323,6 +336,7 @@ def parse_prediction(p):
     kickoff_dt = to_cst_datetime(kickoff)
     mr = mk.get("match_result", {})
     eg = mk.get("expected_goals", {})
+    ou = mk.get("over_under", {})
     xg_h = eg.get("home"); xg_a = eg.get("away")
     pred = predict_full(xg_h, xg_a)
     if pred:
@@ -332,19 +346,46 @@ def parse_prediction(p):
         alt_score = scores_list[1][0] if len(scores_list) > 1 else "—"
         main_score_p = scores_list[0][1] if scores_list else 0
         alt_score_p = scores_list[1][1] if len(scores_list) > 1 else 0
-        over_label = "大球" if pred["over25"] > 0.5 else "小球"
-        over_pct = pred["over25"] if pred["over25"] > 0.5 else pred["under25"]
         h1 = pred["h1"]; h2 = pred["h2"]
     else:
         scores_list = []; main_score = "—"; alt_score = "—"
         main_score_p = 0; alt_score_p = 0
-        over_label = "—"; over_pct = 0; h1 = "—"; h2 = "—"
+        h1 = "—"; h2 = "—"
 
     prob_home = mr.get("prob_home") or 0
     prob_draw = mr.get("prob_draw") or 0
     prob_away = mr.get("prob_away") or 0
-    prob_over = (pred["over25"] * 100) if pred else 0
-    prob_under = (pred["under25"] * 100) if pred else 0
+
+    # ★ 大小球：优先用 Bzzoiro 的 prob_over_25（百分数 0-100）
+    prob_over25_raw = ou.get("prob_over_25")
+    if prob_over25_raw is not None:
+        try:
+            p_over = float(prob_over25_raw)
+        except:
+            p_over = None
+    else:
+        p_over = None
+
+    if p_over is not None:
+        if p_over >= 50:
+            over_label = "大球"
+            over_pct = p_over
+        else:
+            over_label = "小球"
+            over_pct = 100 - p_over
+    else:
+        # 没有直接用 xG 反推的
+        if pred:
+            p_over = pred["over25"] * 100
+            if p_over >= 50:
+                over_label = "大球"
+                over_pct = p_over
+            else:
+                over_label = "小球"
+                over_pct = 100 - p_over
+        else:
+            over_label = "—"
+            over_pct = 0
 
     status_map = {"finished": "已结束", "notstarted": "未开始",
                   "upcoming": "未开始", "live": "进行中",
@@ -373,13 +414,15 @@ def parse_prediction(p):
         "主胜赔率": fmt_odds(implied_odds(prob_home)),
         "和局赔率": fmt_odds(implied_odds(prob_draw)),
         "客胜赔率": fmt_odds(implied_odds(prob_away)),
-        "大球赔率": fmt_odds(implied_odds(prob_over)),
-        "小球赔率": fmt_odds(implied_odds(prob_under)),
+        "大球赔率": fmt_odds(implied_odds(p_over)) if p_over else "—",
+        "小球赔率": fmt_odds(implied_odds(100 - p_over)) if p_over else "—",
         "_prob_home": prob_home,
         "_prob_draw": prob_draw,
         "_prob_away": prob_away,
-        "_prob_over": pred["over25"] if pred else 0,
-        "_prob_under": pred["under25"] if pred else 0,
+        "_prob_over": (p_over / 100) if p_over else 0,
+        "_prob_under": ((100 - p_over) / 100) if p_over else 0,
+        "_prob_over_pct": p_over or 0,
+        "_prob_under_pct": (100 - p_over) if p_over else 0,
         "_xg_h": xg_h, "_xg_a": xg_a,
     }
 
@@ -429,22 +472,18 @@ def parse_espn_event(e):
         "_home_key": canon(home_name), "_away_key": canon(away_name),
     }
 
-# ============ 赔率接口测试 ============
 def test_odds_endpoints(event_id):
-    """测试多个可能的赔率接口，返回结果列表"""
     candidates = [
         ("GET", f"{BSD_BASE}/events/{event_id}/odds/", None),
         ("GET", f"{BSD_BASE}/events/{event_id}/odds", None),
         ("GET", f"{BSD_BASE}/odds/?event_id={event_id}", None),
         ("GET", f"{BSD_BASE}/odds/", {"event_id": event_id}),
         ("GET", f"{BSD_BASE}/predictions/{event_id}/", None),
-        ("GET", f"{BSD_BASE}/events/{event_id}/", None),
     ]
     results = []
     for method, url, params in candidates:
         try:
-            if method == "GET":
-                r = requests.get(url, headers=BSD_HEADERS, params=params, timeout=15)
+            r = requests.get(url, headers=BSD_HEADERS, params=params, timeout=15)
             results.append({
                 "URL": url,
                 "参数": str(params) if params else "",
@@ -502,11 +541,9 @@ with tab1:
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
 
         if not df.empty:
-            # ★ 使用 data_editor 让用户勾选"加入核心"
             display_df = df[["时间", "联赛", "状态", "主队", "客队",
                              "主力比分", "备选比分", "预测结果",
                              "主胜", "和局", "客胜", "大小球"]].copy()
-            # 标记当前是否在核心
             display_df.insert(0, "加入核心",
                               df["event_id"].isin(st.session_state.core_matches).values)
 
@@ -517,7 +554,7 @@ with tab1:
                 column_config={
                     "加入核心": st.column_config.CheckboxColumn(
                         "加入核心",
-                        help="勾选后点下方按钮保存到核心列表（Tab 2 生成 3串1 时优先使用）",
+                        help="勾选后点下方按钮保存到核心列表",
                         default=False,
                     )
                 },
@@ -527,7 +564,6 @@ with tab1:
             col_save, col_info = st.columns([1, 3])
             with col_save:
                 if st.button("💾 保存核心选择", type="primary", key="save_core_tab1"):
-                    # 找出被勾选的行（保持原 df 的 index 顺序）
                     selected_event_ids = df.loc[
                         edited["加入核心"].values, "event_id"
                     ].dropna().astype(int).tolist()
@@ -576,7 +612,6 @@ with tab2:
             if window_matches.empty:
                 st.warning(f"⏰ 当前 2 小时内没有未开赛比赛，也没有进行中的比赛。")
             else:
-                # ★ 逻辑：核心比赛全部保留，不足 3 场才从其他比赛里补
                 def calc_conf(row):
                     return max(
                         row["_prob_home"] / 100 if row["_prob_home"] else 0,
@@ -594,17 +629,14 @@ with tab2:
                 n_core_in_window = len(core_df)
 
                 if n_core_in_window >= 3:
-                    # 核心比赛够 3 场，按信心度排前 3
                     selected = core_df.sort_values("_conf", ascending=False).head(3)
                     note = f"✅ 使用你手动加入的核心比赛 {len(selected)} 场（共 {n_core_in_window} 场在窗口内）"
                 elif n_core_in_window > 0:
-                    # 核心不足 3 场，从其他比赛里补
                     need = 3 - n_core_in_window
                     fill = other_df.sort_values("_conf", ascending=False).head(need)
                     selected = pd.concat([core_df, fill])
                     note = f"✅ 核心比赛 {n_core_in_window} 场 + 自动补充 {len(fill)} 场"
                 else:
-                    # 没有核心，纯自动
                     selected = other_df.sort_values("_conf", ascending=False).head(3)
                     note = f"⚙️ 未加入核心，自动选出信心最高的 3 场"
 
@@ -613,7 +645,6 @@ with tab2:
                 else:
                     st.success(note)
 
-                    # 伤病降权
                     if use_manual:
                         prog = st.progress(0, text="正在获取阵容数据...")
                         updates = []
@@ -650,10 +681,10 @@ with tab2:
                             opts.append(("和局", row["_prob_draw"] / 100, implied_odds(row["_prob_draw"])))
                         if row["_prob_away"]:
                             opts.append(("客胜", row["_prob_away"] / 100, implied_odds(row["_prob_away"])))
-                        if row["_prob_over"]:
-                            opts.append(("大球(2.5+)", row["_prob_over"], implied_odds(row["_prob_over"] * 100)))
-                        if row["_prob_under"]:
-                            opts.append(("小球(2.5-)", row["_prob_under"], implied_odds(row["_prob_under"] * 100)))
+                        if row["_prob_over_pct"]:
+                            opts.append(("大球(2.5+)", row["_prob_over_pct"] / 100, implied_odds(row["_prob_over_pct"])))
+                        if row["_prob_under_pct"]:
+                            opts.append(("小球(2.5-)", row["_prob_under_pct"] / 100, implied_odds(row["_prob_under_pct"])))
                         opts.sort(key=lambda x: -x[1])
                         scores = row["_scores_list"] if row["_scores_list"] else []
                         main_s = scores[0] if len(scores) > 0 else ("—", 0)
@@ -667,7 +698,6 @@ with tab2:
                             "main_score": main_s, "alt_score": alt_s,
                         })
 
-                    # 比分串
                     st.subheader("🎲 比分串（3串1）")
                     best_idx = None; best_p = 0
                     for i, md in enumerate(matches_data):
@@ -725,7 +755,6 @@ with tab2:
 
                     st.divider()
 
-                    # 稳健串
                     st.subheader("🛡️ 稳健串（胜平负/大小球）")
                     combo = [(md, md["opts"][0]) for md in matches_data]
                     prob = 1; total_odds = 1
@@ -851,13 +880,45 @@ with tab4:
 
 # ========== Tab 5：接口测试 ==========
 with tab5:
-    st.caption("测试 Bzzoiro 是否有赔率（odds）接口。填入一个 event_id 后点测试。")
+    st.caption("💰 Bzzoiro 赔率接口 —— 查看完整 JSON 结构，以便整合进预测")
+
     test_id = st.text_input("Event ID", value="216460", key="test_id")
-    if st.button("🔍 测试赔率接口", type="primary", key="btn_test"):
-        with st.spinner("正在测试多个端点..."):
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("📊 查看单场赔率 JSON", type="primary", key="btn_odds1"):
+            try:
+                r = requests.get(f"{BSD_BASE}/events/{test_id}/odds/",
+                                 headers=BSD_HEADERS, timeout=15)
+                st.write(f"状态码：{r.status_code}")
+                if r.status_code == 200:
+                    st.json(r.json())
+                else:
+                    st.error(r.text)
+            except Exception as e:
+                st.error(f"错误：{e}")
+
+    with col2:
+        if st.button("📊 查看赔率列表 JSON", key="btn_odds2"):
+            try:
+                r = requests.get(f"{BSD_BASE}/odds/",
+                                 headers=BSD_HEADERS,
+                                 params={"event_id": test_id},
+                                 timeout=15)
+                st.write(f"状态码：{r.status_code}")
+                if r.status_code == 200:
+                    st.json(r.json())
+                else:
+                    st.error(r.text)
+            except Exception as e:
+                st.error(f"错误：{e}")
+
+    st.divider()
+    st.caption("**批量测试所有可能端点**")
+    if st.button("🔍 测试所有赔率接口", key="btn_test_all"):
+        with st.spinner("测试中..."):
             results = test_odds_endpoints(test_id)
         st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
-        st.caption("把这张表截图发我，我就能知道 Bzzoiro 有没有真实赔率接口，以及字段名是什么。")
 
 st.divider()
 st.caption("⚠️ 预测来自 Bzzoiro；赔率为概率反推的隐含赔率（非真实盘口）；比分为 xG 泊松反推；时间为北京时间。")
