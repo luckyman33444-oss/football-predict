@@ -1,14 +1,17 @@
 import math, requests, pandas as pd, streamlit as st
 from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import date
 
 st.set_page_config(page_title="足球预测 + 历史交锋", page_icon="⚽", layout="wide")
 
-BASE = "https://api.football-data.org/v4"
-COMPS = {"英超":"PL","西甲":"PD","德甲":"BL1","意甲":"SA","法甲":"FL1"}
-
-# ★★★ 你的 API 钥匙 ★★★
-TOKEN = "76e5bbe2eda54736a17d920186d3b176"
+# 免费开源数据源（OpenFootball），无需任何 API 密钥
+COMPS = {
+    "英超": "en.1",
+    "西甲": "es.1",
+    "德甲": "de.1",
+    "意甲": "it.1",
+    "法甲": "fr.1",
+}
 
 # ★★★ 你自己的球队调整区 ★★★
 ATTACK_BOOST = {
@@ -18,19 +21,12 @@ ATTACK_BOOST = {
 GOAL_TWEAK = 1.0
 # =========================================================
 
-# ============ 预测模块（football-data.org） ============
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch(code):
-    url = f"{BASE}/competitions/{code}/matches"
-    r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
-    if r.status_code == 200:
-        return r.json()
-    url = f"{BASE}/competitions/{code}/matches?season=2025"
-    r = requests.get(url, headers={"X-Auth-Token": TOKEN}, timeout=25)
-    if r.status_code == 200:
-        return r.json()
-    st.error(f"API 请求失败：{r.text}")
-    st.stop()
+    url = f"https://raw.githubusercontent.com/openfootball/football.json/master/2025-26/{code}.json"
+    r = requests.get(url, timeout=25)
+    r.raise_for_status()
+    return r.json()
 
 def pois(k, lam):
     return math.exp(-lam) * lam**k / math.factorial(k)
@@ -43,40 +39,34 @@ def matrix(lh, la, mg=10):
 def build(ms):
     hs,hp,hc = defaultdict(int),defaultdict(int),defaultdict(int)
     a_s,ap,ac = defaultdict(int),defaultdict(int),defaultdict(int)
-    names = {}
     Lh = La = 0.0; n = 0
     for m in ms:
-        if m.get("status") != "FINISHED": continue
-        ft = m.get("score",{}).get("fullTime",{})
-        hg, ag = ft.get("home"), ft.get("away")
-        if hg is None or ag is None: continue
-        h,a = m["homeTeam"]["id"], m["awayTeam"]["id"]
-        names[h] = m["homeTeam"].get("shortName") or m["homeTeam"]["name"]
-        names[a] = m["awayTeam"].get("shortName") or m["awayTeam"]["name"]
-        n+=1; Lh+=hg; La+=ag
+        if "score" not in m: continue
+        sc = m.get("score")
+        if not sc or len(sc) < 2: continue
+        hg, ag = sc[0], sc[1]
+        h, a = m["team1"], m["team2"]
+        n += 1; Lh += hg; La += ag
         hs[h]+=hg; hp[h]+=1; hc[h]+=ag
         a_s[a]+=ag; ap[a]+=1; ac[a]+=hg
 
-    if n==0:
-        st.warning("⚠️ 没有历史数据，将使用联赛平均值预测。")
-        return {"Lh":1.5,"La":1.1,"n":0,"names":names,
-                "ha":{},"hd":{},"aa":{},"ad":{}}
+    if n == 0:
+        return {"Lh":1.5, "La":1.1, "n":0,
+                "ha":{}, "hd":{}, "aa":{}, "ad":{}}
 
     Lh/=n; La/=n
     K = 6
     def rate(tot, played, base):
         return (tot + K*base)/(played+K)/base
-    return {"Lh":Lh,"La":La,"n":n,"names":names,
+    return {"Lh":Lh,"La":La,"n":n,
             "ha":{t:rate(hs[t],hp[t],Lh) for t in hp},
             "hd":{t:rate(hc[t],hp[t],La) for t in hp},
             "aa":{t:rate(a_s[t],ap[t],La) for t in ap},
             "ad":{t:rate(ac[t],ap[t],Lh) for t in ap}}
 
-def predict(M, hid, aid):
-    hn = M["names"].get(hid, "")
-    an = M["names"].get(aid, "")
-    lh = M["ha"].get(hid,1.0) * M["ad"].get(aid,1.0) * M["Lh"] * GOAL_TWEAK
-    la = M["aa"].get(aid,1.0) * M["hd"].get(hid,1.0) * M["La"] * GOAL_TWEAK
+def predict(M, hn, an):
+    lh = M["ha"].get(hn,1.0) * M["ad"].get(an,1.0) * M["Lh"] * GOAL_TWEAK
+    la = M["aa"].get(an,1.0) * M["hd"].get(hn,1.0) * M["La"] * GOAL_TWEAK
     lh *= ATTACK_BOOST.get(hn, 1.0)
     la *= ATTACK_BOOST.get(an, 1.0)
     m = matrix(lh, la)
@@ -88,7 +78,6 @@ def predict(M, hid, aid):
     top = sorted(m.items(), key=lambda x:-x[1])[:2]
     return lh, la, hw, d, aw, ov, bt, top
 
-# ============ 历史交锋模块（datafc + Sofascore） ============
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_h2h(tid, sid, week):
     try:
@@ -102,37 +91,47 @@ def get_h2h(tid, sid, week):
 # ============ 主界面 ============
 st.title("⚽ 足球预测 + 历史交锋")
 
-tab1, tab2 = st.tabs(["📅 今日预测", "🔁 历史交锋查询"])
+tab1, tab2 = st.tabs(["📅 比分预测", "🔁 历史交锋查询"])
 
-# -------- Tab 1：今日预测 --------
+# -------- Tab 1：比分预测 --------
 with tab1:
     comp_label = st.selectbox("选择联赛", list(COMPS.keys()))
-    data = fetch(COMPS[comp_label])
+    try:
+        data = fetch(COMPS[comp_label])
+    except Exception as e:
+        st.error(f"数据源抓取失败：{e}")
+        st.stop()
+
     ms = data.get("matches", [])
     M = build(ms)
+    st.caption(f"模型基于 {M['n']} 场已完场比赛｜主场场均 {M['Lh']:.2f}，客场 {M['La']:.2f}")
 
-    st.caption(f"模型基于本赛季 {M['n']} 场完场赛事｜主场场均 {M['Lh']:.2f}，客场 {M['La']:.2f}")
+    # 日期选择器：默认选数据里第一场有比分的日期
+    all_dates = sorted(set(m.get("date") for m in ms if m.get("date")))
+    default_date = None
+    for d in all_dates:
+        if any(m.get("date")==d and "score" in m for m in ms):
+            default_date = d
+            break
 
-    def dt(s): return datetime.fromisoformat(s.replace("Z","+00:00"))
-    now = datetime.now(timezone.utc)
-    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_day = start_of_day + timedelta(days=1)
+    sel_date = st.date_input(
+        "选择日期（默认显示数据源里第一场已完赛的日期）",
+        value=date.fromisoformat(default_date) if default_date else date.today()
+    )
+    target = sel_date.strftime("%Y-%m-%d")
 
-    up = [m for m in ms if m.get("status") in ("SCHEDULED","TIMED")
-          and start_of_day <= dt(m["utcDate"]) < end_of_day]
-
+    up = [m for m in ms if m.get("date") == target]
     if not up:
-        st.info("今天没有该联赛的赛程。")
+        st.info(f"{target} 没有该联赛的赛程。可以换个日期试试。")
+        st.caption(f"提示：本数据源目前包含的日期范围：{all_dates[0]} ～ {all_dates[-1]}")
     else:
         rows = []
-        for m in sorted(up, key=lambda x:x["utcDate"]):
-            hid, aid = m["homeTeam"]["id"], m["awayTeam"]["id"]
-            hn = M["names"].get(hid, m["homeTeam"]["name"])
-            an = M["names"].get(aid, m["awayTeam"]["name"])
-            lh, la, hw, d, aw, ov, bt, top = predict(M, hid, aid)
+        for m in sorted(up, key=lambda x:x["date"]):
+            hn, an = m["team1"], m["team2"]
+            lh, la, hw, d, aw, ov, bt, top = predict(M, hn, an)
             score_str = " / ".join([f"{h}-{a}" for (h,a),p in top])
             rows.append({
-                "时间(UTC)": dt(m["utcDate"]).strftime("%H:%M"),
+                "日期": m["date"],
                 "主队": hn, "客队": an, "预测比分": score_str,
                 "主胜": f"{hw*100:.1f}%", "和局": f"{d*100:.1f}%",
                 "客胜": f"{aw*100:.1f}%", "大2.5": f"{ov*100:.1f}%",
@@ -155,7 +154,7 @@ with tab2:
         wk = st.number_input("轮次 (Week)", value=1, step=1, min_value=1)
 
     if st.button("🔍 获取数据", type="primary"):
-        with st.spinner("正在从 Sofascore 获取数据..."):
+        with st.spinner("正在从 Sofascore 获取..."):
             m_df, h2h_df, err = get_h2h(int(tid), int(sid), int(wk))
             if err:
                 st.error(f"获取失败：{err}")
