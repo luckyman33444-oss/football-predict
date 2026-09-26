@@ -53,7 +53,6 @@ LEAGUE_CN = {
     "Taça de Portugal": "葡萄牙杯",
 }
 
-# 队名中文对照表（你已有的，保持不变）
 TEAM_CN = {
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
@@ -284,36 +283,22 @@ def fmt_odds(o):
     try: return f"{float(o):.2f}"
     except: return "—"
 
-# ★★★ 方案A：盘口变动分析 ★★★
+# ============ 盘口变动分析 ============
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_event_odds_full(event_id):
-    """获取单场赔率 + 变动方向 + 开盘/临场赔率"""
     if not event_id: return None
     try:
-        # 简化版（核心赔率）
         r1 = requests.get(f"{BSD_BASE}/events/{event_id}/odds/", headers=BSD_HEADERS, timeout=15)
         simple = r1.json().get("odds", {}) if r1.status_code == 200 else {}
-        # 明细版（含 movement 和开盘/临场赔率）
         r2 = requests.get(f"{BSD_BASE}/odds/", headers=BSD_HEADERS,
                           params={"event_id": event_id, "limit": 100}, timeout=15)
-        details = []
-        if r2.status_code == 200:
-            details = r2.json().get("results", [])
+        details = r2.json().get("results", []) if r2.status_code == 200 else []
         return {"simple": simple, "details": details}
     except: return None
 
 def analyze_line_movement(odds_data):
-    """
-    分析赔率变动，返回：
-    - home_signal: 主胜市场信号 (看多/看淡/中性)
-    - draw_signal: 和局市场信号
-    - away_signal: 客胜市场信号
-    - over_signal: 大球市场信号
-    - confidence: 市场信心指数 (0-100)
-    """
     if not odds_data or not odds_data.get("details"):
         return None
-
     signals = {}
     for d in odds_data["details"]:
         market = d.get("market", "")
@@ -322,84 +307,118 @@ def analyze_line_movement(odds_data):
         current = d.get("decimal_odds")
         opening = d.get("opening_decimal_odds")
         bookmaker = d.get("bookmaker_name", "")
-
-        # 只看共识盘
-        if bookmaker != "Consensus":
-            continue
-
+        if bookmaker != "Consensus": continue
         key = f"{market}_{outcome}"
-        if movement == "SHORTENING":
-            signal = "看多"
-        elif movement == "DRIFTING":
-            signal = "看淡"
-        else:
-            signal = "中性"
-
-        # 计算赔率变化幅度
+        if movement == "SHORTENING": signal = "看多"
+        elif movement == "DRIFTING": signal = "看淡"
+        else: signal = "中性"
         change_pct = None
         if current and opening and opening > 0:
             change_pct = (current - opening) / opening * 100
-
-        signals[key] = {
-            "market": market,
-            "outcome": outcome,
-            "signal": signal,
-            "current": current,
-            "opening": opening,
-            "change_pct": change_pct,
-            "movement": movement,
-        }
-
-    if not signals:
-        return None
-
-    # 提取关键信号
+        signals[key] = {"market": market, "outcome": outcome, "signal": signal,
+                        "current": current, "opening": opening,
+                        "change_pct": change_pct, "movement": movement}
+    if not signals: return None
     home_sig = signals.get("1x2_HOME", {}).get("signal", "中性")
     draw_sig = signals.get("1x2_DRAW", {}).get("signal", "中性")
     away_sig = signals.get("1x2_AWAY", {}).get("signal", "中性")
     over_sig = signals.get("over_under_25_over", {}).get("signal", "中性")
-
-    # 计算市场信心指数：基于赔率变动幅度
-    # 赔率变化越大，市场信息越强
-    conf_scores = []
-    for k, v in signals.items():
-        if v["change_pct"] is not None:
-            conf_scores.append(abs(v["change_pct"]))
+    conf_scores = [abs(v["change_pct"]) for v in signals.values() if v["change_pct"] is not None]
     confidence = min(100, sum(conf_scores) * 5) if conf_scores else 0
+    return {"home_signal": home_sig, "draw_signal": draw_sig,
+            "away_signal": away_sig, "over_signal": over_sig,
+            "confidence": confidence, "signals": signals}
 
-    return {
-        "home_signal": home_sig,
-        "draw_signal": draw_sig,
-        "away_signal": away_sig,
-        "over_signal": over_sig,
-        "confidence": confidence,
-        "signals": signals,
-    }
-
+# ============ 伤停详细信息 ============
 @st.cache_data(ttl=1800, show_spinner=False)
-def fetch_event_lineups(event_id):
+def get_injury_info(event_id):
+    """返回 {"home": [{"name":..., "position":..., "status":...}], "away": [...]}
+    同时返回 home_weight, away_weight（用于可选降权）"""
     try:
         r = requests.get(f"{BSD_BASE}/events/{event_id}/lineups/", headers=BSD_HEADERS, timeout=15)
         if r.status_code != 200: return None
-        return r.json()
+        data = r.json()
     except: return None
 
-def calc_injury_weight(event_id):
-    data = fetch_event_lineups(event_id)
-    if not data: return 1.0, 1.0
-    def count_missing(side_data):
-        if not isinstance(side_data, dict): return 0
+    def parse_side(side_data):
+        if not isinstance(side_data, dict): return []
         players = side_data.get("players", []) or []
-        n = 0
+        result = []
         for p in players:
             av = str(p.get("availability", "")).lower()
-            if av in ("injured", "suspended", "doubtful"): n += 1
-        return n
-    hw = count_missing(data.get("home", {}))
-    aw = count_missing(data.get("away", {}))
-    def w(n): return max(0.70, 1.0 - n * 0.05)
-    return w(hw), w(aw)
+            if av in ("injured", "suspended", "doubtful"):
+                pos = p.get("position", "") or p.get("position_name", "") or "?"
+                result.append({
+                    "name": p.get("name", p.get("player_name", "?")),
+                    "position": pos,
+                    "status": av,
+                    "injury_type": p.get("injury_type", ""),
+                })
+        return result
 
+    home_list = parse_side(data.get("home", {}))
+    away_list = parse_side(data.get("away", {}))
+
+    # 按位置统计
+    def count_by_pos(lst):
+        cnt = {"门将": 0, "后卫": 0, "中场": 0, "前锋": 0, "其他": 0}
+        for p in lst:
+            pos = str(p["position"]).upper()
+            if "GK" in pos or "GOAL" in pos or "门将" in pos: cnt["门将"] += 1
+            elif "DEF" in pos or "BACK" in pos or "后卫" in pos: cnt["后卫"] += 1
+            elif "MID" in pos or "中场" in pos: cnt["中场"] += 1
+            elif "FW" in pos or "FORW" in pos or "STRIK" in pos or "前锋" in pos: cnt["前锋"] += 1
+            else: cnt["其他"] += 1
+        return cnt
+
+    return {
+        "home_list": home_list,
+        "away_list": away_list,
+        "home_count": len(home_list),
+        "away_count": len(away_list),
+        "home_by_pos": count_by_pos(home_list),
+        "away_by_pos": count_by_pos(away_list),
+    }
+
+def injury_weight_from_info(info):
+    """从伤停信息计算降权系数（可选）"""
+    if not info: return 1.0, 1.0
+    def w(n): return max(0.70, 1.0 - n * 0.05)
+    return w(info["home_count"]), w(info["away_count"])
+
+# ============ 一致性判断（核心）============
+def judge_consistency(model_pick, market_signal):
+    """
+    model_pick: "主胜" / "和局" / "客胜" / "大球(2.5+)" / "小球(2.5-)"
+    market_signal: "看多" / "看淡" / "中性" / ""
+    返回: {"tag": "一致"/"冲突"/"中性", "emoji": "✅/⚠️/➖", "note": "..."}
+    """
+    if not market_signal or market_signal in ("", "—", "中性"):
+        return {"tag": "中性", "emoji": "➖", "note": "市场无明显变动"}
+
+    # 判断模型推荐对应市场信号的方向
+    if model_pick in ("主胜", "大球(2.5+)"):
+        if market_signal == "看多":
+            return {"tag": "一致", "emoji": "✅", "note": f"模型推荐{model_pick}，市场也看多"}
+        elif market_signal == "看淡":
+            return {"tag": "冲突", "emoji": "⚠️", "note": f"模型推荐{model_pick}，但市场看淡"}
+    elif model_pick in ("客胜", "小球(2.5-)"):
+        # 客胜：如果客胜赔率看多 → 一致
+        # 小球：如果大球赔率看淡 → 一致（大球看淡=市场认为小球）
+        if model_pick == "客胜":
+            if market_signal == "看多": return {"tag": "一致", "emoji": "✅", "note": "模型推荐客胜，市场看多客胜"}
+            elif market_signal == "看淡": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐客胜，但市场看淡客胜"}
+        else:  # 小球
+            if market_signal == "看淡": return {"tag": "一致", "emoji": "✅", "note": "模型推荐小球，市场看淡大球"}
+            elif market_signal == "看多": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐小球，但市场看多大球"}
+    elif model_pick == "和局":
+        if market_signal == "看多":
+            return {"tag": "一致", "emoji": "✅", "note": "模型推荐和局，市场看多和局"}
+        elif market_signal == "看淡":
+            return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐和局，但市场看淡和局"}
+    return {"tag": "中性", "emoji": "➖", "note": ""}
+
+# ============ 数据获取 ============
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_all_predictions():
     all_results = []; offset = 0; limit = 100
@@ -434,51 +453,35 @@ def parse_prediction(p):
     ou = mk.get("over_under", {})
     xg_h = eg.get("home"); xg_a = eg.get("away")
     pred = predict_full(xg_h, xg_a)
-
     prob_home = mr.get("prob_home") or 0
     prob_draw = mr.get("prob_draw") or 0
     prob_away = mr.get("prob_away") or 0
-
     prob_over25_raw = ou.get("prob_over_25")
     if prob_over25_raw is not None:
         try: p_over = float(prob_over25_raw)
         except: p_over = None
-    else:
-        p_over = None
-
+    else: p_over = None
     if p_over is not None:
-        if p_over >= 50:
-            over_label = "大球"; over_pct = p_over
-        else:
-            over_label = "小球"; over_pct = 100 - p_over
+        if p_over >= 50: over_label = "大球"; over_pct = p_over
+        else: over_label = "小球"; over_pct = 100 - p_over
     else:
         if pred:
             p_over = pred["over25"] * 100
-            if p_over >= 50:
-                over_label = "大球"; over_pct = p_over
-            else:
-                over_label = "小球"; over_pct = 100 - p_over
-        else:
-            over_label = "—"; over_pct = 0
-
+            if p_over >= 50: over_label = "大球"; over_pct = p_over
+            else: over_label = "小球"; over_pct = 100 - p_over
+        else: over_label = "—"; over_pct = 0
     if pred:
-        if over_label == "大球":
-            chosen_scores = pred["over_scores"]
-        elif over_label == "小球":
-            chosen_scores = pred["under_scores"]
-        else:
-            chosen_scores = pred["top_scores"]
+        if over_label == "大球": chosen_scores = pred["over_scores"]
+        elif over_label == "小球": chosen_scores = pred["under_scores"]
+        else: chosen_scores = pred["top_scores"]
         scores_list = [(f"{h}-{a}", p) for h, a, p in chosen_scores]
-    else:
-        scores_list = []
-
+    else: scores_list = []
     main_score = scores_list[0][0] if scores_list else "—"
     alt_score = scores_list[1][0] if len(scores_list) > 1 else "—"
     main_score_p = scores_list[0][1] if scores_list else 0
     alt_score_p = scores_list[1][1] if len(scores_list) > 1 else 0
     h1 = pred["h1"] if pred else "—"
     h2 = pred["h2"] if pred else "—"
-
     status_map = {"finished": "已结束", "notstarted": "未开始",
                   "upcoming": "未开始", "live": "进行中",
                   "inprogress": "进行中", "postponed": "延期", "canceled": "取消"}
@@ -583,8 +586,7 @@ with tab1:
         available_dates = sorted(date_counts.keys())
         date_options = [f"{d}（{date_counts[d]}场）" for d in available_dates]
         today_str = datetime.now(CST).strftime("%Y-%m-%d")
-        if today_str in available_dates:
-            default_idx = available_dates.index(today_str)
+        if today_str in available_dates: default_idx = available_dates.index(today_str)
         else:
             future = [i for i, d in enumerate(available_dates) if d >= today_str]
             default_idx = future[0] if future else len(available_dates) - 1
@@ -598,53 +600,10 @@ with tab1:
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
 
         if not df.empty:
-            load_real = st.checkbox("💰 加载真实赔率 + 盘口变动（会调用 API，慢一些）", value=False, key="load_real_tab1")
-
             display_df = df[["时间", "联赛", "状态", "主队", "客队",
                              "主力比分", "备选比分", "预测结果",
                              "主胜", "和局", "客胜", "大小球"]].copy()
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
-
-            if load_real:
-                real_odds_home = []; real_odds_draw = []; real_odds_away = []
-                real_odds_over = []; real_odds_under = []
-                mov_home = []; mov_draw = []; mov_away = []; mov_over = []; market_conf = []
-                for _, row in df.iterrows():
-                    od = fetch_event_odds_full(row["event_id"])
-                    if od and od.get("simple"):
-                        o = od["simple"]
-                        real_odds_home.append(fmt_odds(o.get("home_win")))
-                        real_odds_draw.append(fmt_odds(o.get("draw")))
-                        real_odds_away.append(fmt_odds(o.get("away_win")))
-                        real_odds_over.append(fmt_odds(o.get("over_25_goals")))
-                        real_odds_under.append(fmt_odds(o.get("under_25_goals")))
-                        # 盘口变动
-                        analysis = analyze_line_movement(od)
-                        if analysis:
-                            mov_home.append(analysis["home_signal"])
-                            mov_draw.append(analysis["draw_signal"])
-                            mov_away.append(analysis["away_signal"])
-                            mov_over.append(analysis["over_signal"])
-                            market_conf.append(f"{analysis['confidence']:.0f}")
-                        else:
-                            mov_home.append("—"); mov_draw.append("—")
-                            mov_away.append("—"); mov_over.append("—"); market_conf.append("—")
-                    else:
-                        real_odds_home.append("—"); real_odds_draw.append("—")
-                        real_odds_away.append("—"); real_odds_over.append("—")
-                        real_odds_under.append("—")
-                        mov_home.append("—"); mov_draw.append("—")
-                        mov_away.append("—"); mov_over.append("—"); market_conf.append("—")
-                display_df["真主胜"] = real_odds_home
-                display_df["真和"] = real_odds_draw
-                display_df["真客胜"] = real_odds_away
-                display_df["真大球"] = real_odds_over
-                display_df["真小球"] = real_odds_under
-                display_df["主胜走势"] = mov_home
-                display_df["和局走势"] = mov_draw
-                display_df["客胜走势"] = mov_away
-                display_df["大球走势"] = mov_over
-                display_df["市场信心"] = market_conf
 
             edited = st.data_editor(
                 display_df, use_container_width=True, hide_index=True,
@@ -668,8 +627,6 @@ with tab1:
                 if st.session_state.core_matches:
                     st.info(f"📌 当前核心：**{len(st.session_state.core_matches)}** 场（Tab 2 优先使用）")
 
-            st.caption("💡 走势列解读：**看多**=赔率缩短（市场看好）；**看淡**=赔率走远（市场看淡）。市场信心 0-100，越高说明市场变动越大。")
-
 # ========== Tab 2：3串1核心 ==========
 with tab2:
     now = datetime.now(CST)
@@ -679,7 +636,8 @@ with tab2:
 
     col1, col2 = st.columns([3, 1])
     with col1:
-        use_manual = st.checkbox("🩺 启用伤病自动降权", value=False, key="manual_switch")
+        enable_injury_info = st.checkbox("🩺 显示伤停信息（半自动）", value=True, key="injury_switch")
+        enable_market_info = st.checkbox("📊 显示盘口走势（半自动）", value=True, key="market_switch")
     with col2:
         if st.button("🗑️ 清空核心", key="clear_core"):
             st.session_state.core_matches = []
@@ -691,6 +649,8 @@ with tab2:
         st.info(f"📌 已手动加入 **{core_count}** 场核心比赛，生成时会优先使用")
     else:
         st.caption("📌 未手动加入核心。可在 **Tab 1** 勾选，或在 **Tab 4** 搜索后加入。")
+
+    st.caption("💡 **半自动模式**：模型只做推荐，**不自动改概率**。伤停和盘口信息会并排展示，你自己判断。")
 
     if st.button("🎯 生成 3串1 推荐", type="primary", key="btn_core"):
         if df_all.empty:
@@ -721,10 +681,9 @@ with tab2:
                 other_df = window_matches[~window_matches["event_id"].isin(core_ids)].copy()
 
                 n_core_in_window = len(core_df)
-
                 if n_core_in_window >= 3:
                     selected = core_df.sort_values("_conf", ascending=False).head(3)
-                    note = f"✅ 使用你手动加入的核心比赛 {len(selected)} 场（共 {n_core_in_window} 场在窗口内）"
+                    note = f"✅ 使用你手动加入的核心比赛 {len(selected)} 场"
                 elif n_core_in_window > 0:
                     need = 3 - n_core_in_window
                     fill = other_df.sort_values("_conf", ascending=False).head(need)
@@ -739,50 +698,24 @@ with tab2:
                 else:
                     st.success(note)
 
-                    if use_manual:
-                        prog = st.progress(0, text="正在获取阵容数据...")
-                        updates = []
-                        for i, (_, row) in enumerate(selected.iterrows()):
-                            eid = row.get("event_id")
-                            hw_, aw_ = calc_injury_weight(eid) if eid else (1.0, 1.0)
-                            updates.append((row.name, hw_, aw_))
-                            prog.progress((i + 1) / len(selected), text=f"处理 {i+1}/{len(selected)}")
-                        prog.empty()
-                        for idx, hw_, aw_ in updates:
-                            row = selected.loc[idx]
-                            new_xg_h = (row["_xg_h"] or 1.5) * hw_
-                            new_xg_a = (row["_xg_a"] or 1.2) * aw_
-                            new_pred = predict_full(new_xg_h, new_xg_a)
-                            if new_pred:
-                                if row["_prob_over_pct"] >= 50:
-                                    chosen = new_pred["over_scores"]
-                                else:
-                                    chosen = new_pred["under_scores"]
-                                if chosen:
-                                    selected.at[idx, "主力比分"] = f"{chosen[0][0]}-{chosen[0][1]}"
-                                    if len(chosen) > 1:
-                                        selected.at[idx, "备选比分"] = f"{chosen[1][0]}-{chosen[1][1]}"
-                                m = score_matrix_full(new_xg_h, new_xg_a)
-                                selected.at[idx, "_prob_home"] = sum(p for (h, a), p in m.items() if h > a) * 100
-                                selected.at[idx, "_prob_draw"] = sum(p for (h, a), p in m.items() if h == a) * 100
-                                selected.at[idx, "_prob_away"] = sum(p for (h, a), p in m.items() if h < a) * 100
-                                selected.at[idx, "_prob_over"] = new_pred["over25"]
-                                selected.at[idx, "_prob_under"] = new_pred["under25"]
-
-                    with st.spinner("正在获取真实赔率 + 盘口变动..."):
-                        real_odds_map = {}
+                    with st.spinner("正在获取赔率和伤停信息..."):
+                        odds_map = {}
+                        injury_map = {}
                         movement_map = {}
                         for _, row in selected.iterrows():
                             eid = row.get("event_id")
                             od = fetch_event_odds_full(eid) if eid else None
-                            real_odds_map[eid] = od["simple"] if od else None
+                            odds_map[eid] = od["simple"] if od else None
                             movement_map[eid] = analyze_line_movement(od) if od else None
+                            injury_map[eid] = get_injury_info(eid) if eid else None
 
                     matches_data = []
                     for _, row in selected.iterrows():
-                        is_core = row["event_id"] in core_ids
-                        o = real_odds_map.get(row["event_id"]) or {}
-                        mv = movement_map.get(row["event_id"]) or {}
+                        eid = row["event_id"]
+                        is_core = eid in core_ids
+                        o = odds_map.get(eid) or {}
+                        mv = movement_map.get(eid) or {}
+                        inj = injury_map.get(eid) or {}
                         opts = []
                         hw_real = o.get("home_win"); dr_real = o.get("draw"); aw_real = o.get("away_win")
                         over_real = o.get("over_25_goals"); under_real = o.get("under_25_goals")
@@ -809,14 +742,67 @@ with tab2:
                         matches_data.append({
                             "比赛": f"{row['主队']} vs {row['客队']}",
                             "时间": row["时间"], "联赛": row["联赛"],
-                            "状态": row["状态"],
-                            "大小球方向": row["大小球"],
+                            "状态": row["状态"], "大小球方向": row["大小球"],
                             "是否核心": "⭐ 核心" if is_core else "自动",
-                            "opts": opts,
-                            "main_score": main_s, "alt_score": alt_s,
-                            "real_odds": o,
-                            "movement": mv,
+                            "opts": opts, "main_score": main_s, "alt_score": alt_s,
+                            "real_odds": o, "movement": mv, "injury": inj,
                         })
+
+                    # ============ 半自动情报面板（核心）============
+                    if enable_injury_info or enable_market_info:
+                        st.subheader("🔍 半自动情报面板")
+                        st.caption("模型推荐 vs 市场信号 vs 伤停情况。⚠️ 表示模型与市场冲突，需谨慎。")
+
+                        info_rows = []
+                        for i, md in enumerate(matches_data, 1):
+                            inj = md.get("injury") or {}
+                            mv = md.get("movement") or {}
+                            best_opt = md["opts"][0]
+                            model_pick = best_opt[0]
+
+                            # 伤停文本
+                            home_inj = inj.get("home_count", 0) if inj else 0
+                            away_inj = inj.get("away_count", 0) if inj else 0
+                            def pos_summary(by_pos):
+                                if not by_pos: return ""
+                                parts = [f"{k}{v}" for k, v in by_pos.items() if v > 0]
+                                return " ".join(parts) if parts else ""
+                            home_pos = pos_summary(inj.get("home_by_pos")) if inj else ""
+                            away_pos = pos_summary(inj.get("away_by_pos")) if inj else ""
+                            injury_str = f"主 {home_inj}人"
+                            if home_pos: injury_str += f"({home_pos})"
+                            injury_str += f" ｜ 客 {away_inj}人"
+                            if away_pos: injury_str += f"({away_pos})"
+                            if home_inj == 0 and away_inj == 0:
+                                injury_str = "无伤停报告"
+
+                            # 市场信号（跟模型推荐对应的）
+                            pick_name, _, _, is_real, movement = best_opt
+                            # 一致性判断
+                            consistency = judge_consistency(pick_name, movement)
+
+                            info_rows.append({
+                                "场次": i,
+                                "比赛": md["比赛"],
+                                "模型推荐": f"{pick_name} ({best_opt[1]*100:.1f}%)",
+                                "盘口走势": movement if movement else "—",
+                                "一致性": f"{consistency['emoji']} {consistency['tag']}",
+                                "伤停": injury_str,
+                                "说明": consistency["note"],
+                            })
+                        info_df = pd.DataFrame(info_rows)
+                        st.dataframe(info_df, use_container_width=True, hide_index=True)
+
+                        # 冲突提醒
+                        conflicts = [r for r in info_rows if "冲突" in r["一致性"]]
+                        if conflicts:
+                            st.warning(f"⚠️ 发现 **{len(conflicts)}** 场模型与市场冲突，建议谨慎：")
+                            for c in conflicts:
+                                st.write(f"- **{c['比赛']}**：模型推荐 {c['模型推荐']}，但市场{c['盘口走势']}")
+                        else:
+                            st.success("✅ 模型推荐与市场走势一致，无冲突")
+
+                        st.divider()
 
                     # 比分串
                     st.subheader("🎲 比分串（3串1）")
@@ -879,8 +865,8 @@ with tab2:
 
                     st.divider()
 
-                    # 稳健串（含盘口变动）
-                    st.subheader("🛡️ 稳健串（胜平负/大小球，含真实赔率 + 盘口变动）")
+                    # 稳健串
+                    st.subheader("🛡️ 稳健串（胜平负/大小球）")
                     combo = [(md, md["opts"][0]) for md in matches_data]
                     prob = 1; total_odds = 1
                     for _, opt in combo:
@@ -891,14 +877,14 @@ with tab2:
                     stable_rows = []
                     for i, (md, opt) in enumerate(combo, 1):
                         pick_name, pick_prob, pick_odds, is_real, movement = opt
+                        consistency = judge_consistency(pick_name, movement)
                         stable_rows.append({
-                            "场次": i, "时间": md["时间"], "比赛": md["比赛"],
-                            "大小球方向": md["大小球方向"], "来源": md["是否核心"],
-                            "状态": md["状态"], "推荐": pick_name,
+                            "场次": i, "比赛": md["比赛"], "推荐": pick_name,
                             "概率": f"{pick_prob*100:.1f}%",
                             "赔率": fmt_odds(pick_odds),
                             "赔率来源": "真实" if is_real else "隐含",
                             "盘口走势": movement if movement else "—",
+                            "一致性": f"{consistency['emoji']} {consistency['tag']}",
                         })
                     st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
 
@@ -912,14 +898,14 @@ with tab2:
                     stable_rows_b = []
                     for i, (md, opt) in enumerate(combo_b, 1):
                         pick_name, pick_prob, pick_odds, is_real, movement = opt
+                        consistency = judge_consistency(pick_name, movement)
                         stable_rows_b.append({
-                            "场次": i, "时间": md["时间"], "比赛": md["比赛"],
-                            "大小球方向": md["大小球方向"], "来源": md["是否核心"],
-                            "状态": md["状态"], "推荐": pick_name,
+                            "场次": i, "比赛": md["比赛"], "推荐": pick_name,
                             "概率": f"{pick_prob*100:.1f}%",
                             "赔率": fmt_odds(pick_odds),
                             "赔率来源": "真实" if is_real else "隐含",
                             "盘口走势": movement if movement else "—",
+                            "一致性": f"{consistency['emoji']} {consistency['tag']}",
                         })
                     st.dataframe(pd.DataFrame(stable_rows_b), use_container_width=True, hide_index=True)
 
@@ -929,6 +915,8 @@ with tab2:
                     best_opt = first["opts"][0]
                     o = first.get("real_odds", {})
                     mv = first.get("movement", {}) or {}
+                    inj = first.get("injury", {}) or {}
+                    consistency = judge_consistency(best_opt[0], best_opt[4])
                     odds_line = ""
                     if o:
                         odds_line = (
@@ -940,15 +928,23 @@ with tab2:
                     if mv:
                         movement_line = (
                             f"\n\n**盘口走势**：主胜 {mv.get('home_signal', '—')} ｜ "
-                            f"和局 {mv.get('draw_signal', '—')} ｜ 客胜 {mv.get('away_signal', '—')} ｜ "
+                            f"和 {mv.get('draw_signal', '—')} ｜ 客胜 {mv.get('away_signal', '—')} ｜ "
                             f"大球 {mv.get('over_signal', '—')} ｜ 市场信心 {mv.get('confidence', 0):.0f}"
+                        )
+                    injury_line = ""
+                    if inj:
+                        injury_line = (
+                            f"\n\n**伤停**：主队缺阵 {inj.get('home_count', 0)} 人"
+                            f" ｜ 客队缺阵 {inj.get('away_count', 0)} 人"
                         )
                     st.success(
                         f"**{first['比赛']}** ｜ {first['联赛']} ｜ {first['时间']} ｜ {first['状态']} ｜ {first['是否核心']}\n\n"
                         f"大小球方向：**{first['大小球方向']}**\n\n"
                         f"推荐：**{best_opt[0]}**（概率 {best_opt[1]*100:.1f}%，赔率 {fmt_odds(best_opt[2])}）"
-                        f"{odds_line}{movement_line}\n\n"
-                        f"比分参考：{first['main_score'][0]} / {first['alt_score'][0]}（已按大小球方向筛选）"
+                        f"{odds_line}{movement_line}{injury_line}\n\n"
+                        f"**一致性**：{consistency['emoji']} {consistency['tag']}"
+                        + (f" — {consistency['note']}" if consistency['note'] else "")
+                        + f"\n\n比分参考：{first['main_score'][0]} / {first['alt_score'][0]}（已按大小球方向筛选）"
                     )
 
 # ========== Tab 3 ==========
@@ -1026,4 +1022,4 @@ with tab4:
                             st.rerun()
 
 st.divider()
-st.caption("⚠️ 预测来自 Bzzoiro；赔率为真实共识赔率；盘口走势来自 Bzzoiro movement 字段；比分为 xG 泊松反推并按大小球方向筛选；时间为北京时间。")
+st.caption("⚠️ 预测来自 Bzzoiro；赔率、盘口走势、伤停信息来自 Bzzoiro；半自动模式仅展示信息，不自动改预测；比分为 xG 泊松反推并按大小球方向筛选；时间为北京时间。")
