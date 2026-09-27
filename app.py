@@ -5,11 +5,11 @@ import json as _json
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 CST = timezone(timedelta(hours=8))
 
-# ============ 权重调整系数（跑几周后可自行微调）============
-INJURY_WEIGHT_PER_PLAYER = 0.05   # 每伤停 1 人，该队 xG ×(1-0.05)
-INJURY_WEIGHT_MIN = 0.70           # 最低降到 0.70
-CONFIRMED_LINEUP_BOOST = 1.05      # 阵容已确认，信心 ×1.05（展示用）
-NO_LINEUP_PENALTY = 0.95           # 阵容未公布，信心 ×0.95（展示用）
+# ============ 权重调整系数 ============
+INJURY_WEIGHT_PER_PLAYER = 0.05
+INJURY_WEIGHT_MIN = 0.70
+CONFIRMED_LINEUP_BOOST = 1.05
+NO_LINEUP_PENALTY = 0.95
 # ==========================================================
 
 BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
@@ -291,37 +291,25 @@ def fmt_odds(o):
     try: return f"{float(o):.2f}"
     except: return "—"
 
-# ★★★ 方案A：阵容/伤病权重调整 ★★★
 def adjust_with_lineup(xg_h, xg_a, lineup_info):
-    """
-    根据阵容和伤停调整 xG。
-    返回：(adj_xg_h, adj_xg_a, home_weight, away_weight, reason)
-    """
     if not lineup_info:
         return xg_h, xg_a, 1.0, 1.0, "无阵容数据，不调整"
-
     has_data = lineup_info.get("has_data", False)
     status = lineup_info.get("status", "")
-
     if not has_data:
         return xg_h, xg_a, 1.0, 1.0, "阵容未公布，不调整"
-
     home_inj = len(lineup_info.get("home", {}).get("injured", []))
     away_inj = len(lineup_info.get("away", {}).get("injured", []))
-
     home_weight = max(INJURY_WEIGHT_MIN, 1.0 - home_inj * INJURY_WEIGHT_PER_PLAYER)
     away_weight = max(INJURY_WEIGHT_MIN, 1.0 - away_inj * INJURY_WEIGHT_PER_PLAYER)
-
     adj_xg_h = xg_h * home_weight
     adj_xg_a = xg_a * away_weight
-
     reasons = []
     if home_inj > 0: reasons.append(f"主队伤停{home_inj}人→进攻×{home_weight:.2f}")
     if away_inj > 0: reasons.append(f"客队伤停{away_inj}人→进攻×{away_weight:.2f}")
     if status == "confirmed": reasons.append("阵容已确认")
     elif status == "predicted": reasons.append("仅预测阵容")
     if not reasons: reasons.append("无伤停，权重不变")
-
     return adj_xg_h, adj_xg_a, home_weight, away_weight, " ｜ ".join(reasons)
 
 @st.cache_data(ttl=300, show_spinner=False)
@@ -337,8 +325,7 @@ def fetch_event_odds_full(event_id):
     except: return None
 
 def analyze_line_movement(odds_data):
-    if not odds_data or not odds_data.get("details"):
-        return None
+    if not odds_data or not odds_data.get("details"): return None
     signals = {}
     for d in odds_data["details"]:
         market = d.get("market", "")
@@ -376,12 +363,10 @@ def get_lineup_info(event_id):
         if r.status_code != 200: return None
         data = r.json()
     except: return None
-
     lineups = data.get("lineups", {}) if isinstance(data.get("lineups"), dict) else {}
     unavailable = data.get("unavailable_players", {}) if isinstance(data.get("unavailable_players"), dict) else {}
     status = data.get("lineup_status", "")
     has_data = bool(lineups.get("home") or lineups.get("away"))
-
     def pos_cn(pos):
         if not pos: return "?"
         if pos in ("G", "GK"): return "门将"
@@ -389,43 +374,30 @@ def get_lineup_info(event_id):
         if pos in ("M", "MID", "CM", "DM", "AM"): return "中场"
         if pos in ("F", "FW", "ST", "CF", "LW", "RW"): return "前锋"
         return pos
-
     def parse_player(p):
-        return {
-            "name": p.get("short_name") or p.get("name", "?"),
-            "position": pos_cn(p.get("position", "")),
-            "number": p.get("jersey_number", ""),
-            "captain": p.get("captain", False),
-        }
-
+        return {"name": p.get("short_name") or p.get("name", "?"),
+                "position": pos_cn(p.get("position", "")),
+                "number": p.get("jersey_number", ""),
+                "captain": p.get("captain", False)}
     def parse_side(side_data, unavail_list):
         if not isinstance(side_data, dict): side_data = {}
-        players = [parse_player(p) for p in (side_data.get("players") or [])]
-        subs = [parse_player(p) for p in (side_data.get("substitutes") or [])]
-        injured = [parse_player(p) for p in (unavail_list or [])]
         return {
             "formation": side_data.get("formation", ""),
-            "players": players,
-            "substitutes": subs,
-            "injured": injured,
+            "players": [parse_player(p) for p in (side_data.get("players") or [])],
+            "substitutes": [parse_player(p) for p in (side_data.get("substitutes") or [])],
+            "injured": [parse_player(p) for p in (unavail_list or [])],
             "team_name": side_data.get("team_name", ""),
         }
-
-    return {
-        "status": status,
-        "has_data": has_data,
-        "home": parse_side(lineups.get("home", {}), unavailable.get("home", [])),
-        "away": parse_side(lineups.get("away", {}), unavailable.get("away", [])),
-    }
+    return {"status": status, "has_data": has_data,
+            "home": parse_side(lineups.get("home", {}), unavailable.get("home", [])),
+            "away": parse_side(lineups.get("away", {}), unavailable.get("away", []))}
 
 def judge_consistency(model_pick, market_signal):
     if not market_signal or market_signal in ("", "—", "中性"):
         return {"tag": "中性", "emoji": "➖", "note": "市场无明显变动"}
     if model_pick in ("主胜", "大球(2.5+)"):
-        if market_signal == "看多":
-            return {"tag": "一致", "emoji": "✅", "note": f"模型推荐{model_pick}，市场也看多"}
-        elif market_signal == "看淡":
-            return {"tag": "冲突", "emoji": "⚠️", "note": f"模型推荐{model_pick}，但市场看淡"}
+        if market_signal == "看多": return {"tag": "一致", "emoji": "✅", "note": f"模型推荐{model_pick}，市场也看多"}
+        elif market_signal == "看淡": return {"tag": "冲突", "emoji": "⚠️", "note": f"模型推荐{model_pick}，但市场看淡"}
     elif model_pick == "客胜":
         if market_signal == "看多": return {"tag": "一致", "emoji": "✅", "note": "模型推荐客胜，市场看多客胜"}
         elif market_signal == "看淡": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐客胜，但市场看淡客胜"}
@@ -530,7 +502,53 @@ def parse_prediction(p):
         "_prob_over_pct": p_over or 0,
         "_prob_under_pct": (100 - p_over) if p_over else 0,
         "_xg_h": xg_h, "_xg_a": xg_a,
+        "_over_label": over_label,
+        "_result_label": result_map.get(mr.get("predicted", ""), "—"),
     }
+
+# ★★★ 赛后复盘：拉取实际比分 ★★★
+@st.cache_data(ttl=600, show_spinner=False)
+def fetch_actual_results(date_str):
+    """从 Bzzoiro 拉取指定日期的已结束比赛实际比分"""
+    try:
+        r = requests.get(f"{BSD_BASE}/predictions/", headers=BSD_HEADERS,
+                         params={"date_from": date_str, "date_to": date_str, "limit": 200}, timeout=25)
+        if r.status_code != 200: return {}
+        data = r.json()
+        results = data.get("results", []) if isinstance(data, dict) else []
+        actual = {}
+        for p in results:
+            ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
+            eid = ev.get("id")
+            if not eid: continue
+            status = ev.get("status", "")
+            if status != "finished": continue
+            home_score = ev.get("home_score")
+            away_score = ev.get("away_score")
+            if home_score is None or away_score is None: continue
+            actual[eid] = {"home": int(home_score), "away": int(away_score)}
+        return actual
+    except: return {}
+
+def judge_prediction_hit(pred_label, actual_result):
+    """判断预测结果是否命中
+    pred_label: "主胜" / "和局" / "客胜"
+    actual_result: {"home": 2, "away": 0}
+    """
+    h = actual_result["home"]; a = actual_result["away"]
+    if h > a: actual = "主胜"
+    elif h == a: actual = "和局"
+    else: actual = "客胜"
+    return pred_label == actual, actual
+
+def judge_over_under_hit(pred_label, actual_result):
+    """判断大小球预测是否命中
+    pred_label: "大球" / "小球"
+    """
+    total = actual_result["home"] + actual_result["away"]
+    if total >= 3: actual = "大球"
+    else: actual = "小球"
+    return pred_label == actual, actual, total
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_espn_all(date_str):
@@ -579,9 +597,12 @@ def parse_espn_event(e):
 
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
+if "history_snapshots" not in st.session_state:
+    # 保存历次推荐（用于复盘）
+    st.session_state.history_snapshots = []
 
 st.title("⚽ 足球预测")
-tab1, tab2, tab3, tab4 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘"])
 
 with st.spinner("正在获取 Bzzoiro 预测数据..."):
     all_preds, err = fetch_all_predictions()
@@ -665,8 +686,7 @@ with tab2:
     if enable_weight_adjust:
         st.info(
             f"⚖️ **权重规则**：每伤停 1 人 → 该队 xG ×{1-INJURY_WEIGHT_PER_PLAYER:.2f}（最低 {INJURY_WEIGHT_MIN}）｜ "
-            f"阵容已确认 → 信心 ×{CONFIRMED_LINEUP_BOOST} ｜ 未公布 → 信心 ×{NO_LINEUP_PENALTY}\n\n"
-            f"💡 修改系数：编辑代码顶部的 `INJURY_WEIGHT_PER_PLAYER` 等变量"
+            f"阵容已确认 → 信心 ×{CONFIRMED_LINEUP_BOOST} ｜ 未公布 → 信心 ×{NO_LINEUP_PENALTY}"
         )
 
     core_count = len(st.session_state.core_matches)
@@ -674,9 +694,6 @@ with tab2:
         st.info(f"📌 已手动加入 **{core_count}** 场核心比赛，生成时会优先使用")
     else:
         st.caption("📌 未手动加入核心。可在 **Tab 1** 勾选，或在 **Tab 4** 搜索后加入。")
-
-    st.caption("💡 **半自动模式**：勾上「权重调整」后，会并排显示**原推荐 vs 调整后推荐**，你直观看到伤停/阵容的影响。")
-    st.caption("⚠️ 首发阵容和伤停赛前 1 小时才更新，之前显示「暂无」是正常的。")
 
     if st.button("🎯 生成 3串1 推荐", type="primary", key="btn_core"):
         if df_all.empty:
@@ -766,17 +783,14 @@ with tab2:
                         main_s = scores[0] if len(scores) > 0 else ("—", 0)
                         alt_s = scores[1] if len(scores) > 1 else ("—", 0)
 
-                        # ★ 调整后的预测
                         xg_h = row["_xg_h"] or 1.5
                         xg_a = row["_xg_a"] or 1.2
                         adj_xg_h, adj_xg_a, hw_w, aw_w, reason = adjust_with_lineup(xg_h, xg_a, lu)
                         adj_pred = predict_full(adj_xg_h, adj_xg_a)
                         if adj_pred:
                             adj_best_opts = [
-                                ("主胜", adj_pred["hw"]),
-                                ("和局", adj_pred["d"]),
-                                ("客胜", adj_pred["aw"]),
-                                ("大球(2.5+)", adj_pred["over25"]),
+                                ("主胜", adj_pred["hw"]), ("和局", adj_pred["d"]),
+                                ("客胜", adj_pred["aw"]), ("大球(2.5+)", adj_pred["over25"]),
                                 ("小球(2.5-)", adj_pred["under25"]),
                             ]
                             adj_best_opts.sort(key=lambda x: -x[1])
@@ -785,6 +799,7 @@ with tab2:
                             adj_best = ("—", 0)
 
                         matches_data.append({
+                            "event_id": eid,
                             "比赛": f"{row['主队']} vs {row['客队']}",
                             "时间": row["时间"], "联赛": row["联赛"],
                             "状态": row["状态"], "大小球方向": row["大小球"],
@@ -798,21 +813,15 @@ with tab2:
                             "_xg_h": xg_h, "_xg_a": xg_a,
                         })
 
-                    # ============ 半自动情报面板 ============
+                    # 半自动情报面板
                     if enable_lineup_info or enable_market_info:
                         st.subheader("🔍 半自动情报面板")
-                        if enable_weight_adjust:
-                            st.caption("模型推荐 vs 市场信号 vs 阵容/伤停 vs **权重调整后**。⚠️ 表示冲突，需谨慎。")
-                        else:
-                            st.caption("模型推荐 vs 市场信号 vs 阵容/伤停。⚠️ 表示冲突，需谨慎。")
-
                         info_rows = []
                         for i, md in enumerate(matches_data, 1):
                             lu = md.get("lineup") or {}
                             mv = md.get("movement") or {}
                             best_opt = md["opts"][0]
                             model_pick = best_opt[0]
-
                             lineup_status = lu.get("status", "") if lu else ""
                             has_data = lu.get("has_data", False) if lu else False
                             home_lu = lu.get("home", {}) if lu else {}
@@ -825,23 +834,19 @@ with tab2:
                             away_inj = len(away_lu.get("injured", []))
                             home_form = home_lu.get("formation", "")
                             away_form = away_lu.get("formation", "")
-
                             if home_n > 0 or away_n > 0:
                                 status_cn = {"confirmed": "已确认", "predicted": "预测"}.get(lineup_status, lineup_status)
                                 lineup_str = f"{status_cn} ｜ 主{home_n}人({home_form})/替{home_sub} ｜ 客{away_n}人({away_form})/替{away_sub}"
                             else:
                                 lineup_str = "暂无（赛前1小时更新）"
-
                             if not has_data:
                                 injury_str = "数据未公布"
                             elif home_inj == 0 and away_inj == 0:
                                 injury_str = "无伤停报告"
                             else:
                                 injury_str = f"主 {home_inj}人 ｜ 客 {away_inj}人"
-
                             pick_name, pick_prob, _, is_real, movement = best_opt
                             consistency = judge_consistency(pick_name, movement)
-
                             row_data = {
                                 "场次": i, "比赛": md["比赛"],
                                 "原推荐": f"{pick_name} ({pick_prob*100:.1f}%)",
@@ -851,39 +856,18 @@ with tab2:
                                 "伤停": injury_str,
                                 "说明": consistency["note"],
                             }
-
-                            # ★ 权重调整后对比
                             if enable_weight_adjust:
                                 adj_name, adj_prob = md["adj_best"]
                                 diff = adj_prob - pick_prob
-                                if abs(diff) < 0.005:
-                                    diff_str = "≈ 0"
-                                elif diff > 0:
-                                    diff_str = f"↑ +{diff*100:.1f}%"
-                                else:
-                                    diff_str = f"↓ {diff*100:.1f}%"
+                                if abs(diff) < 0.005: diff_str = "≈ 0"
+                                elif diff > 0: diff_str = f"↑ +{diff*100:.1f}%"
+                                else: diff_str = f"↓ {diff*100:.1f}%"
                                 row_data["调整后推荐"] = f"{adj_name} ({adj_prob*100:.1f}%)"
                                 row_data["变化"] = diff_str
                                 row_data["调整原因"] = md["adjust_reason"]
-
                             info_rows.append(row_data)
-                        info_df = pd.DataFrame(info_rows)
-                        st.dataframe(info_df, use_container_width=True, hide_index=True)
+                        st.dataframe(pd.DataFrame(info_rows), use_container_width=True, hide_index=True)
 
-                        # 展开详细
-                        if enable_weight_adjust:
-                            with st.expander("📊 权重调整详细计算"):
-                                for i, md in enumerate(matches_data, 1):
-                                    st.markdown(f"**第 {i} 场：{md['比赛']}**")
-                                    st.write(f"- 原始 xG：主 {md['_xg_h']:.2f} ｜ 客 {md['_xg_a']:.2f}")
-                                    st.write(f"- 调整权重：主 ×{md['home_weight']:.3f} ｜ 客 ×{md['away_weight']:.3f}")
-                                    st.write(f"- 调整后 xG：主 {md['adj_xg_h']:.2f} ｜ 客 {md['adj_xg_a']:.2f}")
-                                    st.write(f"- 原因：{md['adjust_reason']}")
-                                    st.write(f"- 原推荐：{md['opts'][0][0]} ({md['opts'][0][1]*100:.1f}%)")
-                                    st.write(f"- 调整后：{md['adj_best'][0]} ({md['adj_best'][1]*100:.1f}%)")
-                                    st.divider()
-
-                        # 展开首发名单
                         with st.expander("📋 查看首发名单 / 替补 / 伤停详情"):
                             any_data = False
                             for i, md in enumerate(matches_data, 1):
@@ -891,51 +875,37 @@ with tab2:
                                 if not lu: continue
                                 home_lu = lu.get("home", {}) or {}
                                 away_lu = lu.get("away", {}) or {}
-                                if not (home_lu.get("players") or away_lu.get("players")):
-                                    continue
+                                if not (home_lu.get("players") or away_lu.get("players")): continue
                                 any_data = True
                                 st.markdown(f"### 第 {i} 场：{md['比赛']}")
                                 col_h, col_a = st.columns(2)
                                 with col_h:
                                     st.write(f"**主队 {home_lu.get('team_name', '')}** ｜ 阵型 {home_lu.get('formation', '')}")
-                                    st.write("**首发：**")
                                     for p in home_lu.get("players", []):
                                         cap = " (C)" if p.get("captain") else ""
                                         st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']}){cap}")
-                                    if home_lu.get("substitutes"):
-                                        st.write("**替补：**")
-                                        for p in home_lu["substitutes"]:
-                                            st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']})")
                                     if home_lu.get("injured"):
                                         st.write("**伤停：**")
-                                        for p in home_lu["injured"]:
-                                            st.write(f"  {p['name']} ({p['position']})")
+                                        for p in home_lu["injured"]: st.write(f"  {p['name']} ({p['position']})")
                                 with col_a:
                                     st.write(f"**客队 {away_lu.get('team_name', '')}** ｜ 阵型 {away_lu.get('formation', '')}")
-                                    st.write("**首发：**")
                                     for p in away_lu.get("players", []):
                                         cap = " (C)" if p.get("captain") else ""
                                         st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']}){cap}")
-                                    if away_lu.get("substitutes"):
-                                        st.write("**替补：**")
-                                        for p in away_lu["substitutes"]:
-                                            st.write(f"  #{p.get('number', '')} {p['name']} ({p['position']})")
                                     if away_lu.get("injured"):
                                         st.write("**伤停：**")
-                                        for p in away_lu["injured"]:
-                                            st.write(f"  {p['name']} ({p['position']})")
+                                        for p in away_lu["injured"]: st.write(f"  {p['name']} ({p['position']})")
                                 st.divider()
                             if not any_data:
-                                st.info("当前所有比赛的首发阵容都还未公布（赛前1小时会更新）")
+                                st.info("当前所有比赛的首发阵容都还未公布")
 
                         conflicts = [r for r in info_rows if "冲突" in r["一致性"]]
                         if conflicts:
-                            st.warning(f"⚠️ 发现 **{len(conflicts)}** 场模型与市场冲突，建议谨慎：")
+                            st.warning(f"⚠️ 发现 **{len(conflicts)}** 场模型与市场冲突：")
                             for c in conflicts:
                                 st.write(f"- **{c['比赛']}**：模型推荐 {c['原推荐']}，但市场{c['盘口走势']}")
                         else:
                             st.success("✅ 模型推荐与市场走势一致，无冲突")
-
                         st.divider()
 
                     # 比分串
@@ -948,7 +918,6 @@ with tab2:
                         else: ratio = mp / ap if ap > 0 else 999
                         if ratio >= 1.3 and ratio > best_ratio:
                             best_ratio = ratio; best_idx = i
-
                     rows_for_table = []
                     for i, md in enumerate(matches_data):
                         mp = md["main_score"][1]; ap = md["alt_score"][1]
@@ -966,7 +935,7 @@ with tab2:
                     bet_rows = []
                     if best_idx is not None:
                         st.markdown(f"**策略：第 {best_idx+1} 场做主胆**（比分1概率是比分2的 {best_ratio:.2f} 倍）")
-                        st.markdown(f"**具体注单（共 4 注，1×2×2）：**")
+                        st.markdown(f"**具体注单（共 4 注）：**")
                         other_idx = [i for i in range(3) if i != best_idx]
                         main_s_str = matches_data[best_idx]["main_score"][0]
                         o1_main = matches_data[other_idx[0]]["main_score"][0]
@@ -983,8 +952,7 @@ with tab2:
                                 })
                         st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     else:
-                        st.markdown("**策略：三场无明显主胆，每场选 2 个比分覆盖**")
-                        st.markdown("**具体注单（共 8 注，2×2×2）：**")
+                        st.markdown("**策略：三场无明显主胆，每场选 2 个比分覆盖（共 8 注）**")
                         s1_list = [matches_data[0]["main_score"][0], matches_data[0]["alt_score"][0]]
                         s2_list = [matches_data[1]["main_score"][0], matches_data[1]["alt_score"][0]]
                         s3_list = [matches_data[2]["main_score"][0], matches_data[2]["alt_score"][0]]
@@ -1042,59 +1010,29 @@ with tab2:
                         })
                     st.dataframe(pd.DataFrame(stable_rows_b), use_container_width=True, hide_index=True)
 
-                    st.divider()
-                    st.subheader("⭐ 最重心单场")
-                    first = matches_data[0]
-                    best_opt = first["opts"][0]
-                    o = first.get("real_odds", {})
-                    mv = first.get("movement", {}) or {}
-                    lu = first.get("lineup", {}) or {}
-                    consistency = judge_consistency(best_opt[0], best_opt[4])
-                    odds_line = ""
-                    if o:
-                        odds_line = (
-                            f"\n\n**真实赔率**：主胜 {fmt_odds(o.get('home_win'))} ｜ "
-                            f"和 {fmt_odds(o.get('draw'))} ｜ 客胜 {fmt_odds(o.get('away_win'))} ｜ "
-                            f"大2.5 {fmt_odds(o.get('over_25_goals'))} ｜ 小2.5 {fmt_odds(o.get('under_25_goals'))}"
-                        )
-                    movement_line = ""
-                    if mv:
-                        movement_line = (
-                            f"\n\n**盘口走势**：主胜 {mv.get('home_signal', '—')} ｜ "
-                            f"和 {mv.get('draw_signal', '—')} ｜ 客胜 {mv.get('away_signal', '—')} ｜ "
-                            f"大球 {mv.get('over_signal', '—')} ｜ 市场信心 {mv.get('confidence', 0):.0f}"
-                        )
-                    lineup_line = ""
-                    if lu:
-                        home_n = len(lu.get("home", {}).get("players", []))
-                        away_n = len(lu.get("away", {}).get("players", []))
-                        home_inj = len(lu.get("home", {}).get("injured", []))
-                        away_inj = len(lu.get("away", {}).get("injured", []))
-                        if home_n > 0 or away_n > 0:
-                            status_cn = {"confirmed": "已确认", "predicted": "预测"}.get(lu.get("status", ""), lu.get("status", ""))
-                            lineup_line = f"\n\n**首发阵容**：{status_cn} ｜ 主 {home_n}人 ｜ 客 {away_n}人"
-                            if home_inj > 0 or away_inj > 0:
-                                lineup_line += f"\n**伤停**：主 {home_inj}人 ｜ 客 {away_inj}人"
-                        else:
-                            lineup_line = "\n\n**首发阵容**：暂无（赛前1小时更新）"
-                    weight_line = ""
-                    if enable_weight_adjust:
-                        adj_name, adj_prob = first["adj_best"]
-                        weight_line = (
-                            f"\n\n**权重调整**：{first['adjust_reason']}\n"
-                            f"调整后推荐：**{adj_name}** ({adj_prob*100:.1f}%)"
-                        )
-                    st.success(
-                        f"**{first['比赛']}** ｜ {first['联赛']} ｜ {first['时间']} ｜ {first['状态']} ｜ {first['是否核心']}\n\n"
-                        f"大小球方向：**{first['大小球方向']}**\n\n"
-                        f"推荐：**{best_opt[0]}**（概率 {best_opt[1]*100:.1f}%，赔率 {fmt_odds(best_opt[2])}）"
-                        f"{odds_line}{movement_line}{lineup_line}{weight_line}\n\n"
-                        f"**一致性**：{consistency['emoji']} {consistency['tag']}"
-                        + (f" — {consistency['note']}" if consistency['note'] else "")
-                        + f"\n\n比分参考：{first['main_score'][0]} / {first['alt_score'][0]}（已按大小球方向筛选）"
-                    )
+                    # 保存到历史快照
+                    today_str_save = datetime.now(CST).strftime("%Y-%m-%d")
+                    snapshot = {
+                        "date": today_str_save,
+                        "time": now.strftime("%H:%M"),
+                        "matches": [{
+                            "event_id": md["event_id"],
+                            "比赛": md["比赛"],
+                            "联赛": md["联赛"],
+                            "时间": md["时间"],
+                            "大小球方向": md["大小球方向"],
+                            "推荐方向": md["opts"][0][0],
+                            "推荐概率": md["opts"][0][1],
+                            "比分1": md["main_score"][0],
+                            "比分2": md["alt_score"][0],
+                        } for md in matches_data],
+                    }
+                    # 检查是否已存在（同一天同一时间不重复保存）
+                    existing = [s for s in st.session_state.history_snapshots
+                                if s["date"] == snapshot["date"] and s["time"] == snapshot["time"]]
+                    if not existing:
+                        st.session_state.history_snapshots.append(snapshot)
 
-                    # 保存
                     st.divider()
                     st.subheader("💾 保存本次推荐")
                     today_str = datetime.now(CST).strftime("%Y%m%d")
@@ -1116,6 +1054,8 @@ with tab2:
                             st.download_button("📥 下载情报面板 CSV",
                                 data=pd.DataFrame(info_rows).to_csv(index=False).encode("utf-8-sig"),
                                 file_name=f"情报面板_{today_str}.csv", mime="text/csv", key="dl_info")
+
+                    st.info(f"✅ 本次推荐已自动存入复盘系统（当前共 {len(st.session_state.history_snapshots)} 条记录）")
 
 # ========== Tab 3 ==========
 with tab3:
@@ -1150,7 +1090,7 @@ with tab3:
             "上半场": "—", "下半场": "—",
             "主胜": "—", "和局": "—", "客胜": "—", "大小球": "—", "来源": "ESPN",
         })
-    st.success(f"**{espn_date_str}** 共 {len(merged)} 场（Bzzoiro {len(bsd_today)} 场 + ESPN 补充 {espn_only} 场）")
+    st.success(f"**{espn_date_str}** 共 {len(merged)} 场")
     if merged:
         merged_df = pd.DataFrame(merged).sort_values("时间")
         all_leagues2 = sorted(merged_df["联赛"].unique())
@@ -1191,37 +1131,170 @@ with tab4:
                             st.session_state.core_matches.append(row["event_id"])
                             st.rerun()
 
+# ========== Tab 5：赛后复盘 ==========
+with tab5:
+    st.subheader("📊 赛后复盘")
+    st.caption("自动拉取实际比分，对比预测结果，算出命中率")
+
+    # 加载历史快照
+    snapshots = st.session_state.history_snapshots
+    if not snapshots:
+        st.info("📌 还没有历史推荐记录。去 Tab 2 点「生成 3串1 推荐」，会自动存入复盘系统。")
+    else:
+        st.success(f"当前共有 **{len(snapshots)}** 条历史推荐记录")
+
+        # 日期选择
+        dates = sorted(set(s["date"] for s in snapshots), reverse=True)
+        sel_review_date = st.selectbox("选择要复盘的日期", dates, key="review_date")
+
+        # 找到该日期所有快照
+        day_snapshots = [s for s in snapshots if s["date"] == sel_review_date]
+        st.caption(f"该日期有 **{len(day_snapshots)}** 条推荐记录")
+
+        if st.button("🔍 开始复盘", type="primary", key="btn_review"):
+            with st.spinner("正在拉取实际比分..."):
+                actual_results = fetch_actual_results(sel_review_date)
+
+            if not actual_results:
+                st.warning(f"Bzzoiro 暂时没有 {sel_review_date} 的比赛结果数据，可能比赛还没结束，或该日期没有已完赛比赛。")
+            else:
+                st.success(f"✅ 找到 {len(actual_results)} 场已完赛比赛的实际比分")
+
+                # 逐条复盘
+                all_review_rows = []
+                for snap in day_snapshots:
+                    for m in snap["matches"]:
+                        eid = m["event_id"]
+                        actual = actual_results.get(eid)
+                        if not actual:
+                            all_review_rows.append({
+                                "推荐时间": snap["time"],
+                                "比赛": m["比赛"],
+                                "联赛": m["联赛"],
+                                "推荐方向": m["推荐方向"],
+                                "推荐概率": f"{m['推荐概率']*100:.1f}%",
+                                "预测比分": f"{m['比分1']} / {m['比分2']}",
+                                "实际比分": "未结束/无数据",
+                                "胜负命中": "—",
+                                "大小球命中": "—",
+                            })
+                            continue
+
+                        actual_str = f"{actual['home']}-{actual['away']}"
+                        # 判断胜负
+                        win_hit, actual_result = judge_prediction_hit(m["推荐方向"], actual)
+                        # 判断大小球（如果推荐是大小球）
+                        if "大球" in m["推荐方向"]:
+                            ou_hit, actual_ou, total = judge_over_under_hit("大球", actual)
+                            ou_str = "✅" if ou_hit else "❌"
+                        elif "小球" in m["推荐方向"]:
+                            ou_hit, actual_ou, total = judge_over_under_hit("小球", actual)
+                            ou_str = "✅" if ou_hit else "❌"
+                        else:
+                            ou_hit, actual_ou, total = judge_over_under_hit("大球", actual)
+                            ou_str = "—"
+                        # 胜负命中（只有推荐是胜平负才显示）
+                        if m["推荐方向"] in ("主胜", "和局", "客胜"):
+                            win_str = "✅" if win_hit else "❌"
+                        else:
+                            win_str = "—"
+
+                        all_review_rows.append({
+                            "推荐时间": snap["time"],
+                            "比赛": m["比赛"],
+                            "联赛": m["联赛"],
+                            "推荐方向": m["推荐方向"],
+                            "推荐概率": f"{m['推荐概率']*100:.1f}%",
+                            "预测比分": f"{m['比分1']} / {m['比分2']}",
+                            "实际比分": actual_str,
+                            "胜负命中": win_str,
+                            "大小球命中": ou_str,
+                        })
+
+                if all_review_rows:
+                    review_df = pd.DataFrame(all_review_rows)
+                    st.dataframe(review_df, use_container_width=True, hide_index=True)
+
+                    # 统计
+                    st.divider()
+                    st.subheader("📈 命中率统计")
+
+                    total_games = len([r for r in all_review_rows if r["实际比分"] != "未结束/无数据"])
+                    if total_games == 0:
+                        st.warning("所选日期的比赛还未结束，暂时无法统计命中率。")
+                    else:
+                        # 胜负命中
+                        win_games = [r for r in all_review_rows if r["胜负命中"] in ("✅", "❌")]
+                        win_hits = len([r for r in win_games if r["胜负命中"] == "✅"])
+                        win_rate = win_hits / len(win_games) if win_games else 0
+
+                        # 大小球命中
+                        ou_games = [r for r in all_review_rows if r["大小球命中"] in ("✅", "❌")]
+                        ou_hits = len([r for r in ou_games if r["大小球命中"] == "✅"])
+                        ou_rate = ou_hits / len(ou_games) if ou_games else 0
+
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("已完赛场次", f"{total_games} 场")
+                        with col2:
+                            st.metric("胜负命中率", f"{win_rate*100:.1f}%",
+                                      f"{win_hits}/{len(win_games)}" if win_games else "无数据")
+                        with col3:
+                            st.metric("大小球命中率", f"{ou_rate*100:.1f}%",
+                                      f"{ou_hits}/{len(ou_games)}" if ou_games else "无数据")
+
+                        # 按联赛统计
+                        st.subheader("📊 按联赛统计")
+                        league_stats = {}
+                        for r in all_review_rows:
+                            if r["实际比分"] == "未结束/无数据": continue
+                            lg = r["联赛"]
+                            if lg not in league_stats:
+                                league_stats[lg] = {"total": 0, "win_hit": 0, "win_total": 0,
+                                                     "ou_hit": 0, "ou_total": 0}
+                            league_stats[lg]["total"] += 1
+                            if r["胜负命中"] in ("✅", "❌"):
+                                league_stats[lg]["win_total"] += 1
+                                if r["胜负命中"] == "✅": league_stats[lg]["win_hit"] += 1
+                            if r["大小球命中"] in ("✅", "❌"):
+                                league_stats[lg]["ou_total"] += 1
+                                if r["大小球命中"] == "✅": league_stats[lg]["ou_hit"] += 1
+
+                        league_rows = []
+                        for lg, stats in sorted(league_stats.items()):
+                            win_r = stats["win_hit"] / stats["win_total"] * 100 if stats["win_total"] else 0
+                            ou_r = stats["ou_hit"] / stats["ou_total"] * 100 if stats["ou_total"] else 0
+                            league_rows.append({
+                                "联赛": lg, "场次": stats["total"],
+                                "胜负命中": f"{stats['win_hit']}/{stats['win_total']} ({win_r:.0f}%)" if stats["win_total"] else "—",
+                                "大小球命中": f"{stats['ou_hit']}/{stats['ou_total']} ({ou_r:.0f}%)" if stats["ou_total"] else "—",
+                            })
+                        st.dataframe(pd.DataFrame(league_rows), use_container_width=True, hide_index=True)
+
+                        # 下载复盘 CSV
+                        st.download_button(
+                            "📥 下载复盘报告 CSV",
+                            data=review_df.to_csv(index=False).encode("utf-8-sig"),
+                            file_name=f"复盘_{sel_review_date}.csv",
+                            mime="text/csv", key="dl_review",
+                        )
+
+        # 清空历史
+        st.divider()
+        if st.button("🗑️ 清空所有历史记录", key="clear_history"):
+            st.session_state.history_snapshots = []
+            st.success("已清空所有历史记录。")
+            st.rerun()
+
 st.divider()
-
 with st.expander("🔬 调试：查看/下载比赛原始数据"):
-    st.caption("Bzzoiro 的 lineups 接口返回首发阵容 + 替补 + 伤停（赛前1小时才更新为 confirmed）")
     debug_eid = st.text_input("输入 event_id", value="216460", key="debug_injury_eid")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("📊 查看阵容 JSON", key="btn_debug_lineup", type="primary"):
-            try:
-                r = requests.get(f"{BSD_BASE}/events/{debug_eid}/lineups/", headers=BSD_HEADERS, timeout=15)
-                st.write(f"状态码：{r.status_code}")
-                if r.status_code == 200: st.session_state["debug_lineup_json"] = r.json()
-                else: st.error(r.text)
-            except Exception as e: st.error(f"错误：{e}")
-    with col2:
-        if st.button("💰 查看赔率 JSON", key="btn_debug_odds"):
-            try:
-                r = requests.get(f"{BSD_BASE}/events/{debug_eid}/odds/", headers=BSD_HEADERS, timeout=15)
-                st.write(f"状态码：{r.status_code}")
-                if r.status_code == 200: st.session_state["debug_odds_json"] = r.json()
-                else: st.error(r.text)
-            except Exception as e: st.error(f"错误：{e}")
-    if "debug_lineup_json" in st.session_state:
-        st.subheader("阵容 JSON"); st.json(st.session_state["debug_lineup_json"])
-        st.download_button("📥 下载阵容 JSON",
-            data=_json.dumps(st.session_state["debug_lineup_json"], ensure_ascii=False, indent=2),
-            file_name=f"lineup_{debug_eid}.json", mime="application/json", key="dl_lineup")
-    if "debug_odds_json" in st.session_state:
-        st.subheader("赔率 JSON"); st.json(st.session_state["debug_odds_json"])
-        st.download_button("📥 下载赔率 JSON",
-            data=_json.dumps(st.session_state["debug_odds_json"], ensure_ascii=False, indent=2),
-            file_name=f"odds_{debug_eid}.json", mime="application/json", key="dl_odds")
+    if st.button("📊 查看阵容 JSON", key="btn_debug_lineup", type="primary"):
+        try:
+            r = requests.get(f"{BSD_BASE}/events/{debug_eid}/lineups/", headers=BSD_HEADERS, timeout=15)
+            st.write(f"状态码：{r.status_code}")
+            if r.status_code == 200: st.json(r.json())
+            else: st.error(r.text)
+        except Exception as e: st.error(f"错误：{e}")
 
-st.caption("⚠️ 预测来自 Bzzoiro；赔率为真实共识赔率；盘口走势来自 movement 字段；首发阵容/替补/伤停来自 lineups 接口；比分为 xG 泊松反推并按大小球方向筛选；时间为北京时间。")
+st.caption("⚠️ 预测来自 Bzzoiro；赛后复盘自动拉取实际比分。")
