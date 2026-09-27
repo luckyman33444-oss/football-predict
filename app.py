@@ -15,7 +15,7 @@ H2H_WEIGHT_HIGH = 1.10
 # =========================================
 
 # ★★★ API-Football 配置（去 dashboard.api-football.com/register 免费注册）★★★
-API_FOOTBALL_KEY = ""
+API_FOOTBALL_KEY = "d00cc95c3d639618d9313dc86f883685"
 API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
 # =============================================================================
 
