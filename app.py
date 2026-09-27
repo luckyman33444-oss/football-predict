@@ -1335,7 +1335,6 @@ with tab5:
     st.subheader("📊 赛后复盘（上传 Excel）")
     st.caption("上传早上下载的 Excel，系统自动读回预测，拉取实际比分，算出命中率。")
 
-    st.markdown("### 📤 第一步：上传推荐 Excel")
     uploaded_file = st.file_uploader(
         "选择早上下载的 Excel 文件（推荐_YYYYMMDD_HHMM.xlsx）",
         type=["xlsx"],
@@ -1348,47 +1347,103 @@ with tab5:
         try:
             xl = pd.ExcelFile(uploaded_file)
             sheet_names = xl.sheet_names
-            st.success(f"✅ 已加载，包含 {len(sheet_names)} 个 sheet：{', '.join(sheet_names)}")
+            st.success(f"✅ 已加载，包含 {len(sheet_names)} 个 sheet")
 
-            meta_df = None
             rec_df = None
+            all_today_df = None
+            date_str = None
+
             if "基本信息" in sheet_names:
                 full_meta = pd.read_excel(uploaded_file, sheet_name="基本信息")
-                meta_df = full_meta.head(5)
-                st.markdown("### 📋 存档信息")
-                st.dataframe(meta_df, use_container_width=True, hide_index=True)
-                rec_df = full_meta[full_meta["event_id"].astype(str) != "—"].copy()
-                # 去掉汇总行
-                rec_df = rec_df[~rec_df["比赛"].astype(str).str.contains("当天全部预测")]
-                st.markdown(f"### 🎯 推荐比赛 {len(rec_df)} 场")
-                st.dataframe(rec_df, use_container_width=True, hide_index=True)
 
-            date_str = None
-            if meta_df is not None and "存档时间" in meta_df.columns:
-                try:
-                    date_str = str(meta_df.iloc[0]["存档时间"]).split()[0]
-                except:
-                    pass
+                info_cols = ["存档时间", "推荐场次", "当天全部预测场次", "核心比赛"]
+                if all(c in full_meta.columns for c in info_cols):
+                    info_row = full_meta.iloc[0]
+                    c1, c2, c3, c4 = st.columns(4)
+                    with c1:
+                        st.metric("存档时间", str(info_row.get("存档时间", "—")))
+                    with c2:
+                        st.metric("推荐场次", str(info_row.get("推荐场次", "—")))
+                    with c3:
+                        st.metric("当天全部预测", str(info_row.get("当天全部预测场次", "—")))
+                    with c4:
+                        st.metric("核心比赛", str(info_row.get("核心比赛", "—")))
+                    try:
+                        date_str = str(info_row["存档时间"]).split()[0]
+                    except:
+                        pass
+
+                if "推荐方向" in full_meta.columns:
+                    rec_mask = (
+                        full_meta["推荐方向"].notna() &
+                        (full_meta["推荐方向"].astype(str).str.strip() != "—") &
+                        (full_meta["推荐方向"].astype(str).str.strip() != "") &
+                        (full_meta["推荐方向"].astype(str).str.strip() != "nan")
+                    )
+                    rec_df = full_meta[rec_mask].copy()
+                    st.markdown(f"### 🎯 推荐比赛 **{len(rec_df)} 场**")
+                    if len(rec_df) > 0:
+                        show_cols = [c for c in ["场次", "比赛", "联赛", "时间", "推荐方向", "推荐概率", "赔率", "比分1", "比分2", "角色"] if c in rec_df.columns]
+                        st.dataframe(rec_df[show_cols], use_container_width=True, hide_index=True)
+
+                if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
+                    all_mask = (
+                        full_meta["预测结果"].notna() &
+                        (full_meta["预测结果"].astype(str).str.strip() != "—") &
+                        (full_meta["预测结果"].astype(str).str.strip() != "") &
+                        (full_meta["预测结果"].astype(str).str.strip() != "nan") &
+                        full_meta["event_id"].notna()
+                    )
+                    all_today_df = full_meta[all_mask].copy()
+                    if rec_df is not None and len(rec_df) > 0 and "event_id" in rec_df.columns:
+                        rec_ids = set()
+                        for x in rec_df["event_id"].dropna():
+                            try:
+                                rec_ids.add(int(x))
+                            except:
+                                pass
+                        def is_in_rec(x):
+                            try:
+                                return int(x) in rec_ids
+                            except:
+                                return False
+                        all_today_df = all_today_df[~all_today_df["event_id"].apply(is_in_rec)]
+                    st.markdown(f"### 📋 当天其余预测 **{len(all_today_df)} 场**")
+                    if len(all_today_df) > 0:
+                        with st.expander("展开查看全部预测"):
+                            show2 = [c for c in ["比赛", "联赛", "时间", "预测结果", "大小球", "主胜", "和局", "客胜"] if c in all_today_df.columns]
+                            st.dataframe(all_today_df[show2], use_container_width=True, hide_index=True)
 
             if not date_str:
-                st.warning("⚠️ 无法从 Excel 读取日期，请手动输入：")
+                st.warning("⚠️ 无法自动读取日期，请手动输入：")
                 date_str = st.text_input("日期（YYYY-MM-DD）",
                                           value=datetime.now(CST).strftime("%Y-%m-%d"),
                                           key="manual_date")
 
             st.markdown(f"### 📅 复盘日期：**{date_str}**")
 
+            st.markdown("### 🎛️ 复盘范围")
+            review_scope = st.radio(
+                "选择复盘范围",
+                ["只复盘推荐比赛", "复盘当天全部预测", "两者都复盘"],
+                horizontal=True,
+                key="review_scope",
+            )
+
             if st.button("🔍 开始复盘", type="primary", key="btn_review_upload"):
                 with st.spinner("正在拉取实际比分..."):
                     actual_results = fetch_actual_results(date_str)
 
                 if not actual_results:
-                    st.warning(f"Bzzoiro 暂时没有 {date_str} 的比赛结果数据。")
+                    st.warning(f"Bzzoiro 暂时没有 {date_str} 的比赛结果数据（可能比赛未结束）。")
                 else:
                     st.success(f"✅ 找到 {len(actual_results)} 场已完赛比赛的实际比分")
 
                     review_rows = []
-                    if rec_df is not None:
+                    all_rows = []
+
+                    if review_scope in ("只复盘推荐比赛", "两者都复盘") and rec_df is not None and len(rec_df) > 0:
+                        st.markdown("### 🎯 推荐比赛复盘")
                         for _, m in rec_df.iterrows():
                             eid = m.get("event_id")
                             try:
@@ -1396,79 +1451,154 @@ with tab5:
                             except:
                                 continue
                             actual = actual_results.get(eid)
+                            rec_dir = str(m.get("推荐方向", ""))
                             if not actual:
                                 review_rows.append({
                                     "比赛": m["比赛"], "联赛": m["联赛"],
-                                    "推荐方向": m["推荐方向"],
-                                    "推荐概率": m["推荐概率"],
+                                    "推荐方向": rec_dir,
+                                    "推荐概率": m.get("推荐概率", "—"),
                                     "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                     "实际比分": "未结束/无数据",
                                     "胜负命中": "—", "大小球命中": "—",
                                 })
                                 continue
                             actual_str = f"{actual['home']}-{actual['away']}"
-                            win_hit, _ = judge_prediction_hit(m["推荐方向"], actual)
-                            if "大球" in str(m["推荐方向"]):
+                            win_hit, _ = judge_prediction_hit(rec_dir, actual)
+                            if "大球" in rec_dir:
                                 ou_hit, _, _ = judge_over_under_hit("大球", actual)
                                 ou_str = "✅" if ou_hit else "❌"
-                            elif "小球" in str(m["推荐方向"]):
+                            elif "小球" in rec_dir:
                                 ou_hit, _, _ = judge_over_under_hit("小球", actual)
                                 ou_str = "✅" if ou_hit else "❌"
                             else:
                                 ou_str = "—"
-                            if m["推荐方向"] in ("主胜", "和局", "客胜"):
+                            if rec_dir in ("主胜", "和局", "客胜"):
                                 win_str = "✅" if win_hit else "❌"
                             else:
                                 win_str = "—"
                             review_rows.append({
                                 "比赛": m["比赛"], "联赛": m["联赛"],
-                                "推荐方向": m["推荐方向"],
-                                "推荐概率": m["推荐概率"],
+                                "推荐方向": rec_dir,
+                                "推荐概率": m.get("推荐概率", "—"),
                                 "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                 "实际比分": actual_str,
                                 "胜负命中": win_str, "大小球命中": ou_str,
                             })
+                        if review_rows:
+                            rec_review_df = pd.DataFrame(review_rows)
+                            st.dataframe(rec_review_df, use_container_width=True, hide_index=True)
+                            total = len([r for r in review_rows if r["实际比分"] != "未结束/无数据"])
+                            if total > 0:
+                                wg = [r for r in review_rows if r["胜负命中"] in ("✅", "❌")]
+                                wh = len([r for r in wg if r["胜负命中"] == "✅"])
+                                wr = wh / len(wg) if wg else 0
+                                og = [r for r in review_rows if r["大小球命中"] in ("✅", "❌")]
+                                oh = len([r for r in og if r["大小球命中"] == "✅"])
+                                orr = oh / len(og) if og else 0
+                                c1, c2, c3 = st.columns(3)
+                                with c1:
+                                    st.metric("推荐已完赛", f"{total} 场")
+                                with c2:
+                                    st.metric("胜负命中", f"{wr*100:.1f}%", f"{wh}/{len(wg)}" if wg else "无")
+                                with c3:
+                                    st.metric("大小球命中", f"{orr*100:.1f}%", f"{oh}/{len(og)}" if og else "无")
 
-                    if review_rows:
-                        review_df = pd.DataFrame(review_rows)
-                        st.markdown("### 📊 复盘结果")
-                        st.dataframe(review_df, use_container_width=True, hide_index=True)
+                    if review_scope in ("复盘当天全部预测", "两者都复盘") and all_today_df is not None and len(all_today_df) > 0:
+                        st.markdown("### 📋 当天全部预测复盘")
+                        for _, m in all_today_df.iterrows():
+                            eid = m.get("event_id")
+                            try:
+                                eid = int(eid)
+                            except:
+                                continue
+                            actual = actual_results.get(eid)
+                            if not actual:
+                                continue
+                            actual_str = f"{actual['home']}-{actual['away']}"
+                            pred_result = str(m.get("预测结果", ""))
+                            if pred_result in ("主胜", "和局", "客胜"):
+                                win_hit, _ = judge_prediction_hit(pred_result, actual)
+                                win_str = "✅" if win_hit else "❌"
+                            else:
+                                win_str = "—"
+                            ou_dir = str(m.get("大小球", ""))
+                            if "大球" in ou_dir:
+                                ou_hit, _, _ = judge_over_under_hit("大球", actual)
+                                ou_str = "✅" if ou_hit else "❌"
+                            elif "小球" in ou_dir:
+                                ou_hit, _, _ = judge_over_under_hit("小球", actual)
+                                ou_str = "✅" if ou_hit else "❌"
+                            else:
+                                ou_str = "—"
+                            all_rows.append({
+                                "比赛": m["比赛"], "联赛": m["联赛"],
+                                "预测结果": pred_result,
+                                "大小球": ou_dir,
+                                "实际比分": actual_str,
+                                "胜负命中": win_str, "大小球命中": ou_str,
+                            })
+                        if all_rows:
+                            all_review_df = pd.DataFrame(all_rows)
+                            st.dataframe(all_review_df, use_container_width=True, hide_index=True)
+                            wg2 = [r for r in all_rows if r["胜负命中"] in ("✅", "❌")]
+                            wh2 = len([r for r in wg2 if r["胜负命中"] == "✅"])
+                            wr2 = wh2 / len(wg2) if wg2 else 0
+                            og2 = [r for r in all_rows if r["大小球命中"] in ("✅", "❌")]
+                            oh2 = len([r for r in og2 if r["大小球命中"] == "✅"])
+                            orr2 = oh2 / len(og2) if og2 else 0
+                            c1, c2, c3 = st.columns(3)
+                            with c1:
+                                st.metric("全部预测已完赛", f"{len(all_rows)} 场")
+                            with c2:
+                                st.metric("胜负命中", f"{wr2*100:.1f}%", f"{wh2}/{len(wg2)}" if wg2 else "无")
+                            with c3:
+                                st.metric("大小球命中", f"{orr2*100:.1f}%", f"{oh2}/{len(og2)}" if og2 else "无")
 
-                        total = len([r for r in review_rows if r["实际比分"] != "未结束/无数据"])
-                        if total == 0:
-                            st.warning("比赛还未结束。")
-                        else:
-                            win_games = [r for r in review_rows if r["胜负命中"] in ("✅", "❌")]
-                            win_hits = len([r for r in win_games if r["胜负命中"] == "✅"])
-                            win_rate = win_hits / len(win_games) if win_games else 0
-                            ou_games = [r for r in review_rows if r["大小球命中"] in ("✅", "❌")]
-                            ou_hits = len([r for r in ou_games if r["大小球命中"] == "✅"])
-                            ou_rate = ou_hits / len(ou_games) if ou_games else 0
+                            st.markdown("### 📊 按联赛统计")
+                            ls = {}
+                            for r in all_rows:
+                                lg = r["联赛"]
+                                if lg not in ls:
+                                    ls[lg] = {"t": 0, "wh": 0, "wt": 0, "oh": 0, "ot": 0}
+                                ls[lg]["t"] += 1
+                                if r["胜负命中"] in ("✅", "❌"):
+                                    ls[lg]["wt"] += 1
+                                    if r["胜负命中"] == "✅":
+                                        ls[lg]["wh"] += 1
+                                if r["大小球命中"] in ("✅", "❌"):
+                                    ls[lg]["ot"] += 1
+                                    if r["大小球命中"] == "✅":
+                                        ls[lg]["oh"] += 1
+                            l_rows = []
+                            for lg, s in sorted(ls.items()):
+                                w = s["wh"] / s["wt"] * 100 if s["wt"] else 0
+                                o = s["oh"] / s["ot"] * 100 if s["ot"] else 0
+                                l_rows.append({
+                                    "联赛": lg, "场次": s["t"],
+                                    "胜负命中": f"{s['wh']}/{s['wt']} ({w:.0f}%)" if s["wt"] else "—",
+                                    "大小球命中": f"{s['oh']}/{s['ot']} ({o:.0f}%)" if s["ot"] else "—",
+                                })
+                            st.dataframe(pd.DataFrame(l_rows), use_container_width=True, hide_index=True)
 
-                            st.markdown("### 📈 命中率统计")
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("已完赛场次", f"{total} 场")
-                            with col2:
-                                st.metric("胜负命中率", f"{win_rate*100:.1f}%",
-                                          f"{win_hits}/{len(win_games)}" if win_games else "无")
-                            with col3:
-                                st.metric("大小球命中率", f"{ou_rate*100:.1f}%",
-                                          f"{ou_hits}/{len(ou_games)}" if ou_games else "无")
-
-                        buffer = io.BytesIO()
-                        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-                            review_df.to_excel(writer, sheet_name="复盘报告", index=False)
-                        st.download_button(
-                            "📥 下载复盘报告 Excel",
-                            data=buffer.getvalue(),
-                            file_name=f"复盘_{date_str}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="dl_review_upload",
-                        )
+                    st.divider()
+                    dl_buffer = io.BytesIO()
+                    with pd.ExcelWriter(dl_buffer, engine='openpyxl') as w:
+                        if review_scope in ("只复盘推荐比赛", "两者都复盘") and review_rows:
+                            pd.DataFrame(review_rows).to_excel(w, sheet_name="推荐复盘", index=False)
+                        if review_scope in ("复盘当天全部预测", "两者都复盘") and all_rows:
+                            pd.DataFrame(all_rows).to_excel(w, sheet_name="全部预测复盘", index=False)
+                    st.download_button(
+                        "📥 下载复盘报告 Excel",
+                        data=dl_buffer.getvalue(),
+                        file_name=f"复盘_{date_str}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_review_upload",
+                    )
 
         except Exception as e:
             st.error(f"读取 Excel 失败：{e}")
+            import traceback
+            st.code(traceback.format_exc())
 
 st.divider()
 with st.expander("🔬 调试：查看/下载比赛原始数据"):
