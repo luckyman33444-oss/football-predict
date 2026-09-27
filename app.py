@@ -1,16 +1,15 @@
 import math, requests, pandas as pd, streamlit as st
 from datetime import date, datetime, timezone, timedelta
 import json as _json
+import io
 
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 CST = timezone(timedelta(hours=8))
 
-# ============ 权重调整系数 ============
 INJURY_WEIGHT_PER_PLAYER = 0.05
 INJURY_WEIGHT_MIN = 0.70
 CONFIRMED_LINEUP_BOOST = 1.05
 NO_LINEUP_PENALTY = 0.95
-# ==========================================================
 
 BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
@@ -292,12 +291,10 @@ def fmt_odds(o):
     except: return "—"
 
 def adjust_with_lineup(xg_h, xg_a, lineup_info):
-    if not lineup_info:
-        return xg_h, xg_a, 1.0, 1.0, "无阵容数据，不调整"
+    if not lineup_info: return xg_h, xg_a, 1.0, 1.0, "无阵容数据，不调整"
     has_data = lineup_info.get("has_data", False)
     status = lineup_info.get("status", "")
-    if not has_data:
-        return xg_h, xg_a, 1.0, 1.0, "阵容未公布，不调整"
+    if not has_data: return xg_h, xg_a, 1.0, 1.0, "阵容未公布，不调整"
     home_inj = len(lineup_info.get("home", {}).get("injured", []))
     away_inj = len(lineup_info.get("away", {}).get("injured", []))
     home_weight = max(INJURY_WEIGHT_MIN, 1.0 - home_inj * INJURY_WEIGHT_PER_PLAYER)
@@ -506,10 +503,8 @@ def parse_prediction(p):
         "_result_label": result_map.get(mr.get("predicted", ""), "—"),
     }
 
-# ★★★ 赛后复盘：拉取实际比分 ★★★
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_actual_results(date_str):
-    """从 Bzzoiro 拉取指定日期的已结束比赛实际比分"""
     try:
         r = requests.get(f"{BSD_BASE}/predictions/", headers=BSD_HEADERS,
                          params={"date_from": date_str, "date_to": date_str, "limit": 200}, timeout=25)
@@ -531,10 +526,6 @@ def fetch_actual_results(date_str):
     except: return {}
 
 def judge_prediction_hit(pred_label, actual_result):
-    """判断预测结果是否命中
-    pred_label: "主胜" / "和局" / "客胜"
-    actual_result: {"home": 2, "away": 0}
-    """
     h = actual_result["home"]; a = actual_result["away"]
     if h > a: actual = "主胜"
     elif h == a: actual = "和局"
@@ -542,9 +533,6 @@ def judge_prediction_hit(pred_label, actual_result):
     return pred_label == actual, actual
 
 def judge_over_under_hit(pred_label, actual_result):
-    """判断大小球预测是否命中
-    pred_label: "大球" / "小球"
-    """
     total = actual_result["home"] + actual_result["away"]
     if total >= 3: actual = "大球"
     else: actual = "小球"
@@ -595,10 +583,24 @@ def parse_espn_event(e):
         "_home_key": canon(home_name), "_away_key": canon(away_name),
     }
 
+# ★ 一键打包 Excel
+def build_excel(bet_rows, stable_rows, info_rows, review_rows=None):
+    """把多个表格打包成一个 Excel，多 sheet"""
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        if bet_rows:
+            pd.DataFrame(bet_rows).to_excel(writer, sheet_name='比分串', index=False)
+        if stable_rows:
+            pd.DataFrame(stable_rows).to_excel(writer, sheet_name='稳健串', index=False)
+        if info_rows:
+            pd.DataFrame(info_rows).to_excel(writer, sheet_name='情报面板', index=False)
+        if review_rows:
+            pd.DataFrame(review_rows).to_excel(writer, sheet_name='复盘', index=False)
+    return buffer.getvalue()
+
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 if "history_snapshots" not in st.session_state:
-    # 保存历次推荐（用于复盘）
     st.session_state.history_snapshots = []
 
 st.title("⚽ 足球预测")
@@ -686,7 +688,7 @@ with tab2:
     if enable_weight_adjust:
         st.info(
             f"⚖️ **权重规则**：每伤停 1 人 → 该队 xG ×{1-INJURY_WEIGHT_PER_PLAYER:.2f}（最低 {INJURY_WEIGHT_MIN}）｜ "
-            f"阵容已确认 → 信心 ×{CONFIRMED_LINEUP_BOOST} ｜ 未公布 → 信心 ×{NO_LINEUP_PENALTY}"
+            f"阵容已确认 → 信心 ×{CONFIRMED_LINEUP_BOOST}"
         )
 
     core_count = len(st.session_state.core_matches)
@@ -934,7 +936,7 @@ with tab2:
 
                     bet_rows = []
                     if best_idx is not None:
-                        st.markdown(f"**策略：第 {best_idx+1} 场做主胆**（比分1概率是比分2的 {best_ratio:.2f} 倍）")
+                        st.markdown(f"**策略：第 {best_idx+1} 场做主胆**")
                         st.markdown(f"**具体注单（共 4 注）：**")
                         other_idx = [i for i in range(3) if i != best_idx]
                         main_s_str = matches_data[best_idx]["main_score"][0]
@@ -952,7 +954,7 @@ with tab2:
                                 })
                         st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     else:
-                        st.markdown("**策略：三场无明显主胆，每场选 2 个比分覆盖（共 8 注）**")
+                        st.markdown("**策略：三场无明显主胆，每场选 2 个比分（共 8 注）**")
                         s1_list = [matches_data[0]["main_score"][0], matches_data[0]["alt_score"][0]]
                         s2_list = [matches_data[1]["main_score"][0], matches_data[1]["alt_score"][0]]
                         s3_list = [matches_data[2]["main_score"][0], matches_data[2]["alt_score"][0]]
@@ -1010,52 +1012,70 @@ with tab2:
                         })
                     st.dataframe(pd.DataFrame(stable_rows_b), use_container_width=True, hide_index=True)
 
-                    # 保存到历史快照
+                    # ★ 保存历史：3 场推荐 + 当天所有预测
                     today_str_save = datetime.now(CST).strftime("%Y-%m-%d")
+
+                    # 3 场推荐
+                    recommended_matches = [{
+                        "event_id": md["event_id"],
+                        "比赛": md["比赛"],
+                        "联赛": md["联赛"],
+                        "时间": md["时间"],
+                        "大小球方向": md["大小球方向"],
+                        "推荐方向": md["opts"][0][0],
+                        "推荐概率": md["opts"][0][1],
+                        "比分1": md["main_score"][0],
+                        "比分2": md["alt_score"][0],
+                    } for md in matches_data]
+
+                    # 当天所有预测
+                    all_today = []
+                    if not df_all.empty:
+                        today_df = df_all[df_all["event_date"] == today_str_save]
+                        for _, r in today_df.iterrows():
+                            all_today.append({
+                                "event_id": r["event_id"],
+                                "比赛": f"{r['主队']} vs {r['客队']}",
+                                "联赛": r["联赛"],
+                                "时间": r["时间"],
+                                "预测结果": r["预测结果"],
+                                "大小球方向": r["大小球"].split()[0] if r["大小球"] else "—",
+                                "主胜": r["主胜"],
+                                "和局": r["和局"],
+                                "客胜": r["客胜"],
+                            })
+
                     snapshot = {
                         "date": today_str_save,
                         "time": now.strftime("%H:%M"),
-                        "matches": [{
-                            "event_id": md["event_id"],
-                            "比赛": md["比赛"],
-                            "联赛": md["联赛"],
-                            "时间": md["时间"],
-                            "大小球方向": md["大小球方向"],
-                            "推荐方向": md["opts"][0][0],
-                            "推荐概率": md["opts"][0][1],
-                            "比分1": md["main_score"][0],
-                            "比分2": md["alt_score"][0],
-                        } for md in matches_data],
+                        "recommended": recommended_matches,
+                        "all_today": all_today,
                     }
-                    # 检查是否已存在（同一天同一时间不重复保存）
                     existing = [s for s in st.session_state.history_snapshots
                                 if s["date"] == snapshot["date"] and s["time"] == snapshot["time"]]
                     if not existing:
                         st.session_state.history_snapshots.append(snapshot)
 
                     st.divider()
-                    st.subheader("💾 保存本次推荐")
-                    today_str = datetime.now(CST).strftime("%Y%m%d")
-                    col_dl1, col_dl2, col_dl3 = st.columns(3)
-                    with col_dl1:
-                        if bet_rows:
-                            st.download_button("📥 下载比分串 CSV",
-                                data=pd.DataFrame(bet_rows).to_csv(index=False).encode("utf-8-sig"),
-                                file_name=f"比分串_{today_str}.csv", mime="text/csv", key="dl_bets")
-                    with col_dl2:
-                        if stable_rows or stable_rows_b:
-                            combined = [{"类型": "稳健串", **r} for r in stable_rows] + \
-                                       [{"类型": "备选串", **r} for r in stable_rows_b]
-                            st.download_button("📥 下载稳健串 CSV",
-                                data=pd.DataFrame(combined).to_csv(index=False).encode("utf-8-sig"),
-                                file_name=f"稳健串_{today_str}.csv", mime="text/csv", key="dl_stable")
-                    with col_dl3:
-                        if info_rows:
-                            st.download_button("📥 下载情报面板 CSV",
-                                data=pd.DataFrame(info_rows).to_csv(index=False).encode("utf-8-sig"),
-                                file_name=f"情报面板_{today_str}.csv", mime="text/csv", key="dl_info")
+                    st.subheader("💾 一键保存 / 下载本次推荐")
 
-                    st.info(f"✅ 本次推荐已自动存入复盘系统（当前共 {len(st.session_state.history_snapshots)} 条记录）")
+                    # 打包 Excel
+                    excel_data = build_excel(
+                        bet_rows,
+                        [{"类型": "稳健串", **r} for r in stable_rows] + \
+                        [{"类型": "备选串", **r} for r in stable_rows_b],
+                        info_rows
+                    )
+                    st.download_button(
+                        "📥 一键下载全部（Excel，含比分串+稳健串+情报面板）",
+                        data=excel_data,
+                        file_name=f"推荐_{datetime.now(CST).strftime('%Y%m%d_%H%M')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_all_excel",
+                        type="primary",
+                    )
+
+                    st.info(f"✅ 本次推荐已存入复盘系统（推荐 3 场 + 当天全部预测 {len(all_today)} 场）")
 
 # ========== Tab 3 ==========
 with tab3:
@@ -1134,81 +1154,108 @@ with tab4:
 # ========== Tab 5：赛后复盘 ==========
 with tab5:
     st.subheader("📊 赛后复盘")
-    st.caption("自动拉取实际比分，对比预测结果，算出命中率")
+    st.caption("自动拉取实际比分，对比预测结果，算出命中率。推荐 3 场 vs 全部预测，分开统计。")
 
-    # 加载历史快照
     snapshots = st.session_state.history_snapshots
     if not snapshots:
         st.info("📌 还没有历史推荐记录。去 Tab 2 点「生成 3串1 推荐」，会自动存入复盘系统。")
     else:
         st.success(f"当前共有 **{len(snapshots)}** 条历史推荐记录")
 
-        # 日期选择
         dates = sorted(set(s["date"] for s in snapshots), reverse=True)
         sel_review_date = st.selectbox("选择要复盘的日期", dates, key="review_date")
 
-        # 找到该日期所有快照
         day_snapshots = [s for s in snapshots if s["date"] == sel_review_date]
         st.caption(f"该日期有 **{len(day_snapshots)}** 条推荐记录")
+
+        # 复盘范围选择
+        review_scope = st.radio(
+            "复盘范围",
+            ["只复盘推荐 3 场", "复盘当天全部预测"],
+            horizontal=True,
+            key="review_scope"
+        )
 
         if st.button("🔍 开始复盘", type="primary", key="btn_review"):
             with st.spinner("正在拉取实际比分..."):
                 actual_results = fetch_actual_results(sel_review_date)
 
             if not actual_results:
-                st.warning(f"Bzzoiro 暂时没有 {sel_review_date} 的比赛结果数据，可能比赛还没结束，或该日期没有已完赛比赛。")
+                st.warning(f"Bzzoiro 暂时没有 {sel_review_date} 的比赛结果数据。")
             else:
                 st.success(f"✅ 找到 {len(actual_results)} 场已完赛比赛的实际比分")
 
-                # 逐条复盘
                 all_review_rows = []
-                for snap in day_snapshots:
-                    for m in snap["matches"]:
-                        eid = m["event_id"]
-                        actual = actual_results.get(eid)
-                        if not actual:
+
+                if review_scope == "只复盘推荐 3 场":
+                    # 收集所有推荐过的比赛
+                    for snap in day_snapshots:
+                        for m in snap["recommended"]:
+                            eid = m["event_id"]
+                            actual = actual_results.get(eid)
+                            if not actual:
+                                all_review_rows.append({
+                                    "来源": f"推荐{snap['time']}",
+                                    "比赛": m["比赛"], "联赛": m["联赛"],
+                                    "推荐方向": m["推荐方向"],
+                                    "推荐概率": f"{m['推荐概率']*100:.1f}%",
+                                    "预测比分": f"{m['比分1']} / {m['比分2']}",
+                                    "实际比分": "未结束/无数据",
+                                    "胜负命中": "—", "大小球命中": "—",
+                                })
+                                continue
+                            actual_str = f"{actual['home']}-{actual['away']}"
+                            win_hit, _ = judge_prediction_hit(m["推荐方向"], actual)
+                            if "大球" in m["推荐方向"]:
+                                ou_hit, _, _ = judge_over_under_hit("大球", actual)
+                                ou_str = "✅" if ou_hit else "❌"
+                            elif "小球" in m["推荐方向"]:
+                                ou_hit, _, _ = judge_over_under_hit("小球", actual)
+                                ou_str = "✅" if ou_hit else "❌"
+                            else:
+                                ou_str = "—"
+                            win_str = "✅" if win_hit else "❌" if m["推荐方向"] in ("主胜", "和局", "客胜") else "—"
                             all_review_rows.append({
-                                "推荐时间": snap["time"],
-                                "比赛": m["比赛"],
-                                "联赛": m["联赛"],
+                                "来源": f"推荐{snap['time']}",
+                                "比赛": m["比赛"], "联赛": m["联赛"],
                                 "推荐方向": m["推荐方向"],
                                 "推荐概率": f"{m['推荐概率']*100:.1f}%",
                                 "预测比分": f"{m['比分1']} / {m['比分2']}",
-                                "实际比分": "未结束/无数据",
-                                "胜负命中": "—",
-                                "大小球命中": "—",
+                                "实际比分": actual_str,
+                                "胜负命中": win_str, "大小球命中": ou_str,
                             })
+                else:
+                    # 复盘当天全部预测
+                    # 取最新一次快照的 all_today
+                    latest = day_snapshots[-1]
+                    for m in latest.get("all_today", []):
+                        eid = m["event_id"]
+                        actual = actual_results.get(eid)
+                        if not actual:
                             continue
-
                         actual_str = f"{actual['home']}-{actual['away']}"
-                        # 判断胜负
-                        win_hit, actual_result = judge_prediction_hit(m["推荐方向"], actual)
-                        # 判断大小球（如果推荐是大小球）
-                        if "大球" in m["推荐方向"]:
-                            ou_hit, actual_ou, total = judge_over_under_hit("大球", actual)
-                            ou_str = "✅" if ou_hit else "❌"
-                        elif "小球" in m["推荐方向"]:
-                            ou_hit, actual_ou, total = judge_over_under_hit("小球", actual)
-                            ou_str = "✅" if ou_hit else "❌"
-                        else:
-                            ou_hit, actual_ou, total = judge_over_under_hit("大球", actual)
-                            ou_str = "—"
-                        # 胜负命中（只有推荐是胜平负才显示）
-                        if m["推荐方向"] in ("主胜", "和局", "客胜"):
+                        # 用预测结果判断胜负
+                        pred_result = m["预测结果"]  # "主胜"/"和局"/"客胜"/"—"
+                        if pred_result in ("主胜", "和局", "客胜"):
+                            win_hit, _ = judge_prediction_hit(pred_result, actual)
                             win_str = "✅" if win_hit else "❌"
                         else:
                             win_str = "—"
-
+                        # 大小球
+                        ou_dir = m.get("大小球方向", "")
+                        if ou_dir in ("大球", "小球"):
+                            ou_hit, _, _ = judge_over_under_hit(ou_dir, actual)
+                            ou_str = "✅" if ou_hit else "❌"
+                        else:
+                            ou_str = "—"
                         all_review_rows.append({
-                            "推荐时间": snap["time"],
-                            "比赛": m["比赛"],
-                            "联赛": m["联赛"],
-                            "推荐方向": m["推荐方向"],
-                            "推荐概率": f"{m['推荐概率']*100:.1f}%",
-                            "预测比分": f"{m['比分1']} / {m['比分2']}",
+                            "来源": f"全部预测",
+                            "比赛": m["比赛"], "联赛": m["联赛"],
+                            "推荐方向": pred_result,
+                            "推荐概率": "—",
+                            "预测比分": "—",
                             "实际比分": actual_str,
-                            "胜负命中": win_str,
-                            "大小球命中": ou_str,
+                            "胜负命中": win_str, "大小球命中": ou_str,
                         })
 
                 if all_review_rows:
@@ -1221,14 +1268,12 @@ with tab5:
 
                     total_games = len([r for r in all_review_rows if r["实际比分"] != "未结束/无数据"])
                     if total_games == 0:
-                        st.warning("所选日期的比赛还未结束，暂时无法统计命中率。")
+                        st.warning("所选日期的比赛还未结束。")
                     else:
-                        # 胜负命中
                         win_games = [r for r in all_review_rows if r["胜负命中"] in ("✅", "❌")]
                         win_hits = len([r for r in win_games if r["胜负命中"] == "✅"])
                         win_rate = win_hits / len(win_games) if win_games else 0
 
-                        # 大小球命中
                         ou_games = [r for r in all_review_rows if r["大小球命中"] in ("✅", "❌")]
                         ou_hits = len([r for r in ou_games if r["大小球命中"] == "✅"])
                         ou_rate = ou_hits / len(ou_games) if ou_games else 0
@@ -1271,15 +1316,16 @@ with tab5:
                             })
                         st.dataframe(pd.DataFrame(league_rows), use_container_width=True, hide_index=True)
 
-                        # 下载复盘 CSV
+                        # 下载复盘 Excel
+                        review_excel = build_excel(None, None, None, all_review_rows)
                         st.download_button(
-                            "📥 下载复盘报告 CSV",
-                            data=review_df.to_csv(index=False).encode("utf-8-sig"),
-                            file_name=f"复盘_{sel_review_date}.csv",
-                            mime="text/csv", key="dl_review",
+                            "📥 下载复盘报告（Excel）",
+                            data=review_excel,
+                            file_name=f"复盘_{sel_review_date}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="dl_review_xlsx",
                         )
 
-        # 清空历史
         st.divider()
         if st.button("🗑️ 清空所有历史记录", key="clear_history"):
             st.session_state.history_snapshots = []
