@@ -6,24 +6,20 @@ import io
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 CST = timezone(timedelta(hours=8))
 
-# ============ 权重调整系数 ============
 INJURY_WEIGHT_PER_PLAYER = 0.05
 INJURY_WEIGHT_MIN = 0.70
 H2H_WEIGHT_MIN = 0.70
 H2H_WEIGHT_LOW = 0.80
 H2H_WEIGHT_HIGH = 1.10
-# =========================================
 
-# ★★★ API-Football 配置（去 dashboard.api-football.com/register 免费注册）★★★
 API_FOOTBALL_KEY = "d00cc95c3d639618d9313dc86f883685"
 API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
-# =============================================================================
 
-# API-Football 联赛 ID 映射（ESPN 代码 → API-Football ID）
 FOOTBALL_API_LEAGUE_IDS = {
     "eng.1": 39, "esp.1": 140, "ger.1": 78,
     "ita.1": 135, "fra.1": 61,
     "uefa.champions": 2, "uefa.europa": 3,
+    "uefa.nations": 5,
     "ned.1": 88, "por.1": 94,
     "bra.1": 71, "usa.1": 253, "mex.1": 262,
     "chn.1": 169, "jpn.1": 98, "kor.1": 292,
@@ -31,7 +27,6 @@ FOOTBALL_API_LEAGUE_IDS = {
     "eng.2": 40, "tur.1": 203, "bel.1": 144, "sco.1": 179,
 }
 
-# ============ 战意层级权重（基于 tactiq.club 职业模型）============
 MOTIVATION_WEIGHT = {
     "title_race":   {"home": 1.05, "away": 1.03},
     "european":     {"home": 1.03, "away": 1.015},
@@ -40,7 +35,6 @@ MOTIVATION_WEIGHT = {
 }
 
 def fetch_standings(league_id, season):
-    """从 API-Football 获取联赛积分榜"""
     if not API_FOOTBALL_KEY:
         return None
     try:
@@ -68,15 +62,12 @@ def fetch_standings(league_id, season):
                 "rank": row.get("rank"),
                 "points": row.get("points"),
                 "goalsDiff": row.get("goalsDiff"),
-                "form": row.get("form"),
-                "all": row.get("all", {}),
             }
         return result
     except:
         return None
 
 def judge_motivation_tier(rank, total_teams, points, max_points):
-    """根据排名和积分判断战意层级"""
     if rank is None or total_teams == 0:
         return "mid_table"
     if rank <= 4:
@@ -88,7 +79,6 @@ def judge_motivation_tier(rank, total_teams, points, max_points):
     return "mid_table"
 
 def find_team_in_standings(standings, team_name_cn, team_name_en):
-    """在积分榜中模糊匹配球队"""
     if not standings:
         return None
     for name, info in standings.items():
@@ -99,12 +89,9 @@ def find_team_in_standings(standings, team_name_cn, team_name_en):
     return None
 
 def apply_motivation_adjustment(xg_h, xg_a, home_tier, away_tier):
-    """根据战意层级调整 xG"""
     home_w = MOTIVATION_WEIGHT.get(home_tier, MOTIVATION_WEIGHT["mid_table"])["home"]
     away_w = MOTIVATION_WEIGHT.get(away_tier, MOTIVATION_WEIGHT["mid_table"])["away"]
     return xg_h * home_w, xg_a * away_w, home_w, away_w
-
-# ============ 以下与之前相同 ============
 
 BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
@@ -156,6 +143,7 @@ LEAGUE_CN = {
 }
 
 TEAM_CN = {
+    # 主流俱乐部（保留）
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
     "Chelsea": "切尔西", "Crystal Palace": "水晶宫", "Everton": "埃弗顿",
@@ -173,7 +161,12 @@ TEAM_CN = {
     "Mallorca": "马洛卡", "Almería": "阿尔梅里亚", "Cádiz": "加的斯",
     "CD Tenerife": "特内里费", "Celta Fortuna": "塞尔塔B队",
     "CE Sabadell": "萨瓦德尔", "Real Valladolid": "皇家巴利亚多利德",
-    "Córdoba": "科尔多瓦", "SD Eibar": "埃瓦尔", "Real Oviedo": "皇家奥维耶多",
+    "Córdoba": "科尔多瓦", "SD Eibar": "埃瓦尔", "Eibar": "埃瓦尔",
+    "Real Oviedo": "皇家奥维耶多", "Burgos Club de Fútbol": "布尔戈斯",
+    "CD Eldense": "埃尔登斯", "UD Las Palmas": "拉斯帕尔马斯",
+    "Sporting Gijón": "希洪竞技",
+    "RCD Espanyol de Barcelona": "西班牙人",
+    "Real Club Deportivo de A Coruña": "拉科鲁尼亚",
     "Bayern Munich": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "莱比锡红牛", "Bayer Leverkusen": "勒沃库森",
     "Eintracht Frankfurt": "法兰克福", "Stuttgart": "斯图加特",
@@ -185,13 +178,15 @@ TEAM_CN = {
     "Paris Saint-Germain": "巴黎圣日耳曼", "Marseille": "马赛",
     "Lyon": "里昂", "Monaco": "摩纳哥", "Lille": "里尔",
     "Rennes": "雷恩", "Nice": "尼斯", "Lens": "朗斯",
-    "Ajax": "阿贾克斯", "PSV": "埃因霍温", "Feyenoord": "费耶诺德",
+    "Ajax": "阿贾克斯", "PSV": "埃因霍温", "PSV Eindhoven": "埃因霍温",
+    "Feyenoord": "费耶诺德",
     "Benfica": "本菲卡", "Porto": "波尔图", "Sporting CP": "葡萄牙体育",
     "Celtic": "凯尔特人", "Rangers": "流浪者",
     "Galatasaray": "加拉塔萨雷", "Fenerbahce": "费内巴切",
     "Flamengo": "弗拉门戈", "Palmeiras": "帕尔梅拉斯",
     "Boca Juniors": "博卡青年", "River Plate": "河床",
-    "Criciúma": "克里西乌马", "Avaí": "阿瓦伊",
+    "Criciúma": "克里西乌马", "Avaí": "阿瓦伊", "CRB": "CRB",
+    "Cuiabá": "库亚巴", "Fortaleza": "福塔莱萨",
     "Junior Barranquilla": "巴兰基亚青年",
     "Independiente Medellín": "麦德林独立",
     "Náutico": "纳乌蒂科", "Sport Recife": "累西腓体育",
@@ -199,9 +194,14 @@ TEAM_CN = {
     "Goiás": "戈亚斯", "Atlético Goianiense": "戈亚尼亚竞技",
     "Deportivo Pereira": "佩雷拉", "Internacional de Bogotá": "波哥大国际",
     "Cúcuta Deportivo": "库库塔", "Llaneros FC": "亚诺罗斯",
+    "Deportivo Cali": "卡利体育", "Rionegro Águilas Doradas": "里奥内格罗金鹰",
+    "Jaguares de Córdoba": "科尔多瓦美洲虎",
+    "Alianza Valledupar FC": "巴耶杜帕尔",
+    "Fortaleza FC": "福塔莱萨FC", "Deportes Tolima": "托利马",
     "Inter Miami": "迈阿密国际", "LA Galaxy": "洛杉矶银河",
     "LAFC": "洛杉矶FC", "Los Angeles FC": "洛杉矶FC",
     "Philadelphia Union": "费城联合", "Orlando City": "奥兰多城",
+    "Orlando Pride": "奥兰多荣耀",
     "New York Red Bulls": "纽约红牛", "Red Bull New York": "纽约红牛",
     "St.Louis City": "圣路易斯城", "Atlanta United": "亚特兰大联",
     "New York City FC": "纽约城", "CF Montréal": "蒙特利尔CF",
@@ -215,11 +215,17 @@ TEAM_CN = {
     "Toronto FC": "多伦多FC", "Vancouver Whitecaps": "温哥华白帽",
     "D.C. United": "华盛顿联", "DC United": "华盛顿联",
     "Nashville SC": "纳什维尔SC", "San Jose Earthquakes": "圣何塞地震",
+    "Columbus Crew": "哥伦布机员", "Bay FC": "湾区FC",
+    "Utah Royals FC": "犹他皇家",
+    "North Carolina Courage": "北卡罗来纳勇气",
     "Cruz Azul": "蓝十字", "CD Toluca": "托卢卡",
     "CD Guadalajara": "瓜达拉哈拉", "Querétaro FC": "克雷塔罗",
     "Santos Laguna": "桑托斯拉古纳", "CF Pachuca": "帕丘卡",
     "Pachuca": "帕丘卡", "Club Puebla": "普埃布拉", "Puebla": "普埃布拉",
-    "Tigres UANL": "老虎大学",
+    "Tigres UANL": "老虎大学", "Pumas UNAM": "美洲狮",
+    "Atlético San Luis": "圣路易斯竞技", "Club León": "莱昂",
+    "FC Juárez": "华雷斯", "Club Necaxa": "内卡萨",
+    "Club América": "墨西哥美洲",
     "Shanghai Port": "上海海港", "Shandong Taishan": "山东泰山",
     "Beijing Guoan": "北京国安", "Shanghai Shenhua": "上海申花",
     "Gangwon FC": "江原FC", "Incheon United": "仁川联",
@@ -227,6 +233,10 @@ TEAM_CN = {
     "Union Touarga Sport": "图阿尔加体育", "Fath Union Sport": "法特联合",
     "Difaâ Hassani El-Jadidi": "迪法哈桑尼", "CODM Meknès": "梅克内斯",
     "Wydad Casablanca": "卡萨布兰卡维达德", "Widad Temara": "维达德特马拉",
+    "Moghreb Atlético Tetuán": "得土安竞技", "RS Berkane": "贝尔卡尼",
+    "MAS de Fès": "非斯MAS", "Renaissance Zemamra": "泽马拉复兴",
+    "Kawkab Athletic Club Marrakech": "马拉喀什",
+    "Hassania d'Agadir": "阿加迪尔",
     "Kansas City Current": "堪萨斯城潮流", "Denver Summit FC": "丹佛峰会",
     "Washington Spirit": "华盛顿精神", "Angel City FC": "天使城FC",
     "NJ/NY Gotham FC": "哥谭FC", "Chicago Stars FC": "芝加哥星队",
@@ -256,6 +266,8 @@ TEAM_CN = {
     "Kun Khalifat FC": "昆哈利法特", "Kwara United": "夸拉联",
     "Plateau United": "高原联", "Inter Lagos FC": "拉各斯国际",
     "Sporting Lagos FC": "拉各斯体育", "Barau FC": "巴劳FC",
+    "Ranchers Bees": "牧场蜜蜂", "Rivers United": "河流联",
+    "AD Os Limianos": "利米亚诺斯", "Rebordosa AC": "雷博尔多萨",
     "Estrela Calheta FC": "卡拉埃塔之星", "CD Cinfães": "辛法埃斯",
     "AD Camacha": "卡马查", "Florgrade FC": "弗洛格拉德",
     "Amora FC": "阿莫拉", "JD Lajense": "拉延塞",
@@ -268,11 +280,7 @@ TEAM_CN = {
     "AFC Toronto": "多伦多AFC", "Ottawa Rapid FC": "渥太华快速",
     "Costa Adeje Tenerife": "特内里费",
     "Club Atlético de Madrid": "马德里竞技",
-    "Montserrat": "蒙特塞拉特", "British Virgin Islands": "英属维尔京群岛",
-    "Saint Martin": "圣马丁", "US Virgin Islands": "美属维尔京群岛",
-    "Saint Vincent and the Grenadines": "圣文森特和格林纳丁斯",
-    "French Guiana": "法属圭亚那", "Antigua and Barbuda": "安提瓜和巴布达",
-    "Anguilla": "安圭拉", "Sint Maarten": "荷属圣马丁", "Belize": "伯利兹",
+    # ========== 国家队（大量补充） ==========
     "England": "英格兰", "France": "法国", "Germany": "德国",
     "Spain": "西班牙", "Italy": "意大利", "Portugal": "葡萄牙",
     "Netherlands": "荷兰", "Belgium": "比利时", "Croatia": "克罗地亚",
@@ -292,6 +300,27 @@ TEAM_CN = {
     "Slovakia": "斯洛伐克", "Moldova": "摩尔多瓦",
     "Lithuania": "立陶宛", "Azerbaijan": "阿塞拜疆",
     "Seychelles": "塞舌尔", "Sri Lanka": "斯里兰卡",
+    "Malta": "马耳他", "Liechtenstein": "列支敦士登",
+    "Gibraltar": "直布罗陀", "Andorra": "安道尔",
+    "Serbia": "塞尔维亚", "Denmark": "丹麦", "Wales": "威尔士",
+    "Austria": "奥地利", "Kosovo": "科索沃",
+    "Israel": "以色列", "Ireland": "爱尔兰", "Greece": "希腊",
+    "Norway": "挪威", "Bolivia": "玻利维亚", "Paraguay": "巴拉圭",
+    "Venezuela": "委内瑞拉", "Uruguay": "乌拉圭",
+    "Kyrgyzstan": "吉尔吉斯斯坦", "Lebanon": "黎巴嫩",
+    "Tajikistan": "塔吉克斯坦", "Palestine": "巴勒斯坦",
+    "Maldives": "马尔代夫", "Jordan": "约旦", "Syria": "叙利亚",
+    "Guyana": "圭亚那", "Cayman Islands": "开曼群岛",
+    "Haiti": "海地", "Costa Rica": "哥斯达黎加",
+    "Dominica": "多米尼克", "Puerto Rico": "波多黎各",
+    "Curaçao": "库拉索", "Nicaragua": "尼加拉瓜",
+    "Trinidad and Tobago": "特立尼达和多巴哥",
+    "Dominican Republic": "多米尼加",
+    "Montserrat": "蒙特塞拉特", "British Virgin Islands": "英属维尔京群岛",
+    "Saint Martin": "圣马丁", "US Virgin Islands": "美属维尔京群岛",
+    "Saint Vincent and the Grenadines": "圣文森特和格林纳丁斯",
+    "French Guiana": "法属圭亚那", "Antigua and Barbuda": "安提瓜和巴布达",
+    "Anguilla": "安圭拉", "Sint Maarten": "荷属圣马丁", "Belize": "伯利兹",
 }
 
 def team_cn(name):
@@ -543,6 +572,41 @@ def analyze_line_movement(odds_data):
             "away_signal": away_sig, "over_signal": over_sig,
             "confidence": confidence, "signals": signals}
 
+def extract_handicap_lines(simple_odds):
+    """从盘口赔率提取三档盘口线"""
+    if not simple_odds:
+        return {}
+    lines = {}
+    for line_key, line_num in [("over_15_goals", 1.5), ("over_25_goals", 2.5), ("over_35_goals", 3.5)]:
+        over_odd = simple_odds.get(line_key)
+        under_key = line_key.replace("over_", "under_")
+        under_odd = simple_odds.get(under_key)
+        if over_odd and under_odd:
+            over_imp = 1 / over_odd
+            under_imp = 1 / under_odd
+            total = over_imp + under_imp
+            over_pct = over_imp / total * 100
+            under_pct = under_imp / total * 100
+            lines[line_num] = {
+                "over_odd": over_odd,
+                "under_odd": under_odd,
+                "over_pct": over_pct,
+                "under_pct": under_pct,
+                "favored": "大球" if over_pct > under_pct else "小球",
+                "favored_pct": max(over_pct, under_pct),
+            }
+    btts_yes = simple_odds.get("btts_yes")
+    btts_no = simple_odds.get("btts_no")
+    if btts_yes and btts_no:
+        btts_yes_imp = 1 / btts_yes
+        btts_no_imp = 1 / btts_no
+        total = btts_yes_imp + btts_no_imp
+        lines["btts"] = {
+            "yes_pct": btts_yes_imp / total * 100,
+            "no_pct": btts_no_imp / total * 100,
+        }
+    return lines
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def get_lineup_info(event_id):
     try:
@@ -615,6 +679,22 @@ def judge_consistency(model_pick, market_signal):
         elif market_signal == "看淡":
             return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐和局，但市场看淡和局"}
     return {"tag": "中性", "emoji": "➖", "note": ""}
+
+def judge_direction_agreement(orig_pick, adj_pick):
+    """判断原推荐和调整后推荐的方向是否一致"""
+    if not orig_pick or not adj_pick:
+        return "—"
+    if orig_pick == adj_pick:
+        return "✅ 同向"
+    if orig_pick in ("主胜", "客胜") and adj_pick in ("主胜", "客胜"):
+        return "⚠️ 反向"
+    if orig_pick in ("主胜", "客胜") and adj_pick in ("大球(2.5+)", "小球(2.5-)"):
+        return "⚠️ 换维度"
+    if orig_pick in ("大球(2.5+)", "小球(2.5-)") and adj_pick in ("主胜", "客胜", "和局"):
+        return "⚠️ 换维度"
+    if orig_pick in ("大球(2.5+)", "小球(2.5-)") and adj_pick in ("大球(2.5+)", "小球(2.5-)"):
+        return "⚠️ 反向"
+    return "—"
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_all_predictions():
@@ -998,6 +1078,7 @@ with tab2:
     with col1:
         enable_lineup_info = st.checkbox("👥 显示首发阵容 + 伤停", value=True, key="lineup_switch")
         enable_market_info = st.checkbox("📊 显示盘口走势", value=True, key="market_switch")
+        enable_handicap = st.checkbox("📏 显示三档盘口线（1.5/2.5/3.5球）", value=True, key="handicap_switch")
         enable_weight_adjust = st.checkbox("🎛️ 启用阵容/伤病权重调整（对比显示）", value=False, key="weight_switch")
         enable_motivation = st.checkbox("🏆 启用联赛战意修正", value=True, key="motivation_switch")
     with col2:
@@ -1063,14 +1144,17 @@ with tab2:
                         lineup_map = {}
                         movement_map = {}
                         h2h_map = {}
+                        handicap_map = {}
                         standings_cache = {}
                         for _, row in selected.iterrows():
                             eid = row.get("event_id")
                             od = fetch_event_odds_full(eid) if eid else None
-                            odds_map[eid] = od["simple"] if od else None
+                            simple = od["simple"] if od else {}
+                            odds_map[eid] = simple
                             movement_map[eid] = analyze_line_movement(od) if od else None
                             lineup_map[eid] = get_lineup_info(eid) if eid else None
                             h2h_map[eid] = fetch_h2h_info(eid) if eid else None
+                            handicap_map[eid] = extract_handicap_lines(simple) if simple else {}
 
                     matches_data = []
                     for _, row in selected.iterrows():
@@ -1080,6 +1164,7 @@ with tab2:
                         mv = movement_map.get(eid) or {}
                         lu = lineup_map.get(eid) or {}
                         h2h = h2h_map.get(eid) or {}
+                        hc = handicap_map.get(eid) or {}
                         opts = []
                         hw_real = o.get("home_win")
                         dr_real = o.get("draw")
@@ -1129,9 +1214,10 @@ with tab2:
                                     break
                             if league_id:
                                 season = datetime.now(CST).year
-                                if season not in standings_cache:
-                                    standings_cache[season] = fetch_standings(league_id, season)
-                                standings = standings_cache.get(season)
+                                cache_key = f"{league_id}_{season}"
+                                if cache_key not in standings_cache:
+                                    standings_cache[cache_key] = fetch_standings(league_id, season)
+                                standings = standings_cache.get(cache_key)
                                 if standings:
                                     home_info = find_team_in_standings(standings, row["主队"], "")
                                     away_info = find_team_in_standings(standings, row["客队"], "")
@@ -1180,7 +1266,7 @@ with tab2:
                             "是否核心": "⭐ 核心" if is_core else "自动",
                             "opts": opts, "main_score": main_s, "alt_score": alt_s,
                             "real_odds": o, "movement": mv, "lineup": lu,
-                            "h2h": h2h,
+                            "h2h": h2h, "handicap": hc,
                             "adj_xg_h": adj_xg_h, "adj_xg_a": adj_xg_a,
                             "final_xg_h": final_xg_h, "final_xg_a": final_xg_a,
                             "home_weight": hw_w, "away_weight": aw_w,
@@ -1190,12 +1276,13 @@ with tab2:
                         })
 
                     info_rows = []
-                    if enable_lineup_info or enable_market_info or enable_motivation:
+                    if enable_lineup_info or enable_market_info or enable_motivation or enable_handicap:
                         st.subheader("🔍 半自动情报面板")
                         for i, md in enumerate(matches_data, 1):
                             lu = md.get("lineup") or {}
                             mv = md.get("movement") or {}
                             h2h = md.get("h2h") or {}
+                            hc = md.get("handicap") or {}
                             best_opt = md["opts"][0]
                             model_pick = best_opt[0]
                             lineup_status = lu.get("status", "") if lu else ""
@@ -1225,9 +1312,23 @@ with tab2:
                             if h2h and h2h.get("total_matches"):
                                 hw_rate = h2h.get("home_win_rate", 0)
                                 aw_rate = h2h.get("away_win_rate", 0)
-                                h2h_str = f"共{h2h.get('total_matches')}场 ｜ 主胜率{hw_rate*100:.0f}% ｜ 客胜率{aw_rate*100:.0f}%"
+                                h2h_str = f"共{h2h.get('total_matches')}场 ｜ 主{hw_rate*100:.0f}% ｜ 客{aw_rate*100:.0f}%"
+                            handicap_str = "—"
+                            if hc:
+                                parts = []
+                                if 1.5 in hc:
+                                    parts.append(f"1.5球:{hc[1.5]['favored']}{hc[1.5]['favored_pct']:.0f}%")
+                                if 2.5 in hc:
+                                    parts.append(f"2.5球:{hc[2.5]['favored']}{hc[2.5]['favored_pct']:.0f}%")
+                                if 3.5 in hc:
+                                    parts.append(f"3.5球:{hc[3.5]['favored']}{hc[3.5]['favored_pct']:.0f}%")
+                                if "btts" in hc:
+                                    parts.append(f"两队进球:{hc['btts']['yes_pct']:.0f}%")
+                                handicap_str = " ｜ ".join(parts)
                             pick_name, pick_prob, _, is_real, movement = best_opt
                             consistency = judge_consistency(pick_name, movement)
+                            adj_name, adj_prob = md["adj_best"]
+                            direction_agreement = judge_direction_agreement(pick_name, adj_name)
                             row_data = {
                                 "场次": i, "比赛": md["比赛"],
                                 "原推荐": f"{pick_name} ({pick_prob*100:.1f}%)",
@@ -1236,10 +1337,10 @@ with tab2:
                                 "首发阵容": lineup_str,
                                 "伤停": injury_str,
                                 "历史交锋": h2h_str,
-                                "说明": consistency["note"],
                             }
+                            if enable_handicap:
+                                row_data["三档盘口线"] = handicap_str
                             if enable_weight_adjust or enable_motivation:
-                                adj_name, adj_prob = md["adj_best"]
                                 diff = adj_prob - pick_prob
                                 if abs(diff) < 0.005:
                                     diff_str = "≈ 0"
@@ -1249,7 +1350,9 @@ with tab2:
                                     diff_str = f"↓ {diff*100:.1f}%"
                                 row_data["调整后推荐"] = f"{adj_name} ({adj_prob*100:.1f}%)"
                                 row_data["变化"] = diff_str
+                                row_data["方向一致"] = direction_agreement
                                 row_data["调整原因"] = md["adjust_reason"]
+                            row_data["说明"] = consistency["note"]
                             info_rows.append(row_data)
                         st.dataframe(pd.DataFrame(info_rows), use_container_width=True, hide_index=True)
 
@@ -1295,6 +1398,13 @@ with tab2:
                                 st.write(f"- **{c['比赛']}**：模型推荐 {c['原推荐']}，但市场{c['盘口走势']}")
                         else:
                             st.success("✅ 模型推荐与市场走势一致，无冲突")
+
+                        direction_mismatch = [r for r in info_rows if "方向一致" in r and "⚠️" in r.get("方向一致", "")]
+                        if direction_mismatch:
+                            st.warning(f"⚠️ 发现 **{len(direction_mismatch)}** 场原推荐与调整后方向不一致（模型自己都不确定）：")
+                            for d in direction_mismatch:
+                                st.write(f"- **{d['比赛']}**：原推荐 {d['原推荐']}，调整后 {d['调整后推荐']}")
+
                         st.divider()
 
                     st.subheader("🎲 比分串（3串1）")
@@ -1414,6 +1524,7 @@ with tab2:
                     rec_rows = []
                     for i, md in enumerate(matches_data, 1):
                         best_opt = md["opts"][0]
+                        adj_name, adj_prob = md["adj_best"]
                         rec_rows.append({
                             "场次": i,
                             "比赛": md["比赛"],
@@ -1422,6 +1533,8 @@ with tab2:
                             "event_id": md["event_id"],
                             "推荐方向": best_opt[0],
                             "推荐概率": f"{best_opt[1]*100:.1f}%",
+                            "调整后方向": adj_name,
+                            "调整后概率": f"{adj_prob*100:.1f}%",
                             "赔率": fmt_odds(best_opt[2]),
                             "大小球方向": md["大小球方向"],
                             "比分1": md["main_score"][0],
@@ -1622,7 +1735,7 @@ with tab5:
                     rec_df = full_meta[rec_mask].copy()
                     st.markdown(f"### 🎯 推荐比赛 **{len(rec_df)} 场**")
                     if len(rec_df) > 0:
-                        show_cols = [c for c in ["场次", "比赛", "联赛", "时间", "推荐方向", "推荐概率", "赔率", "比分1", "比分2", "角色"] if c in rec_df.columns]
+                        show_cols = [c for c in ["场次", "比赛", "联赛", "时间", "推荐方向", "推荐概率", "调整后方向", "调整后概率", "赔率", "比分1", "比分2", "角色"] if c in rec_df.columns]
                         st.dataframe(rec_df[show_cols], use_container_width=True, hide_index=True)
 
                 if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
@@ -1691,19 +1804,26 @@ with tab5:
                                 continue
                             actual = actual_results.get(eid)
                             rec_dir = str(m.get("推荐方向", ""))
+                            adj_dir = str(m.get("调整后方向", "—"))
                             if not actual:
                                 review_rows.append({
                                     "比赛": m["比赛"], "联赛": m["联赛"],
-                                    "推荐方向": rec_dir,
-                                    "推荐概率": m.get("推荐概率", "—"),
+                                    "推荐方向": rec_dir, "推荐概率": m.get("推荐概率", "—"),
+                                    "调整后方向": adj_dir, "调整后概率": m.get("调整后概率", "—"),
                                     "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                     "实际比分": "未结束/无数据",
-                                    "胜负命中": "—", "大小球命中": "—",
+                                    "原推荐命中": "—", "调整后命中": "—",
+                                    "大小球命中": "—",
                                     "比分1命中": "—", "比分2命中": "—", "方向对但比分错": "—",
                                 })
                                 continue
                             actual_str = f"{actual['home']}-{actual['away']}"
                             win_hit, _ = judge_prediction_hit(rec_dir, actual)
+                            if adj_dir and adj_dir != "—":
+                                adj_win_hit, _ = judge_prediction_hit(adj_dir, actual)
+                                adj_win_str = "✅" if adj_win_hit else "❌"
+                            else:
+                                adj_win_str = "—"
                             if "大球" in rec_dir:
                                 ou_hit, _, _ = judge_over_under_hit("大球", actual)
                                 ou_str = "✅" if ou_hit else "❌"
@@ -1723,11 +1843,12 @@ with tab5:
                                 direction_but_wrong = "⚠️"
                             review_rows.append({
                                 "比赛": m["比赛"], "联赛": m["联赛"],
-                                "推荐方向": rec_dir,
-                                "推荐概率": m.get("推荐概率", "—"),
+                                "推荐方向": rec_dir, "推荐概率": m.get("推荐概率", "—"),
+                                "调整后方向": adj_dir, "调整后概率": m.get("调整后概率", "—"),
                                 "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                 "实际比分": actual_str,
-                                "胜负命中": win_str, "大小球命中": ou_str,
+                                "原推荐命中": win_str, "调整后命中": adj_win_str,
+                                "大小球命中": ou_str,
                                 "比分1命中": score1_hit, "比分2命中": score2_hit,
                                 "方向对但比分错": direction_but_wrong,
                             })
@@ -1736,18 +1857,23 @@ with tab5:
                             st.dataframe(rec_review_df, use_container_width=True, hide_index=True)
                             total = len([r for r in review_rows if r["实际比分"] != "未结束/无数据"])
                             if total > 0:
-                                wg = [r for r in review_rows if r["胜负命中"] in ("✅", "❌")]
-                                wh = len([r for r in wg if r["胜负命中"] == "✅"])
+                                wg = [r for r in review_rows if r["原推荐命中"] in ("✅", "❌")]
+                                wh = len([r for r in wg if r["原推荐命中"] == "✅"])
                                 wr = wh / len(wg) if wg else 0
+                                ag = [r for r in review_rows if r["调整后命中"] in ("✅", "❌")]
+                                ah = len([r for r in ag if r["调整后命中"] == "✅"])
+                                ar = ah / len(ag) if ag else 0
                                 og = [r for r in review_rows if r["大小球命中"] in ("✅", "❌")]
                                 oh = len([r for r in og if r["大小球命中"] == "✅"])
                                 orr = oh / len(og) if og else 0
-                                c1, c2, c3 = st.columns(3)
+                                c1, c2, c3, c4 = st.columns(4)
                                 with c1:
                                     st.metric("推荐已完赛", f"{total} 场")
                                 with c2:
-                                    st.metric("胜负命中", f"{wr*100:.1f}%", f"{wh}/{len(wg)}" if wg else "无")
+                                    st.metric("原推荐命中", f"{wr*100:.1f}%", f"{wh}/{len(wg)}" if wg else "无")
                                 with c3:
+                                    st.metric("调整后命中", f"{ar*100:.1f}%", f"{ah}/{len(ag)}" if ag else "无")
+                                with c4:
                                     st.metric("大小球命中", f"{orr*100:.1f}%", f"{oh}/{len(og)}" if og else "无")
 
                     if review_scope in ("复盘当天全部预测", "两者都复盘") and all_today_df is not None and len(all_today_df) > 0:
