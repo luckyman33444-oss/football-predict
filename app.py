@@ -8,8 +8,9 @@ CST = timezone(timedelta(hours=8))
 
 INJURY_WEIGHT_PER_PLAYER = 0.05
 INJURY_WEIGHT_MIN = 0.70
-CONFIRMED_LINEUP_BOOST = 1.05
-NO_LINEUP_PENALTY = 0.95
+H2H_WEIGHT_MIN = 0.70
+H2H_WEIGHT_LOW = 0.80
+H2H_WEIGHT_HIGH = 1.10
 
 BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
@@ -360,6 +361,32 @@ def adjust_with_lineup(xg_h, xg_a, lineup_info):
         reasons.append("无伤停，权重不变")
     return adj_xg_h, adj_xg_a, home_weight, away_weight, " ｜ ".join(reasons)
 
+def adjust_with_h2h(xg_h, xg_a, h2h_info):
+    if not h2h_info:
+        return xg_h, xg_a, 1.0, 1.0, ""
+    home_rate = h2h_info.get("home_win_rate")
+    away_rate = h2h_info.get("away_win_rate")
+    if home_rate is None or away_rate is None:
+        return xg_h, xg_a, 1.0, 1.0, ""
+    home_weight = 1.0
+    away_weight = 1.0
+    notes = []
+    if home_rate < 0.20:
+        home_weight = H2H_WEIGHT_LOW
+        notes.append(f"主队历史胜率低({home_rate*100:.0f}%)→进攻×{home_weight:.2f}")
+    elif home_rate > 0.60:
+        home_weight = H2H_WEIGHT_HIGH
+        notes.append(f"主队历史胜率高({home_rate*100:.0f}%)→进攻×{home_weight:.2f}")
+    if away_rate < 0.20:
+        away_weight = H2H_WEIGHT_LOW
+        notes.append(f"客队历史胜率低({away_rate*100:.0f}%)→进攻×{away_weight:.2f}")
+    elif away_rate > 0.60:
+        away_weight = H2H_WEIGHT_HIGH
+        notes.append(f"客队历史胜率高({away_rate*100:.0f}%)→进攻×{away_weight:.2f}")
+    adj_xg_h = xg_h * home_weight
+    adj_xg_a = xg_a * away_weight
+    return adj_xg_h, adj_xg_a, home_weight, away_weight, " ｜ ".join(notes) if notes else ""
+
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_event_odds_full(event_id):
     if not event_id:
@@ -371,6 +398,16 @@ def fetch_event_odds_full(event_id):
                           params={"event_id": event_id, "limit": 100}, timeout=15)
         details = r2.json().get("results", []) if r2.status_code == 200 else []
         return {"simple": simple, "details": details}
+    except:
+        return None
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_h2h_info(event_id):
+    try:
+        r = requests.get(f"{BSD_BASE}/events/{event_id}/h2h/", headers=BSD_HEADERS, timeout=15)
+        if r.status_code != 200:
+            return None
+        return r.json()
     except:
         return None
 
@@ -620,10 +657,7 @@ def parse_prediction(p):
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_actual_results(date_str):
-    """从 Bzzoiro events 接口拉取实际比分（多接口 + 多字段尝试）"""
     actual = {}
-
-    # 方案1：events 接口
     try:
         r = requests.get(f"{BSD_BASE}/events/", headers=BSD_HEADERS,
                          params={"date_from": date_str, "date_to": date_str, "limit": 200}, timeout=25)
@@ -636,9 +670,6 @@ def fetch_actual_results(date_str):
                     continue
                 home_score = ev.get("home_score")
                 away_score = ev.get("away_score")
-                if home_score is None:
-                    home_score = ev.get("home_goals")
-                    away_score = ev.get("away_goals")
                 if home_score is None and "score" in ev:
                     score = ev.get("score")
                     if isinstance(score, list) and len(score) >= 2:
@@ -658,8 +689,6 @@ def fetch_actual_results(date_str):
                     continue
     except:
         pass
-
-    # 方案2：predictions 接口兜底
     if not actual:
         try:
             r = requests.get(f"{BSD_BASE}/predictions/", headers=BSD_HEADERS,
@@ -682,7 +711,6 @@ def fetch_actual_results(date_str):
                         continue
         except:
             pass
-
     return actual
 
 def judge_prediction_hit(pred_label, actual_result):
@@ -703,6 +731,26 @@ def judge_over_under_hit(pred_label, actual_result):
     else:
         actual = "小球"
     return pred_label == actual, actual, total
+
+def judge_score_hit(pred_score_str, actual_result):
+    if not pred_score_str or pred_score_str == "—":
+        return "—"
+    try:
+        parts = str(pred_score_str).split("-")
+        if len(parts) != 2:
+            return "—"
+        ph, pa = int(parts[0]), int(parts[1])
+    except:
+        return "—"
+    ah = actual_result["home"]
+    aa = actual_result["away"]
+    if ph == ah and pa == aa:
+        return "✅"
+    ph_result = "主胜" if ph > pa else ("和局" if ph == pa else "客胜")
+    ah_result = "主胜" if ah > aa else ("和局" if ah == aa else "客胜")
+    if ph_result == ah_result:
+        return "⚠️"
+    return "❌"
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_espn_all(date_str):
@@ -919,12 +967,14 @@ with tab2:
                         odds_map = {}
                         lineup_map = {}
                         movement_map = {}
+                        h2h_map = {}
                         for _, row in selected.iterrows():
                             eid = row.get("event_id")
                             od = fetch_event_odds_full(eid) if eid else None
                             odds_map[eid] = od["simple"] if od else None
                             movement_map[eid] = analyze_line_movement(od) if od else None
                             lineup_map[eid] = get_lineup_info(eid) if eid else None
+                            h2h_map[eid] = fetch_h2h_info(eid) if eid else None
 
                     matches_data = []
                     for _, row in selected.iterrows():
@@ -933,6 +983,7 @@ with tab2:
                         o = odds_map.get(eid) or {}
                         mv = movement_map.get(eid) or {}
                         lu = lineup_map.get(eid) or {}
+                        h2h = h2h_map.get(eid) or {}
                         opts = []
                         hw_real = o.get("home_win")
                         dr_real = o.get("draw")
@@ -967,8 +1018,11 @@ with tab2:
 
                         xg_h = row["_xg_h"] or 1.5
                         xg_a = row["_xg_a"] or 1.2
-                        adj_xg_h, adj_xg_a, hw_w, aw_w, reason = adjust_with_lineup(xg_h, xg_a, lu)
-                        adj_pred = predict_full(adj_xg_h, adj_xg_a)
+                        adj_xg_h, adj_xg_a, hw_w, aw_w, inj_reason = adjust_with_lineup(xg_h, xg_a, lu)
+                        h2h_xg_h, h2h_xg_a, h2h_hw, h2h_aw, h2h_reason = adjust_with_h2h(adj_xg_h, adj_xg_a, h2h)
+                        final_xg_h = h2h_xg_h
+                        final_xg_a = h2h_xg_a
+                        adj_pred = predict_full(final_xg_h, final_xg_a)
                         if adj_pred:
                             adj_best_opts = [
                                 ("主胜", adj_pred["hw"]),
@@ -982,6 +1036,10 @@ with tab2:
                         else:
                             adj_best = ("—", 0)
 
+                        full_reason = inj_reason
+                        if h2h_reason:
+                            full_reason += " ｜ " + h2h_reason
+
                         matches_data.append({
                             "event_id": eid,
                             "比赛": f"{row['主队']} vs {row['客队']}",
@@ -990,9 +1048,11 @@ with tab2:
                             "是否核心": "⭐ 核心" if is_core else "自动",
                             "opts": opts, "main_score": main_s, "alt_score": alt_s,
                             "real_odds": o, "movement": mv, "lineup": lu,
+                            "h2h": h2h,
                             "adj_xg_h": adj_xg_h, "adj_xg_a": adj_xg_a,
+                            "final_xg_h": final_xg_h, "final_xg_a": final_xg_a,
                             "home_weight": hw_w, "away_weight": aw_w,
-                            "adjust_reason": reason,
+                            "adjust_reason": full_reason,
                             "adj_best": adj_best,
                             "_xg_h": xg_h, "_xg_a": xg_a,
                         })
@@ -1003,6 +1063,7 @@ with tab2:
                         for i, md in enumerate(matches_data, 1):
                             lu = md.get("lineup") or {}
                             mv = md.get("movement") or {}
+                            h2h = md.get("h2h") or {}
                             best_opt = md["opts"][0]
                             model_pick = best_opt[0]
                             lineup_status = lu.get("status", "") if lu else ""
@@ -1028,6 +1089,11 @@ with tab2:
                                 injury_str = "无伤停报告"
                             else:
                                 injury_str = f"主 {home_inj}人 ｜ 客 {away_inj}人"
+                            h2h_str = "—"
+                            if h2h and h2h.get("total_matches"):
+                                hw_rate = h2h.get("home_win_rate", 0)
+                                aw_rate = h2h.get("away_win_rate", 0)
+                                h2h_str = f"共{h2h.get('total_matches')}场 ｜ 主胜率{hw_rate*100:.0f}% ｜ 客胜率{aw_rate*100:.0f}%"
                             pick_name, pick_prob, _, is_real, movement = best_opt
                             consistency = judge_consistency(pick_name, movement)
                             row_data = {
@@ -1037,6 +1103,7 @@ with tab2:
                                 "一致性": f"{consistency['emoji']} {consistency['tag']}",
                                 "首发阵容": lineup_str,
                                 "伤停": injury_str,
+                                "历史交锋": h2h_str,
                                 "说明": consistency["note"],
                             }
                             if enable_weight_adjust:
@@ -1500,6 +1567,7 @@ with tab5:
                                     "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                     "实际比分": "未结束/无数据",
                                     "胜负命中": "—", "大小球命中": "—",
+                                    "比分1命中": "—", "比分2命中": "—", "方向对但比分错": "—",
                                 })
                                 continue
                             actual_str = f"{actual['home']}-{actual['away']}"
@@ -1516,6 +1584,11 @@ with tab5:
                                 win_str = "✅" if win_hit else "❌"
                             else:
                                 win_str = "—"
+                            score1_hit = judge_score_hit(m.get("比分1", "—"), actual)
+                            score2_hit = judge_score_hit(m.get("比分2", "—"), actual)
+                            direction_but_wrong = "—"
+                            if score1_hit == "⚠️" or score2_hit == "⚠️":
+                                direction_but_wrong = "⚠️"
                             review_rows.append({
                                 "比赛": m["比赛"], "联赛": m["联赛"],
                                 "推荐方向": rec_dir,
@@ -1523,6 +1596,8 @@ with tab5:
                                 "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                 "实际比分": actual_str,
                                 "胜负命中": win_str, "大小球命中": ou_str,
+                                "比分1命中": score1_hit, "比分2命中": score2_hit,
+                                "方向对但比分错": direction_but_wrong,
                             })
                         if review_rows:
                             rec_review_df = pd.DataFrame(review_rows)
