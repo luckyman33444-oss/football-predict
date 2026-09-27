@@ -620,30 +620,70 @@ def parse_prediction(p):
 
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_actual_results(date_str):
+    """从 Bzzoiro events 接口拉取实际比分（多接口 + 多字段尝试）"""
+    actual = {}
+
+    # 方案1：events 接口
     try:
-        r = requests.get(f"{BSD_BASE}/predictions/", headers=BSD_HEADERS,
+        r = requests.get(f"{BSD_BASE}/events/", headers=BSD_HEADERS,
                          params={"date_from": date_str, "date_to": date_str, "limit": 200}, timeout=25)
-        if r.status_code != 200:
-            return {}
-        data = r.json()
-        results = data.get("results", []) if isinstance(data, dict) else []
-        actual = {}
-        for p in results:
-            ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
-            eid = ev.get("id")
-            if not eid:
-                continue
-            status = ev.get("status", "")
-            if status != "finished":
-                continue
-            home_score = ev.get("home_score")
-            away_score = ev.get("away_score")
-            if home_score is None or away_score is None:
-                continue
-            actual[eid] = {"home": int(home_score), "away": int(away_score)}
-        return actual
+        if r.status_code == 200:
+            data = r.json()
+            results = data.get("results", []) if isinstance(data, dict) else []
+            for ev in results:
+                eid = ev.get("id")
+                if not eid:
+                    continue
+                home_score = ev.get("home_score")
+                away_score = ev.get("away_score")
+                if home_score is None:
+                    home_score = ev.get("home_goals")
+                    away_score = ev.get("away_goals")
+                if home_score is None and "score" in ev:
+                    score = ev.get("score")
+                    if isinstance(score, list) and len(score) >= 2:
+                        home_score, away_score = score[0], score[1]
+                    elif isinstance(score, dict):
+                        ft = score.get("ft")
+                        if isinstance(ft, list) and len(ft) >= 2:
+                            home_score, away_score = ft[0], ft[1]
+                        else:
+                            home_score = score.get("home")
+                            away_score = score.get("away")
+                if home_score is None or away_score is None:
+                    continue
+                try:
+                    actual[eid] = {"home": int(home_score), "away": int(away_score)}
+                except:
+                    continue
     except:
-        return {}
+        pass
+
+    # 方案2：predictions 接口兜底
+    if not actual:
+        try:
+            r = requests.get(f"{BSD_BASE}/predictions/", headers=BSD_HEADERS,
+                             params={"date_from": date_str, "date_to": date_str, "limit": 200}, timeout=25)
+            if r.status_code == 200:
+                data = r.json()
+                results = data.get("results", []) if isinstance(data, dict) else []
+                for p in results:
+                    ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
+                    eid = ev.get("id")
+                    if not eid:
+                        continue
+                    home_score = ev.get("home_score")
+                    away_score = ev.get("away_score")
+                    if home_score is None or away_score is None:
+                        continue
+                    try:
+                        actual[eid] = {"home": int(home_score), "away": int(away_score)}
+                    except:
+                        continue
+        except:
+            pass
+
+    return actual
 
 def judge_prediction_hit(pred_label, actual_result):
     h = actual_result["home"]
