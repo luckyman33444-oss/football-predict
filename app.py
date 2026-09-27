@@ -6,11 +6,105 @@ import io
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 CST = timezone(timedelta(hours=8))
 
+# ============ 权重调整系数 ============
 INJURY_WEIGHT_PER_PLAYER = 0.05
 INJURY_WEIGHT_MIN = 0.70
 H2H_WEIGHT_MIN = 0.70
 H2H_WEIGHT_LOW = 0.80
 H2H_WEIGHT_HIGH = 1.10
+# =========================================
+
+# ★★★ API-Football 配置（去 dashboard.api-football.com/register 免费注册）★★★
+API_FOOTBALL_KEY = ""
+API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
+# =============================================================================
+
+# API-Football 联赛 ID 映射（ESPN 代码 → API-Football ID）
+FOOTBALL_API_LEAGUE_IDS = {
+    "eng.1": 39, "esp.1": 140, "ger.1": 78,
+    "ita.1": 135, "fra.1": 61,
+    "uefa.champions": 2, "uefa.europa": 3,
+    "ned.1": 88, "por.1": 94,
+    "bra.1": 71, "usa.1": 253, "mex.1": 262,
+    "chn.1": 169, "jpn.1": 98, "kor.1": 292,
+    "aus.1": 188, "sau.1": 307,
+    "eng.2": 40, "tur.1": 203, "bel.1": 144, "sco.1": 179,
+}
+
+# ============ 战意层级权重（基于 tactiq.club 职业模型）============
+MOTIVATION_WEIGHT = {
+    "title_race":   {"home": 1.05, "away": 1.03},
+    "european":     {"home": 1.03, "away": 1.015},
+    "mid_table":    {"home": 1.00, "away": 1.00},
+    "relegation":   {"home": 1.03, "away": 0.98},
+}
+
+def fetch_standings(league_id, season):
+    """从 API-Football 获取联赛积分榜"""
+    if not API_FOOTBALL_KEY:
+        return None
+    try:
+        r = requests.get(
+            f"{API_FOOTBALL_BASE}/standings",
+            headers={"x-apisports-key": API_FOOTBALL_KEY},
+            params={"league": league_id, "season": season},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        standings_list = data.get("response", [])
+        if not standings_list:
+            return None
+        league_data = standings_list[0].get("league", {})
+        standings = league_data.get("standings", [])
+        if not standings:
+            return None
+        table = standings[0] if isinstance(standings[0], list) else standings
+        result = {}
+        for row in table:
+            team_name = row.get("team", {}).get("name", "")
+            result[team_name] = {
+                "rank": row.get("rank"),
+                "points": row.get("points"),
+                "goalsDiff": row.get("goalsDiff"),
+                "form": row.get("form"),
+                "all": row.get("all", {}),
+            }
+        return result
+    except:
+        return None
+
+def judge_motivation_tier(rank, total_teams, points, max_points):
+    """根据排名和积分判断战意层级"""
+    if rank is None or total_teams == 0:
+        return "mid_table"
+    if rank <= 4:
+        return "title_race" if rank <= 2 else "european"
+    if rank >= total_teams - 3:
+        return "relegation"
+    if rank <= 8:
+        return "european"
+    return "mid_table"
+
+def find_team_in_standings(standings, team_name_cn, team_name_en):
+    """在积分榜中模糊匹配球队"""
+    if not standings:
+        return None
+    for name, info in standings.items():
+        if team_name_cn and (team_name_cn in name or name in team_name_cn):
+            return info
+        if team_name_en and (team_name_en.lower() in name.lower() or name.lower() in team_name_en.lower()):
+            return info
+    return None
+
+def apply_motivation_adjustment(xg_h, xg_a, home_tier, away_tier):
+    """根据战意层级调整 xG"""
+    home_w = MOTIVATION_WEIGHT.get(home_tier, MOTIVATION_WEIGHT["mid_table"])["home"]
+    away_w = MOTIVATION_WEIGHT.get(away_tier, MOTIVATION_WEIGHT["mid_table"])["away"]
+    return xg_h * home_w, xg_a * away_w, home_w, away_w
+
+# ============ 以下与之前相同 ============
 
 BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
@@ -905,6 +999,7 @@ with tab2:
         enable_lineup_info = st.checkbox("👥 显示首发阵容 + 伤停", value=True, key="lineup_switch")
         enable_market_info = st.checkbox("📊 显示盘口走势", value=True, key="market_switch")
         enable_weight_adjust = st.checkbox("🎛️ 启用阵容/伤病权重调整（对比显示）", value=False, key="weight_switch")
+        enable_motivation = st.checkbox("🏆 启用联赛战意修正", value=True, key="motivation_switch")
     with col2:
         if st.button("🗑️ 清空核心", key="clear_core"):
             st.session_state.core_matches = []
@@ -968,6 +1063,7 @@ with tab2:
                         lineup_map = {}
                         movement_map = {}
                         h2h_map = {}
+                        standings_cache = {}
                         for _, row in selected.iterrows():
                             eid = row.get("event_id")
                             od = fetch_event_odds_full(eid) if eid else None
@@ -1022,6 +1118,40 @@ with tab2:
                         h2h_xg_h, h2h_xg_a, h2h_hw, h2h_aw, h2h_reason = adjust_with_h2h(adj_xg_h, adj_xg_a, h2h)
                         final_xg_h = h2h_xg_h
                         final_xg_a = h2h_xg_a
+
+                        motivation_reason = ""
+                        if enable_motivation and API_FOOTBALL_KEY:
+                            league_name_en = row.get("联赛", "")
+                            league_id = None
+                            for espn_code, api_id in FOOTBALL_API_LEAGUE_IDS.items():
+                                if ESPN_LEAGUES.get(espn_code) == league_name_en:
+                                    league_id = api_id
+                                    break
+                            if league_id:
+                                season = datetime.now(CST).year
+                                if season not in standings_cache:
+                                    standings_cache[season] = fetch_standings(league_id, season)
+                                standings = standings_cache.get(season)
+                                if standings:
+                                    home_info = find_team_in_standings(standings, row["主队"], "")
+                                    away_info = find_team_in_standings(standings, row["客队"], "")
+                                    if home_info or away_info:
+                                        total_teams = len(standings)
+                                        home_rank = home_info.get("rank") if home_info else None
+                                        away_rank = away_info.get("rank") if away_info else None
+                                        home_tier = judge_motivation_tier(home_rank, total_teams,
+                                                                          home_info.get("points") if home_info else 0, 0)
+                                        away_tier = judge_motivation_tier(away_rank, total_teams,
+                                                                          away_info.get("points") if away_info else 0, 0)
+                                        final_xg_h, final_xg_a, m_hw, m_aw = apply_motivation_adjustment(
+                                            final_xg_h, final_xg_a, home_tier, away_tier)
+                                        tier_cn = {"title_race": "争冠", "european": "欧战",
+                                                   "mid_table": "中游", "relegation": "保级"}
+                                        motivation_reason = (
+                                            f"主队{tier_cn.get(home_tier, home_tier)}(第{home_rank}名)×{m_hw:.2f} ｜ "
+                                            f"客队{tier_cn.get(away_tier, away_tier)}(第{away_rank}名)×{m_aw:.2f}"
+                                        )
+
                         adj_pred = predict_full(final_xg_h, final_xg_a)
                         if adj_pred:
                             adj_best_opts = [
@@ -1039,6 +1169,8 @@ with tab2:
                         full_reason = inj_reason
                         if h2h_reason:
                             full_reason += " ｜ " + h2h_reason
+                        if motivation_reason:
+                            full_reason += " ｜ 战意: " + motivation_reason
 
                         matches_data.append({
                             "event_id": eid,
@@ -1058,7 +1190,7 @@ with tab2:
                         })
 
                     info_rows = []
-                    if enable_lineup_info or enable_market_info:
+                    if enable_lineup_info or enable_market_info or enable_motivation:
                         st.subheader("🔍 半自动情报面板")
                         for i, md in enumerate(matches_data, 1):
                             lu = md.get("lineup") or {}
@@ -1106,7 +1238,7 @@ with tab2:
                                 "历史交锋": h2h_str,
                                 "说明": consistency["note"],
                             }
-                            if enable_weight_adjust:
+                            if enable_weight_adjust or enable_motivation:
                                 adj_name, adj_prob = md["adj_best"]
                                 diff = adj_prob - pick_prob
                                 if abs(diff) < 0.005:
