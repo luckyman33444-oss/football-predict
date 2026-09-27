@@ -14,56 +14,33 @@ H2H_WEIGHT_HIGH = 1.10
 API_FOOTBALL_KEY = "d00cc95c3d639618d9313dc86f883685"
 API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
 
-# ★ 优化1：Dixon-Coles 修正参数 ρ（负值，越大越修正低比分）
-# 参考职业模型：欧洲主流 -0.05，友谊赛 -0.08，小联赛 -0.10
 DIXON_COLES_RHO = {
-    "top":     -0.05,
-    "mid":     -0.08,
-    "low":     -0.10,
-    "friendly":-0.08,
+    "top": -0.05, "mid": -0.08, "low": -0.10, "friendly": -0.08,
 }
 
-# ★ 优化2：赛事分层校准（进球预期乘数）
 MATCH_TIER_MULTIPLIER = {
-    "friendly":      0.88,   # 友谊赛：轮换多、战意低 → 进球减少
-    "nations_league":0.95,   # 欧国联：半正式
-    "qualifier":     0.98,   # 预选赛
-    "tournament":    1.00,   # 世界杯/欧洲杯正赛
-    "cup":           0.96,   # 杯赛
-    "league":        1.00,   # 联赛
+    "friendly": 0.88, "nations_league": 0.95, "qualifier": 0.98,
+    "tournament": 1.00, "cup": 0.96, "league": 1.00,
 }
 
-# ★ 优化3：盘口融合权重（模型占比）
-# 主流联赛可信市场，小联赛信模型
-BLEND_WEIGHT_MODEL = {
-    "top":      0.40,   # 英超西甲等：模型占 40%，市场占 60%
-    "mid":      0.55,   # 荷甲葡超等：模型占 55%
-    "low":      0.70,   # 小联赛/友谊赛：模型占 70%
-}
-# =====================================
+BLEND_WEIGHT_MODEL = {"top": 0.40, "mid": 0.55, "low": 0.70}
 
 FOOTBALL_API_LEAGUE_IDS = {
-    "eng.1": 39, "esp.1": 140, "ger.1": 78,
-    "ita.1": 135, "fra.1": 61,
-    "uefa.champions": 2, "uefa.europa": 3,
-    "uefa.nations": 5,
-    "ned.1": 88, "por.1": 94,
-    "bra.1": 71, "usa.1": 253, "mex.1": 262,
-    "chn.1": 169, "jpn.1": 98, "kor.1": 292,
-    "aus.1": 188, "sau.1": 307,
+    "eng.1": 39, "esp.1": 140, "ger.1": 78, "ita.1": 135, "fra.1": 61,
+    "uefa.champions": 2, "uefa.europa": 3, "uefa.nations": 5,
+    "ned.1": 88, "por.1": 94, "bra.1": 71, "usa.1": 253, "mex.1": 262,
+    "chn.1": 169, "jpn.1": 98, "kor.1": 292, "aus.1": 188, "sau.1": 307,
     "eng.2": 40, "tur.1": 203, "bel.1": 144, "sco.1": 179,
 }
 
 MOTIVATION_WEIGHT = {
-    "title_race":   {"home": 1.05, "away": 1.03},
-    "european":     {"home": 1.03, "away": 1.015},
-    "mid_table":    {"home": 1.00, "away": 1.00},
-    "relegation":   {"home": 1.03, "away": 0.98},
+    "title_race": {"home": 1.05, "away": 1.03},
+    "european": {"home": 1.03, "away": 1.015},
+    "mid_table": {"home": 1.00, "away": 1.00},
+    "relegation": {"home": 1.03, "away": 0.98},
 }
 
-# ============ 赛事分层判断 ============
 def get_match_tier(league_name_cn, league_name_en=""):
-    """判断赛事分层：返回 tier 类型"""
     combined = (league_name_cn or "") + " " + (league_name_en or "")
     if "友谊" in combined or "Friendly" in combined:
         return "friendly"
@@ -78,7 +55,6 @@ def get_match_tier(league_name_cn, league_name_en=""):
     return "league"
 
 def get_league_trust_level(league_name_cn):
-    """联赛可信度分级"""
     top_leagues = ["英超", "西甲", "德甲", "意甲", "法甲", "欧冠", "欧联杯"]
     mid_leagues = ["英冠", "荷甲", "葡超", "苏超", "土超", "比甲", "巴甲", "美职联", "墨超", "中超", "日职联", "韩K联", "澳超", "沙特联"]
     if league_name_cn in top_leagues:
@@ -87,12 +63,10 @@ def get_league_trust_level(league_name_cn):
         return "mid"
     return "low"
 
-# ============ 优化1：Dixon-Coles 泊松修正 ============
 def pois(k, lam):
     return math.exp(-lam) * lam ** k / math.factorial(k)
 
 def dixon_coles_tau(x, y, lam, mu, rho):
-    """Dixon-Coles 低比分修正因子"""
     if x == 0 and y == 0:
         return 1 - lam * mu * rho
     elif x == 0 and y == 1:
@@ -105,7 +79,6 @@ def dixon_coles_tau(x, y, lam, mu, rho):
         return 1.0
 
 def score_matrix_dc(lh, la, rho, max_goals=8):
-    """Dixon-Coles 修正后的比分概率矩阵"""
     m = {}
     for h in range(max_goals + 1):
         for a in range(max_goals + 1):
@@ -117,9 +90,7 @@ def score_matrix_dc(lh, la, rho, max_goals=8):
         return score_matrix_dc(lh, la, 0, max_goals)
     return {k: v / s for k, v in m.items()}
 
-# ============ 优化3：盘口融合 ============
 def implied_probs_from_odds(odds_hw, odds_d, odds_aw):
-    """从赔率反推市场隐含概率（去除抽水）"""
     if not odds_hw or not odds_d or not odds_aw:
         return None
     try:
@@ -134,7 +105,6 @@ def implied_probs_from_odds(odds_hw, odds_d, odds_aw):
         return None
 
 def blend_with_market(model_hw, model_d, model_aw, odds_hw, odds_d, odds_aw, trust_level):
-    """模型概率与市场隐含概率加权融合"""
     market = implied_probs_from_odds(odds_hw, odds_d, odds_aw)
     if market is None:
         return model_hw, model_d, model_aw, None
@@ -150,9 +120,7 @@ def blend_with_market(model_hw, model_d, model_aw, odds_hw, odds_d, odds_aw, tru
         blend_aw /= total
     return blend_hw, blend_d, blend_aw, (m_hw, m_d, m_aw)
 
-# ============ 整合预测函数 ============
 def predict_full_dc(xg_h, xg_a, rho=-0.05):
-    """Dixon-Coles 版预测"""
     if xg_h is None or xg_a is None:
         return None
     try:
@@ -197,7 +165,6 @@ def predict_full_dc(xg_h, xg_a, rho=-0.05):
     return {"over_scores": over_scores, "under_scores": under_scores, "top_scores": top,
             "hw": hw, "d": d, "aw": aw, "over25": ov25, "under25": un25, "h1": h1, "h2": h2}
 
-# ============ API-Football 战意 ============
 def fetch_standings(league_id, season):
     if not API_FOOTBALL_KEY:
         return None
@@ -205,8 +172,7 @@ def fetch_standings(league_id, season):
         r = requests.get(
             f"{API_FOOTBALL_BASE}/standings",
             headers={"x-apisports-key": API_FOOTBALL_KEY},
-            params={"league": league_id, "season": season},
-            timeout=15,
+            params={"league": league_id, "season": season}, timeout=15,
         )
         if r.status_code != 200:
             return None
@@ -222,10 +188,7 @@ def fetch_standings(league_id, season):
         result = {}
         for row in table:
             team_name = row.get("team", {}).get("name", "")
-            result[team_name] = {
-                "rank": row.get("rank"),
-                "points": row.get("points"),
-            }
+            result[team_name] = {"rank": row.get("rank"), "points": row.get("points")}
         return result
     except:
         return None
@@ -256,19 +219,16 @@ def apply_motivation_adjustment(xg_h, xg_a, home_tier, away_tier):
     away_w = MOTIVATION_WEIGHT.get(away_tier, MOTIVATION_WEIGHT["mid_table"])["away"]
     return xg_h * home_w, xg_a * away_w, home_w, away_w
 
-# ============ Bzzoiro / ESPN 配置 ============
 BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
 BSD_HEADERS = {"Authorization": f"Token {BSD_TOKEN}"}
 
 ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 ESPN_LEAGUES = {
-    "eng.1": "英超", "esp.1": "西甲", "ger.1": "德甲",
-    "ita.1": "意甲", "fra.1": "法甲", "uefa.champions": "欧冠",
-    "uefa.europa": "欧联杯", "ned.1": "荷甲", "por.1": "葡超",
-    "bra.1": "巴甲", "usa.1": "美职联", "mex.1": "墨超",
-    "chn.1": "中超", "jpn.1": "日职联", "kor.1": "韩K联",
-    "aus.1": "澳超", "sau.1": "沙特联", "eng.2": "英冠",
+    "eng.1": "英超", "esp.1": "西甲", "ger.1": "德甲", "ita.1": "意甲", "fra.1": "法甲",
+    "uefa.champions": "欧冠", "uefa.europa": "欧联杯", "ned.1": "荷甲", "por.1": "葡超",
+    "bra.1": "巴甲", "usa.1": "美职联", "mex.1": "墨超", "chn.1": "中超", "jpn.1": "日职联",
+    "kor.1": "韩K联", "aus.1": "澳超", "sau.1": "沙特联", "eng.2": "英冠",
     "tur.1": "土超", "bel.1": "比甲", "sco.1": "苏超",
 }
 
@@ -302,8 +262,7 @@ LEAGUE_CN = {
     "Copa America": "美洲杯", "Africa Cup of Nations": "非洲杯",
     "USL Championship": "美国USL", "United Soccer League": "美国USL",
     "Liga MX Apertura": "墨超",
-    "Campeonato de Portugal": "葡萄牙杯",
-    "Taça de Portugal": "葡萄牙杯",
+    "Campeonato de Portugal": "葡萄牙杯", "Taça de Portugal": "葡萄牙杯",
 }
 
 TEAM_CN = {
@@ -327,8 +286,7 @@ TEAM_CN = {
     "Córdoba": "科尔多瓦", "SD Eibar": "埃瓦尔", "Eibar": "埃瓦尔",
     "Real Oviedo": "皇家奥维耶多", "Burgos Club de Fútbol": "布尔戈斯",
     "CD Eldense": "埃尔登斯", "UD Las Palmas": "拉斯帕尔马斯",
-    "Sporting Gijón": "希洪竞技",
-    "RCD Espanyol de Barcelona": "西班牙人",
+    "Sporting Gijón": "希洪竞技", "RCD Espanyol de Barcelona": "西班牙人",
     "Real Club Deportivo de A Coruña": "拉科鲁尼亚",
     "Bayern Munich": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "莱比锡红牛", "Bayer Leverkusen": "勒沃库森",
@@ -690,10 +648,8 @@ def extract_handicap_lines(simple_odds):
             over_pct = over_imp / total * 100
             under_pct = under_imp / total * 100
             lines[line_num] = {
-                "over_odd": over_odd,
-                "under_odd": under_odd,
-                "over_pct": over_pct,
-                "under_pct": under_pct,
+                "over_odd": over_odd, "under_odd": under_odd,
+                "over_pct": over_pct, "under_pct": under_pct,
                 "favored": "大球" if over_pct > under_pct else "小球",
                 "favored_pct": max(over_pct, under_pct),
             }
@@ -704,10 +660,7 @@ def extract_handicap_lines(simple_odds):
         btts_no_imp = 1 / btts_no
         total = btts_yes_imp + btts_no_imp
         if total > 0:
-            lines["btts"] = {
-                "yes_pct": btts_yes_imp / total * 100,
-                "no_pct": btts_no_imp / total * 100,
-            }
+            lines["btts"] = {"yes_pct": btts_yes_imp / total * 100, "no_pct": btts_no_imp / total * 100}
     return lines
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -1302,7 +1255,6 @@ with tab2:
                         main_s = scores[0] if len(scores) > 0 else ("—", 0)
                         alt_s = scores[1] if len(scores) > 1 else ("—", 0)
 
-                        # === 应用优化：赛事分层 + 伤停 + H2H + 战意 ===
                         xg_h = row["_xg_h"] or 1.5
                         xg_a = row["_xg_a"] or 1.2
 
@@ -1349,7 +1301,6 @@ with tab2:
                                             f"客队{tier_cn.get(away_tier, away_tier)}(第{away_rank}名)×{m_aw:.2f}"
                                         )
 
-                        # === 应用 Dixon-Coles 修正 ===
                         trust = get_league_trust_level(row.get("联赛", ""))
                         rho = DIXON_COLES_RHO.get(trust, -0.05) if enable_dc else 0
                         if tier == "friendly":
@@ -1357,7 +1308,6 @@ with tab2:
 
                         adj_pred = predict_full_dc(final_xg_h, final_xg_a, rho=rho)
 
-                        # === 应用盘口融合 ===
                         blend_info = ""
                         if adj_pred and enable_blend:
                             bh, bd, ba, market_implied = blend_with_market(
@@ -1368,9 +1318,7 @@ with tab2:
                             adj_pred["aw"] = ba
                             if market_implied:
                                 blend_info = (
-                                    f"模型({adj_pred['hw']*100:.0f}/{adj_pred['d']*100:.0f}/{adj_pred['aw']*100:.0f}) "
-                                    f"×{BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f} + 市场({market_implied[0]*100:.0f}/{market_implied[1]*100:.0f}/{market_implied[2]*100:.0f}) "
-                                    f"×{1-BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f}"
+                                    f"模型×{BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f} + 市场×{1-BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f}"
                                 )
 
                         if adj_pred:
@@ -1383,17 +1331,22 @@ with tab2:
                             ]
                             adj_best_opts.sort(key=lambda x: -x[1])
                             adj_best = adj_best_opts[0]
-                            # 用调整后的预测重新算比分（保持比分和大小球方向一致）
+                            # ★ 用调整后的大小球方向重新选比分
                             if adj_pred["over25"] >= 0.5:
                                 adj_scores = adj_pred["over_scores"]
                             else:
                                 adj_scores = adj_pred["under_scores"]
                             adj_main_score = f"{adj_scores[0][0]}-{adj_scores[0][1]}" if adj_scores else "—"
                             adj_alt_score = f"{adj_scores[1][0]}-{adj_scores[1][1]}" if len(adj_scores) > 1 else "—"
+                            # ★ 调整后比分1的概率（用于主胆判断）
+                            adj_main_prob = adj_scores[0][2] if adj_scores else 0
+                            adj_alt_prob = adj_scores[1][2] if len(adj_scores) > 1 else 0
                         else:
                             adj_best = ("—", 0)
                             adj_main_score = "—"
                             adj_alt_score = "—"
+                            adj_main_prob = 0
+                            adj_alt_prob = 0
 
                         full_reason = inj_reason
                         if tier_reason:
@@ -1421,9 +1374,12 @@ with tab2:
                             "adj_best": adj_best,
                             "adj_main_score": adj_main_score,
                             "adj_alt_score": adj_alt_score,
+                            "adj_main_prob": adj_main_prob,
+                            "adj_alt_prob": adj_alt_prob,
                             "_xg_h": xg_h, "_xg_a": xg_a,
                         })
 
+                    # ===== 情报面板 =====
                     info_rows = []
                     if enable_lineup_info or enable_market_info or enable_motivation or enable_handicap:
                         st.subheader("🔍 半自动情报面板")
@@ -1556,12 +1512,13 @@ with tab2:
 
                         st.divider()
 
-                    st.subheader("🎲 比分串（3串1）")
+                    # ===== 比分串（用调整后比分）=====
+                    st.subheader("🎲 比分串（3串1，基于调整后推荐）")
                     best_idx = None
                     best_ratio = 0
                     for i, md in enumerate(matches_data):
-                        mp = md["main_score"][1]
-                        ap = md["alt_score"][1]
+                        mp = md["adj_main_prob"]
+                        ap = md["adj_alt_prob"]
                         if mp < 0.08:
                             continue
                         if ap == 0:
@@ -1574,10 +1531,10 @@ with tab2:
 
                     rows_for_table = []
                     for i, md in enumerate(matches_data):
-                        mp = md["main_score"][1]
-                        ap = md["alt_score"][1]
-                        main_str = f"{md['main_score'][0]} ({mp*100:.1f}%)"
-                        alt_str = f"{md['alt_score'][0]} ({ap*100:.1f}%)"
+                        mp = md["adj_main_prob"]
+                        ap = md["adj_alt_prob"]
+                        main_str = f"{md['adj_main_score']} ({mp*100:.1f}%)"
+                        alt_str = f"{md['adj_alt_score']} ({ap*100:.1f}%)"
                         role = "**主胆**" if (best_idx == i) else "拖"
                         rows_for_table.append({
                             "场次": i + 1, "时间": md["时间"], "比赛": md["比赛"],
@@ -1591,11 +1548,11 @@ with tab2:
                     if best_idx is not None:
                         st.markdown(f"**策略：第 {best_idx+1} 场做主胆**")
                         other_idx = [i for i in range(3) if i != best_idx]
-                        main_s_str = matches_data[best_idx]["main_score"][0]
-                        o1_main = matches_data[other_idx[0]]["main_score"][0]
-                        o1_alt = matches_data[other_idx[0]]["alt_score"][0]
-                        o2_main = matches_data[other_idx[1]]["main_score"][0]
-                        o2_alt = matches_data[other_idx[1]]["alt_score"][0]
+                        main_s_str = matches_data[best_idx]["adj_main_score"]
+                        o1_main = matches_data[other_idx[0]]["adj_main_score"]
+                        o1_alt = matches_data[other_idx[0]]["adj_alt_score"]
+                        o2_main = matches_data[other_idx[1]]["adj_main_score"]
+                        o2_alt = matches_data[other_idx[1]]["adj_alt_score"]
                         for i1, s1 in enumerate([o1_main, o1_alt], 1):
                             for i2, s2 in enumerate([o2_main, o2_alt], 1):
                                 bet_rows.append({
@@ -1607,9 +1564,9 @@ with tab2:
                         st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     else:
                         st.markdown("**三场无明显主胆，每场选 2 个比分（共 8 注）**")
-                        s1_list = [matches_data[0]["main_score"][0], matches_data[0]["alt_score"][0]]
-                        s2_list = [matches_data[1]["main_score"][0], matches_data[1]["alt_score"][0]]
-                        s3_list = [matches_data[2]["main_score"][0], matches_data[2]["alt_score"][0]]
+                        s1_list = [matches_data[0]["adj_main_score"], matches_data[0]["adj_alt_score"]]
+                        s2_list = [matches_data[1]["adj_main_score"], matches_data[1]["adj_alt_score"]]
+                        s3_list = [matches_data[2]["adj_main_score"], matches_data[2]["adj_alt_score"]]
                         n = 1
                         for a in s1_list:
                             for b in s2_list:
@@ -1620,8 +1577,24 @@ with tab2:
 
                     st.divider()
 
-                    st.subheader("🛡️ 稳健串（胜平负/大小球）")
-                    combo = [(md, md["opts"][0]) for md in matches_data]
+                    # ===== 稳健串（用调整后推荐）=====
+                    st.subheader("🛡️ 稳健串（基于调整后推荐）")
+                    # 每场用调整后的最高概率选项
+                    combo = []
+                    for md in matches_data:
+                        adj_name, adj_prob = md["adj_best"]
+                        # 找调整后选项对应的真实赔率
+                        pick_odds = None
+                        is_real = False
+                        for opt in md["opts"]:
+                            if opt[0] == adj_name:
+                                pick_odds = opt[2]
+                                is_real = opt[3]
+                                break
+                        if pick_odds is None:
+                            pick_odds = implied_odds(adj_prob * 100)
+                        combo.append((md, (adj_name, adj_prob, pick_odds, is_real, "")))
+
                     prob = 1
                     total_odds = 1
                     for _, opt in combo:
@@ -1633,19 +1606,33 @@ with tab2:
                     stable_rows = []
                     for i, (md, opt) in enumerate(combo, 1):
                         pick_name, pick_prob, pick_odds, is_real, movement = opt
-                        consistency = judge_consistency(pick_name, movement)
                         stable_rows.append({
                             "场次": i, "比赛": md["比赛"], "推荐": pick_name,
                             "概率": f"{pick_prob*100:.1f}%",
                             "赔率": fmt_odds(pick_odds),
                             "赔率来源": "真实" if is_real else "隐含",
                             "盘口走势": movement if movement else "—",
-                            "一致性": f"{consistency['emoji']} {consistency['tag']}",
+                            "一致性": "—",
                         })
                     st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
 
-                    st.markdown("**备选串（每场第二高概率）：**")
-                    combo_b = [(md, md["opts"][1] if len(md["opts"]) > 1 else md["opts"][0]) for md in matches_data]
+                    # 备选串（每场取调整后第二高概率）
+                    st.markdown("**备选串（每场取调整后第二高概率）：**")
+                    combo_b = []
+                    for md in matches_data:
+                        # 重新计算调整后所有选项排序
+                        adj_pred_opt = None
+                        for opt in md["opts"]:
+                            if opt[0] == md["adj_best"][0]:
+                                adj_pred_opt = opt
+                                break
+                        # 取原选项里第二高的
+                        if len(md["opts"]) >= 2:
+                            second_opt = md["opts"][1]
+                            combo_b.append((md, second_opt))
+                        else:
+                            combo_b.append((md, md["opts"][0]))
+
                     prob_b = 1
                     total_odds_b = 1
                     for _, opt in combo_b:
@@ -1656,14 +1643,13 @@ with tab2:
                     stable_rows_b = []
                     for i, (md, opt) in enumerate(combo_b, 1):
                         pick_name, pick_prob, pick_odds, is_real, movement = opt
-                        consistency = judge_consistency(pick_name, movement)
                         stable_rows_b.append({
                             "场次": i, "比赛": md["比赛"], "推荐": pick_name,
                             "概率": f"{pick_prob*100:.1f}%",
                             "赔率": fmt_odds(pick_odds),
                             "赔率来源": "真实" if is_real else "隐含",
                             "盘口走势": movement if movement else "—",
-                            "一致性": f"{consistency['emoji']} {consistency['tag']}",
+                            "一致性": "—",
                         })
                     st.dataframe(pd.DataFrame(stable_rows_b), use_container_width=True, hide_index=True)
 
