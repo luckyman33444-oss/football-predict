@@ -1,16 +1,28 @@
 import math, requests, pandas as pd, streamlit as st
 from datetime import date, datetime, timezone, timedelta
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json as _json
 import io
 
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 CST = timezone(timedelta(hours=8))
 
+# ========== #1 密钥改为从 st.secrets 读取 ==========
+def _get_secret(name, default=""):
+    try:
+        if name in st.secrets:
+            return st.secrets[name]
+        return default
+    except Exception:
+        return default
+
 INJURY_WEIGHT_PER_PLAYER = 0.05
 INJURY_WEIGHT_MIN = 0.70
 H2H_WEIGHT_LOW = 0.80
 H2H_WEIGHT_HIGH = 1.10
-API_FOOTBALL_KEY = "d00cc95c3d639618d9313dc86f883685"
+
+# ★ 改动1：不再硬编码
+API_FOOTBALL_KEY = _get_secret("API_FOOTBALL_KEY")
 API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
 
 DIXON_COLES_RHO = {
@@ -20,7 +32,6 @@ DIXON_COLES_RHO = {
     "friendly": -0.08,
 }
 
-# ★ 改动3：友谊赛系数 0.88 → 0.94
 MATCH_TIER_MULTIPLIER = {
     "friendly": 0.94,
     "nations_league": 0.95,
@@ -230,7 +241,8 @@ def apply_motivation_adjustment(xg_h, xg_a, home_tier, away_tier):
     away_w = MOTIVATION_WEIGHT.get(away_tier, MOTIVATION_WEIGHT["mid_table"])["away"]
     return xg_h * home_w, xg_a * away_w, home_w, away_w
 
-BSD_TOKEN = "5d8f48995ad96cead191f0611fdc042ece77b77c"
+# ★ 改动1：Bzzoiro Token 也走 secrets
+BSD_TOKEN = _get_secret("BSD_TOKEN")
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
 BSD_HEADERS = {"Authorization": f"Token {BSD_TOKEN}"}
 
@@ -471,13 +483,14 @@ def league_cn(name):
         return "其他"
     return LEAGUE_CN.get(name, name)
 
+# ★ 改动5：解析失败返回 "—" 而不是切 UTC
 def to_cst_time(dt_str):
     if not dt_str:
         return ""
     try:
         return datetime.fromisoformat(dt_str.replace("Z", "+00:00")).astimezone(CST).strftime("%H:%M")
     except:
-        return str(dt_str)[11:16]
+        return "—"
 
 def to_cst_date(dt_str):
     if not dt_str:
@@ -485,7 +498,7 @@ def to_cst_date(dt_str):
     try:
         return datetime.fromisoformat(dt_str.replace("Z", "+00:00")).astimezone(CST).strftime("%Y-%m-%d")
     except:
-        return str(dt_str)[:10]
+        return "—"
 
 def to_cst_datetime(dt_str):
     if not dt_str:
@@ -747,21 +760,25 @@ def judge_consistency(model_pick, market_signal):
             return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐和局，但市场看淡和局"}
     return {"tag": "中性", "emoji": "➖", "note": ""}
 
+# ★ 改动10：补齐和局与胜负、和局与大小球的情形
 def judge_direction_agreement(orig_pick, adj_pick):
     if not orig_pick or not adj_pick:
         return "—"
     if orig_pick == adj_pick:
         return "✅ 同向"
-    if orig_pick in ("主胜", "客胜") and adj_pick in ("主胜", "客胜"):
+    result_picks = ("主胜", "和局", "客胜")
+    ou_picks = ("大球(2.5+)", "小球(2.5-)")
+    if orig_pick in result_picks and adj_pick in result_picks:
         return "⚠️ 反向"
-    if orig_pick in ("主胜", "客胜") and adj_pick in ("大球(2.5+)", "小球(2.5-)"):
-        return "⚠️ 换维度"
-    if orig_pick in ("大球(2.5+)", "小球(2.5-)") and adj_pick in ("主胜", "客胜", "和局"):
-        return "⚠️ 换维度"
-    if orig_pick in ("大球(2.5+)", "小球(2.5-)") and adj_pick in ("大球(2.5+)", "小球(2.5-)"):
+    if orig_pick in ou_picks and adj_pick in ou_picks:
         return "⚠️ 反向"
+    if orig_pick in result_picks and adj_pick in ou_picks:
+        return "⚠️ 换维度"
+    if orig_pick in ou_picks and adj_pick in result_picks:
+        return "⚠️ 换维度"
     return "—"
 
+# ★ 改动8：offset 上限提升到 20000
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_all_predictions():
     all_results = []
@@ -784,12 +801,13 @@ def fetch_all_predictions():
         all_results.extend(results)
         if data.get("next"):
             offset += limit
-            if offset > 2000:
+            if offset > 20000:
                 break
         else:
             break
     return all_results, None
 
+# ★ 改动2：rho 按联赛分层（和 Tab 2 一致）
 def parse_prediction(p):
     ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
     mk = p.get("markets", {}) if isinstance(p.get("markets"), dict) else {}
@@ -804,7 +822,17 @@ def parse_prediction(p):
     ou = mk.get("over_under", {})
     xg_h = eg.get("home")
     xg_a = eg.get("away")
-    pred = predict_full_dc(xg_h, xg_a, rho=-0.05)
+
+    league_name_cn = league_cn(ev.get("league_name", ""))
+    league_name_en_raw = ev.get("league_name", "")
+    _tier = get_match_tier(league_name_cn, league_name_en_raw)
+    _trust = get_league_trust_level(league_name_cn)
+    if _tier == "friendly":
+        _rho = DIXON_COLES_RHO.get("friendly", -0.08)
+    else:
+        _rho = DIXON_COLES_RHO.get(_trust, -0.05)
+
+    pred = predict_full_dc(xg_h, xg_a, rho=_rho)
     prob_home = mr.get("prob_home") or 0
     prob_draw = mr.get("prob_draw") or 0
     prob_away = mr.get("prob_away") or 0
@@ -872,7 +900,7 @@ def parse_prediction(p):
     return {
         "event_id": ev.get("id"),
         "event_date": event_date, "kickoff_dt": kickoff_dt, "时间": time_str,
-        "联赛": league_cn(ev.get("league_name", "")),
+        "联赛": league_name_cn,
         "状态": status_map.get(ev.get("status", ""), ""),
         "主队": team_cn(home_name), "客队": team_cn(away_name),
         "_home_key": canon(home_name), "_away_key": canon(away_name),
@@ -893,11 +921,14 @@ def parse_prediction(p):
         "_xg_h": xg_h, "_xg_a": xg_a,
         "_over_label": over_label,
         "_result_label": result_map.get(mr.get("predicted", ""), "—"),
+        "_trust": _trust, "_tier": _tier, "_rho": _rho,
     }
 
+# ★ 改动7：返回 (actual, errors)，不再静默吞异常
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_actual_results(date_str):
     actual = {}
+    errors = []
     try:
         r = requests.get(f"{BSD_BASE}/events/", headers=BSD_HEADERS,
                          params={"date_from": date_str, "date_to": date_str, "limit": 200}, timeout=25)
@@ -927,8 +958,12 @@ def fetch_actual_results(date_str):
                     actual[eid] = {"home": int(home_score), "away": int(away_score)}
                 except:
                     continue
-    except:
-        pass
+        elif r.status_code == 401:
+            errors.append("events 接口 401：Bzzoiro Token 无效")
+        else:
+            errors.append(f"events 接口返回 {r.status_code}")
+    except Exception as e:
+        errors.append(f"events 请求异常：{e}")
     if not actual:
         try:
             r = requests.get(f"{BSD_BASE}/predictions/", headers=BSD_HEADERS,
@@ -949,11 +984,12 @@ def fetch_actual_results(date_str):
                         actual[eid] = {"home": int(home_score), "away": int(away_score)}
                     except:
                         continue
-        except:
-            pass
-    return actual
+            else:
+                errors.append(f"predictions 兜底接口返回 {r.status_code}")
+        except Exception as e:
+            errors.append(f"predictions 兜底请求异常：{e}")
+    return actual, errors
 
-# ★ 改动1：修复大小球判断
 def judge_prediction_hit(pred_label, actual_result):
     h = actual_result["home"]
     a = actual_result["away"]
@@ -1004,6 +1040,7 @@ def judge_score_hit(pred_score_str, actual_result):
         return "⚠️"
     return "❌"
 
+# ★ 改动9：ESPN 拉取并发化
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_espn_all(date_str):
     try:
@@ -1015,25 +1052,33 @@ def fetch_espn_all(date_str):
         target_date.strftime("%Y%m%d"),
         (target_date + timedelta(days=1)).strftime("%Y%m%d"),
     ]
+    tasks = [(dp, code, cn_name) for dp in dates_to_fetch for code, cn_name in ESPN_LEAGUES.items()]
+
+    def _fetch_one(task):
+        date_param, code, cn_name = task
+        try:
+            r = requests.get(f"{ESPN_BASE}/{code}/scoreboard",
+                             params={"dates": date_param}, timeout=15)
+            if r.status_code != 200:
+                return []
+            return [(e, cn_name) for e in r.json().get("events", [])]
+        except Exception:
+            return []
+
     all_events = []
     seen_ids = set()
-    for date_param in dates_to_fetch:
-        for code, cn_name in ESPN_LEAGUES.items():
-            try:
-                r = requests.get(f"{ESPN_BASE}/{code}/scoreboard", params={"dates": date_param}, timeout=15)
-                if r.status_code != 200:
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = [ex.submit(_fetch_one, t) for t in tasks]
+        for f in as_completed(futures):
+            for e, cn_name in f.result():
+                eid = e.get("id")
+                if eid in seen_ids:
                     continue
-                for e in r.json().get("events", []):
-                    eid = e.get("id")
-                    if eid in seen_ids:
-                        continue
-                    seen_ids.add(eid)
-                    if to_cst_date(e.get("date", "")) != date_str:
-                        continue
-                    e["_league_cn"] = cn_name
-                    all_events.append(e)
-            except:
-                continue
+                seen_ids.add(eid)
+                if to_cst_date(e.get("date", "")) != date_str:
+                    continue
+                e["_league_cn"] = cn_name
+                all_events.append(e)
     return all_events
 
 def parse_espn_event(e):
@@ -1078,8 +1123,13 @@ def build_excel(bet_rows, stable_rows, info_rows, review_rows=None, meta_rows=No
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v3.1（换维度过滤）")
+st.title("⚽ 足球预测 v3.2（工程加固）")
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘"])
+
+if not BSD_TOKEN:
+    st.error("⚠️ 未检测到 BSD_TOKEN，请在 `.streamlit/secrets.toml` 中配置。")
+if not API_FOOTBALL_KEY:
+    st.warning("⚠️ 未检测到 API_FOOTBALL_KEY，战意修正将不可用。")
 
 with st.spinner("正在获取 Bzzoiro 预测数据..."):
     all_preds, err = fetch_all_predictions()
@@ -1099,7 +1149,7 @@ with tab1:
         st.warning("没有获取到预测数据。")
     else:
         date_counts = df_all.groupby("event_date").size().to_dict()
-        available_dates = sorted(date_counts.keys())
+        available_dates = sorted([d for d in date_counts.keys() if d and d != "—"])
         date_options = [f"{d}（{date_counts[d]}场）" for d in available_dates]
         today_str = datetime.now(CST).strftime("%Y-%m-%d")
         if today_str in available_dates:
@@ -1179,14 +1229,14 @@ with tab2:
             st.warning("没有数据可分析。")
         else:
             tmp = df_all[df_all["kickoff_dt"].notna()].copy()
+            # ★ 改动3：剔除「进行中」，只保留未开赛
             mask_notstarted = (tmp["状态"] == "未开始") & \
                               (tmp["kickoff_dt"] >= now) & \
                               (tmp["kickoff_dt"] <= end_window)
-            mask_live = tmp["状态"] == "进行中"
-            window_matches = tmp[mask_notstarted | mask_live].copy()
+            window_matches = tmp[mask_notstarted].copy()
 
             if window_matches.empty:
-                st.warning(f"⏰ 当前 2 小时内没有未开赛比赛，也没有进行中的比赛。")
+                st.warning(f"⏰ 当前 2 小时内没有未开赛比赛。")
             else:
                 def calc_conf(row):
                     return max(
@@ -1401,7 +1451,6 @@ with tab2:
                             "_xg_h": xg_h, "_xg_a": xg_a,
                         })
 
-                    # 情报面板
                     info_rows = []
                     if enable_lineup_info or enable_market_info or enable_motivation or enable_handicap:
                         st.subheader("🔍 半自动情报面板")
@@ -1533,19 +1582,16 @@ with tab2:
 
                         st.divider()
 
-                    # 比分串
                     st.subheader("🎲 比分串（3串1，基于调整后推荐）")
                     best_idx = None
                     best_ratio = 0
+                    # ★ 改动4：备选概率为 0 直接跳过，不给虚假优先级
                     for i, md in enumerate(matches_data):
                         mp = md["adj_main_prob"]
                         ap = md["adj_alt_prob"]
-                        if mp < 0.08:
+                        if mp < 0.08 or ap <= 0:
                             continue
-                        if ap == 0:
-                            ratio = 999
-                        else:
-                            ratio = mp / ap if ap > 0 else 999
+                        ratio = mp / ap
                         if ratio >= 1.3 and ratio > best_ratio:
                             best_ratio = ratio
                             best_idx = i
@@ -1598,7 +1644,6 @@ with tab2:
 
                     st.divider()
 
-                    # ★ 改动2：稳健串排除「换维度」比赛
                     st.subheader("🛡️ 稳健串（只选方向一致的比赛）")
 
                     eligible = [md for md in matches_data if "同向" in md.get("direction_agreement", "")]
@@ -1609,6 +1654,8 @@ with tab2:
                         for ex in excluded:
                             st.write(f"- {ex['比赛']}：{ex['direction_agreement']}")
 
+                    stable_rows = []
+                    stable_rows_b = []
                     if len(eligible) < 3:
                         st.warning(f"⚠️ 只有 **{len(eligible)}** 场「方向一致」比赛，不足 3 场，**稳健串不建议下注**。")
                         st.caption("建议：等更多比赛，或改看比分串。")
@@ -1635,7 +1682,6 @@ with tab2:
                                 total_odds *= opt[2]
                         st.write(f"**命中概率：{prob*100:.1f}%** ｜ **总赔率：{total_odds:.2f}**")
 
-                        stable_rows = []
                         for i, (md, opt) in enumerate(combo, 1):
                             pick_name, pick_prob, pick_odds, is_real, movement = opt
                             stable_rows.append({
@@ -1647,7 +1693,6 @@ with tab2:
                             })
                         st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
 
-                    # 备选串（每场取调整后第二高概率）
                     st.markdown("**备选串（调整后第二高概率）：**")
                     combo_b = []
                     for md in matches_data:
@@ -1664,7 +1709,6 @@ with tab2:
                         if opt[2]:
                             total_odds_b *= opt[2]
                     st.write(f"**命中概率：{prob_b*100:.1f}%** ｜ **总赔率：{total_odds_b:.2f}**")
-                    stable_rows_b = []
                     for i, (md, opt) in enumerate(combo_b, 1):
                         pick_name, pick_prob, pick_odds, is_real, movement = opt
                         stable_rows_b.append({
@@ -1785,13 +1829,11 @@ with tab3:
                 "主胜": r["主胜"], "和局": r["和局"], "客胜": r["客胜"],
                 "大小球": r["大小球"], "来源": "Bzzoiro",
             })
-    espn_only = 0
     for row in espn_rows:
         key1 = (row["_home_key"], row["_away_key"])
         key2 = (row["_away_key"], row["_home_key"])
         if key1 in bsd_keys or key2 in bsd_keys:
             continue
-        espn_only += 1
         merged.append({
             "时间": row["时间"], "联赛": row["联赛"], "状态": row["状态"],
             "主队": row["主队"], "客队": row["客队"], "实际比分": row["实际比分"],
@@ -1844,7 +1886,7 @@ with tab4:
 # ========== Tab 5：赛后复盘 ==========
 with tab5:
     st.subheader("📊 赛后复盘（上传 Excel）")
-    st.caption("上传早上下载的 Excel，系统自动读回预测，拉取实际比分，算出命中率。")
+    st.caption("上传早上下载的 Excel，系统自动读回预测，拉取实际比分，算出命中率和 ROI。")
 
     uploaded_file = st.file_uploader(
         "选择早上下载的 Excel 文件（推荐_YYYYMMDD_HHMM.xlsx）",
@@ -1943,7 +1985,13 @@ with tab5:
 
             if st.button("🔍 开始复盘", type="primary", key="btn_review_upload"):
                 with st.spinner("正在拉取实际比分..."):
-                    actual_results = fetch_actual_results(date_str)
+                    # ★ 改动7：拿到错误列表
+                    actual_results, fetch_errors = fetch_actual_results(date_str)
+
+                if fetch_errors:
+                    with st.expander("⚠️ 数据拉取提示（点击展开）"):
+                        for e in fetch_errors:
+                            st.write(f"- {e}")
 
                 if not actual_results:
                     st.warning(f"Bzzoiro 暂时没有 {date_str} 的比赛结果数据（可能比赛未结束）。")
@@ -1964,6 +2012,11 @@ with tab5:
                             actual = actual_results.get(eid)
                             rec_dir = str(m.get("推荐方向", ""))
                             adj_dir = str(m.get("调整后方向", "—"))
+                            odds_str = str(m.get("赔率", "—"))
+                            try:
+                                odds_val = float(odds_str) if odds_str not in ("—", "nan", "") else None
+                            except:
+                                odds_val = None
                             if not actual:
                                 review_rows.append({
                                     "比赛": m["比赛"], "联赛": m["联赛"],
@@ -1971,9 +2024,11 @@ with tab5:
                                     "调整后方向": adj_dir, "调整后概率": m.get("调整后概率", "—"),
                                     "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                     "调整后比分": f"{m.get('调整后比分1', '—')} / {m.get('调整后比分2', '—')}",
+                                    "赔率": odds_str,
                                     "实际比分": "未结束/无数据",
                                     "原推荐命中": "—", "调整后命中": "—",
                                     "比分1命中": "—", "比分2命中": "—", "方向对但比分错": "—",
+                                    "_odds_val": odds_val,
                                 })
                                 continue
                             actual_str = f"{actual['home']}-{actual['away']}"
@@ -1983,10 +2038,7 @@ with tab5:
                                 adj_win_str = "✅" if adj_win_hit else "❌"
                             else:
                                 adj_win_str = "—"
-                            if rec_dir in ("主胜", "和局", "客胜"):
-                                win_str = "✅" if win_hit else "❌"
-                            else:
-                                win_str = "✅" if win_hit else "❌"
+                            win_str = "✅" if win_hit else "❌"
                             score1_hit = judge_score_hit(m.get("比分1", "—"), actual)
                             score2_hit = judge_score_hit(m.get("比分2", "—"), actual)
                             direction_but_wrong = "—"
@@ -1998,14 +2050,17 @@ with tab5:
                                 "调整后方向": adj_dir, "调整后概率": m.get("调整后概率", "—"),
                                 "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                 "调整后比分": f"{m.get('调整后比分1', '—')} / {m.get('调整后比分2', '—')}",
+                                "赔率": odds_str,
                                 "实际比分": actual_str,
                                 "原推荐命中": win_str, "调整后命中": adj_win_str,
                                 "比分1命中": score1_hit, "比分2命中": score2_hit,
                                 "方向对但比分错": direction_but_wrong,
+                                "_odds_val": odds_val,
                             })
                         if review_rows:
                             rec_review_df = pd.DataFrame(review_rows)
-                            st.dataframe(rec_review_df, use_container_width=True, hide_index=True)
+                            display_rec = rec_review_df.drop(columns=["_odds_val"], errors="ignore")
+                            st.dataframe(display_rec, use_container_width=True, hide_index=True)
                             total = len([r for r in review_rows if r["实际比分"] != "未结束/无数据"])
                             if total > 0:
                                 wg = [r for r in review_rows if r["原推荐命中"] in ("✅", "❌")]
@@ -2014,13 +2069,26 @@ with tab5:
                                 ag = [r for r in review_rows if r["调整后命中"] in ("✅", "❌")]
                                 ah = len([r for r in ag if r["调整后命中"] == "✅"])
                                 ar = ah / len(ag) if ag else 0
-                                c1, c2, c3 = st.columns(3)
+                                # ★ 改动12：ROI（基于原推荐赔率）
+                                roi_pool = [r for r in wg if r.get("_odds_val")]
+                                if roi_pool:
+                                    profit = sum((r["_odds_val"] - 1) if r["原推荐命中"] == "✅" else -1.0
+                                                 for r in roi_pool)
+                                    roi = profit / len(roi_pool) * 100
+                                    roi_str = f"{roi:+.1f}%"
+                                    roi_delta = f"{len(roi_pool)} 场有效赔率"
+                                else:
+                                    roi_str = "—"
+                                    roi_delta = "无有效赔率"
+                                c1, c2, c3, c4 = st.columns(4)
                                 with c1:
                                     st.metric("推荐已完赛", f"{total} 场")
                                 with c2:
                                     st.metric("原推荐命中", f"{wr*100:.1f}%", f"{wh}/{len(wg)}" if wg else "无")
                                 with c3:
                                     st.metric("调整后命中", f"{ar*100:.1f}%", f"{ah}/{len(ag)}" if ag else "无")
+                                with c4:
+                                    st.metric("原推荐 ROI", roi_str, roi_delta)
 
                     if review_scope in ("复盘当天全部预测", "两者都复盘") and all_today_df is not None and len(all_today_df) > 0:
                         st.markdown("### 📋 当天全部预测复盘")
@@ -2103,7 +2171,8 @@ with tab5:
                     dl_buffer = io.BytesIO()
                     with pd.ExcelWriter(dl_buffer, engine='openpyxl') as w:
                         if review_scope in ("只复盘推荐比赛", "两者都复盘") and review_rows:
-                            pd.DataFrame(review_rows).to_excel(w, sheet_name="推荐复盘", index=False)
+                            rec_out = pd.DataFrame(review_rows).drop(columns=["_odds_val"], errors="ignore")
+                            rec_out.to_excel(w, sheet_name="推荐复盘", index=False)
                         if review_scope in ("复盘当天全部预测", "两者都复盘") and all_rows:
                             pd.DataFrame(all_rows).to_excel(w, sheet_name="全部预测复盘", index=False)
                     st.download_button(
