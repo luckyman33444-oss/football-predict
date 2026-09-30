@@ -2277,84 +2277,65 @@ with st.expander("🔬 调试：查看/下载比赛原始数据"):
 st.caption("⚠️ 预测来自 Bzzoiro；赛后复盘需手动上传 Excel。数据永远在你手中。")
 
 
-# ========== 临时测试：API-Football 数据覆盖率 ==========
+# ========== 临时测试 v2：直接测主流联赛 ==========
 st.divider()
-st.subheader("🧪 API-Football 数据覆盖率测试")
+st.subheader("🧪 API-Football 对照测试")
 
-with st.expander("点这里展开测试面板", expanded=True):
-    test_date = st.date_input("选测试日期", value=date.today(), key="test_date")
-    test_limit = st.slider("测试前 N 场", 3, 15, 8, key="test_limit")
-
-    if st.button("开始测试", key="btn_test_af", type="primary"):
-        test_str = test_date.strftime("%Y-%m-%d")
+with st.expander("点这里展开", expanded=True):
+    if st.button("开始测试（3 个联赛）", key="btn_test_af2", type="primary"):
         headers = {"x-apisports-key": API_FOOTBALL_KEY}
 
-        with st.spinner(f"正在拉 {test_str} 的赛程和球队统计..."):
-            r = requests.get(
-                f"{API_FOOTBALL_BASE}/fixtures",
-                headers=headers,
-                params={"date": test_str, "timezone": "Asia/Shanghai"},
-                timeout=15,
-            )
-            if r.status_code != 200:
-                st.error(f"fixtures 接口错误 {r.status_code}")
-            else:
-                fixtures = r.json().get("response", [])
-                st.info(f"当天共 {len(fixtures)} 场比赛，测试前 {test_limit} 场")
+        # 测试用例：3 个主流联赛 + 已知球队
+        test_cases = [
+            {"name": "英超", "league_id": 39,  "season": 2024, "team_id": 42,  "team": "Arsenal"},
+            {"name": "西甲", "league_id": 140, "season": 2024, "team_id": 529, "team": "Barcelona"},
+            {"name": "美职联", "league_id": 253, "season": 2024, "team_id": 1607, "team": "Inter Miami"},
+        ]
 
-                results = []
-                progress = st.progress(0)
+        rows = []
+        for tc in test_cases:
+            try:
+                r = requests.get(
+                    f"{API_FOOTBALL_BASE}/teams/statistics",
+                    headers=headers,
+                    params={"league": tc["league_id"], "season": tc["season"], "team": tc["team_id"]},
+                    timeout=15,
+                )
+                status = r.status_code
+                resp = r.json().get("response") if status == 200 else None
 
-                def get_team_stat(tid, lid, season):
+                if resp:
                     try:
-                        rr = requests.get(
-                            f"{API_FOOTBALL_BASE}/teams/statistics",
-                            headers=headers,
-                            params={"league": lid, "season": season, "team": tid},
-                            timeout=15,
-                        )
-                        if rr.status_code != 200:
-                            return None
-                        resp = rr.json().get("response")
-                        return resp if resp else None
-                    except Exception:
-                        return None
-
-                def extract(stat, side):
-                    if not stat:
-                        return None, None
-                    try:
-                        gf = stat["goals"]["for"]["average"][side]
-                        ga = stat["goals"]["against"]["average"][side]
-                        return gf, ga
-                    except Exception:
-                        return None, None
-
-                for i, fx in enumerate(fixtures[:test_limit]):
-                    league = fx["league"]
-                    teams = fx["teams"]
-                    home_id, away_id = teams["home"]["id"], teams["away"]["id"]
-                    lid, season = league["id"], league["season"]
-
-                    hs = get_team_stat(home_id, lid, season)
-                    as_ = get_team_stat(away_id, lid, season)
-
-                    h_gf, h_ga = extract(hs, "home")
-                    a_gf, a_ga = extract(as_, "away")
-
-                    results.append({
-                        "联赛": f"{league.get('country', '?')} - {league.get('name', '?')}",
-                        "主队": teams["home"]["name"],
-                        "客队": teams["away"]["name"],
-                        "主队数据": "✅" if hs else "❌",
-                        "客队数据": "✅" if as_ else "❌",
-                        "主队主场进/失": f"{h_gf}/{h_ga}" if h_gf is not None else "—",
-                        "客队客场进/失": f"{a_gf}/{a_ga}" if a_gf is not None else "—",
-                        "能预测": "✅" if (h_gf is not None and a_gf is not None) else "❌",
+                        gf_h = resp["goals"]["for"]["average"]["home"]
+                        ga_h = resp["goals"]["against"]["average"]["home"]
+                        rows.append({
+                            "联赛": tc["name"],
+                            "球队": tc["team"],
+                            "HTTP": status,
+                            "主场场均进": gf_h,
+                            "主场场均失": ga_h,
+                            "结果": "✅ 有数据",
+                        })
+                    except Exception as e:
+                        rows.append({
+                            "联赛": tc["name"], "球队": tc["team"],
+                            "HTTP": status, "主场场均进": "—", "主场场均失": "—",
+                            "结果": f"⚠️ 结构异常",
+                        })
+                else:
+                    rows.append({
+                        "联赛": tc["name"], "球队": tc["team"],
+                        "HTTP": status, "主场场均进": "—", "主场场均失": "—",
+                        "结果": f"❌ 无数据",
                     })
-                    progress.progress((i + 1) / min(len(fixtures), test_limit))
+            except Exception as e:
+                rows.append({
+                    "联赛": tc["name"], "球队": tc["team"],
+                    "HTTP": "ERR", "主场场均进": "—", "主场场均失": "—",
+                    "结果": f"❌ {e}",
+                })
 
-                st.dataframe(pd.DataFrame(results), use_container_width=True, hide_index=True)
-                ok = len([r for r in results if r["能预测"] == "✅"])
-                st.success(f"{ok}/{len(results)} 场能拿到数据 → 可预测")
-                st.caption(f"本次消耗约 {1 + 2 * len(results)} 次请求（免费额度 100/天）")
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        ok = len([r for r in rows if "✅" in r["结果"]])
+        st.success(f"{ok}/{len(rows)} 个主流联赛有数据")
+        st.caption("只消耗 3 次请求")
