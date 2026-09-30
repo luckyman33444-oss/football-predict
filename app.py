@@ -6,7 +6,6 @@ import io
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 CST = timezone(timedelta(hours=8))
 
-# ============ 权重系数 ============
 INJURY_WEIGHT_PER_PLAYER = 0.05
 INJURY_WEIGHT_MIN = 0.70
 H2H_WEIGHT_LOW = 0.80
@@ -15,15 +14,27 @@ API_FOOTBALL_KEY = "d00cc95c3d639618d9313dc86f883685"
 API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
 
 DIXON_COLES_RHO = {
-    "top": -0.05, "mid": -0.08, "low": -0.10, "friendly": -0.08,
+    "top": -0.05,
+    "mid": -0.08,
+    "low": -0.10,
+    "friendly": -0.08,
 }
 
+# ★ 改动3：友谊赛系数 0.88 → 0.94
 MATCH_TIER_MULTIPLIER = {
-    "friendly": 0.88, "nations_league": 0.95, "qualifier": 0.98,
-    "tournament": 1.00, "cup": 0.96, "league": 1.00,
+    "friendly": 0.94,
+    "nations_league": 0.95,
+    "qualifier": 0.98,
+    "tournament": 1.00,
+    "cup": 0.96,
+    "league": 1.00,
 }
 
-BLEND_WEIGHT_MODEL = {"top": 0.40, "mid": 0.55, "low": 0.70}
+BLEND_WEIGHT_MODEL = {
+    "top": 0.40,
+    "mid": 0.55,
+    "low": 0.70,
+}
 
 FOOTBALL_API_LEAGUE_IDS = {
     "eng.1": 39, "esp.1": 140, "ger.1": 78, "ita.1": 135, "fra.1": 61,
@@ -942,9 +953,21 @@ def fetch_actual_results(date_str):
             pass
     return actual
 
+# ★ 改动1：修复大小球判断
 def judge_prediction_hit(pred_label, actual_result):
     h = actual_result["home"]
     a = actual_result["away"]
+    total = h + a
+
+    if "大球" in pred_label:
+        hit = total >= 3
+        actual = "大球" if hit else "小球"
+        return hit, actual
+    if "小球" in pred_label:
+        hit = total <= 2
+        actual = "小球" if hit else "大球"
+        return hit, actual
+
     if h > a:
         actual = "主胜"
     elif h == a:
@@ -1055,7 +1078,7 @@ def build_excel(bet_rows, stable_rows, info_rows, review_rows=None, meta_rows=No
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v3（DC修正+赛事分层+盘口融合）")
+st.title("⚽ 足球预测 v3.1（换维度过滤）")
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘"])
 
 with st.spinner("正在获取 Bzzoiro 预测数据..."):
@@ -1317,9 +1340,7 @@ with tab2:
                             adj_pred["d"] = bd
                             adj_pred["aw"] = ba
                             if market_implied:
-                                blend_info = (
-                                    f"模型×{BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f} + 市场×{1-BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f}"
-                                )
+                                blend_info = f"模型×{BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f} + 市场×{1-BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f}"
 
                         if adj_pred:
                             adj_best_opts = [
@@ -1331,14 +1352,12 @@ with tab2:
                             ]
                             adj_best_opts.sort(key=lambda x: -x[1])
                             adj_best = adj_best_opts[0]
-                            # ★ 用调整后的大小球方向重新选比分
                             if adj_pred["over25"] >= 0.5:
                                 adj_scores = adj_pred["over_scores"]
                             else:
                                 adj_scores = adj_pred["under_scores"]
                             adj_main_score = f"{adj_scores[0][0]}-{adj_scores[0][1]}" if adj_scores else "—"
                             adj_alt_score = f"{adj_scores[1][0]}-{adj_scores[1][1]}" if len(adj_scores) > 1 else "—"
-                            # ★ 调整后比分1的概率（用于主胆判断）
                             adj_main_prob = adj_scores[0][2] if adj_scores else 0
                             adj_alt_prob = adj_scores[1][2] if len(adj_scores) > 1 else 0
                         else:
@@ -1358,6 +1377,8 @@ with tab2:
                         if blend_info:
                             full_reason += " ｜ 盘口融合: " + blend_info
 
+                        direction_agreement = judge_direction_agreement(opts[0][0], adj_best[0])
+
                         matches_data.append({
                             "event_id": eid,
                             "比赛": f"{row['主队']} vs {row['客队']}",
@@ -1376,10 +1397,11 @@ with tab2:
                             "adj_alt_score": adj_alt_score,
                             "adj_main_prob": adj_main_prob,
                             "adj_alt_prob": adj_alt_prob,
+                            "direction_agreement": direction_agreement,
                             "_xg_h": xg_h, "_xg_a": xg_a,
                         })
 
-                    # ===== 情报面板 =====
+                    # 情报面板
                     info_rows = []
                     if enable_lineup_info or enable_market_info or enable_motivation or enable_handicap:
                         st.subheader("🔍 半自动情报面板")
@@ -1433,7 +1455,6 @@ with tab2:
                             pick_name, pick_prob, _, is_real, movement = best_opt
                             consistency = judge_consistency(pick_name, movement)
                             adj_name, adj_prob = md["adj_best"]
-                            direction_agreement = judge_direction_agreement(pick_name, adj_name)
                             row_data = {
                                 "场次": i, "比赛": md["比赛"],
                                 "原推荐": f"{pick_name} ({pick_prob*100:.1f}%)",
@@ -1455,7 +1476,7 @@ with tab2:
                             row_data["调整后推荐"] = f"{adj_name} ({adj_prob*100:.1f}%)"
                             row_data["调整后比分"] = f"{md['adj_main_score']} / {md['adj_alt_score']}"
                             row_data["变化"] = diff_str
-                            row_data["方向一致"] = direction_agreement
+                            row_data["方向一致"] = md["direction_agreement"]
                             row_data["调整原因"] = md["adjust_reason"]
                             row_data["说明"] = consistency["note"]
                             info_rows.append(row_data)
@@ -1506,13 +1527,13 @@ with tab2:
 
                         direction_mismatch = [r for r in info_rows if "方向一致" in r and "⚠️" in r.get("方向一致", "")]
                         if direction_mismatch:
-                            st.warning(f"⚠️ 发现 **{len(direction_mismatch)}** 场原推荐与调整后方向不一致（模型自己都不确定）：")
+                            st.warning(f"⚠️ 发现 **{len(direction_mismatch)}** 场原推荐与调整后方向不一致：")
                             for d in direction_mismatch:
                                 st.write(f"- **{d['比赛']}**：原推荐 {d['原推荐']}，调整后 {d['调整后推荐']}")
 
                         st.divider()
 
-                    # ===== 比分串（用调整后比分）=====
+                    # 比分串
                     st.subheader("🎲 比分串（3串1，基于调整后推荐）")
                     best_idx = None
                     best_ratio = 0
@@ -1577,56 +1598,59 @@ with tab2:
 
                     st.divider()
 
-                    # ===== 稳健串（用调整后推荐）=====
-                    st.subheader("🛡️ 稳健串（基于调整后推荐）")
-                    # 每场用调整后的最高概率选项
-                    combo = []
-                    for md in matches_data:
-                        adj_name, adj_prob = md["adj_best"]
-                        # 找调整后选项对应的真实赔率
-                        pick_odds = None
-                        is_real = False
-                        for opt in md["opts"]:
-                            if opt[0] == adj_name:
-                                pick_odds = opt[2]
-                                is_real = opt[3]
-                                break
-                        if pick_odds is None:
-                            pick_odds = implied_odds(adj_prob * 100)
-                        combo.append((md, (adj_name, adj_prob, pick_odds, is_real, "")))
+                    # ★ 改动2：稳健串排除「换维度」比赛
+                    st.subheader("🛡️ 稳健串（只选方向一致的比赛）")
 
-                    prob = 1
-                    total_odds = 1
-                    for _, opt in combo:
-                        prob *= opt[1]
-                        if opt[2]:
-                            total_odds *= opt[2]
-                    st.write(f"**命中概率：{prob*100:.1f}%** ｜ **总赔率：{total_odds:.2f}**")
+                    eligible = [md for md in matches_data if "同向" in md.get("direction_agreement", "")]
+                    excluded = [md for md in matches_data if "同向" not in md.get("direction_agreement", "")]
 
-                    stable_rows = []
-                    for i, (md, opt) in enumerate(combo, 1):
-                        pick_name, pick_prob, pick_odds, is_real, movement = opt
-                        stable_rows.append({
-                            "场次": i, "比赛": md["比赛"], "推荐": pick_name,
-                            "概率": f"{pick_prob*100:.1f}%",
-                            "赔率": fmt_odds(pick_odds),
-                            "赔率来源": "真实" if is_real else "隐含",
-                            "盘口走势": movement if movement else "—",
-                            "一致性": "—",
-                        })
-                    st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
+                    if excluded:
+                        st.caption(f"已排除 **{len(excluded)}** 场「换维度」比赛（模型自己都不确定）：")
+                        for ex in excluded:
+                            st.write(f"- {ex['比赛']}：{ex['direction_agreement']}")
+
+                    if len(eligible) < 3:
+                        st.warning(f"⚠️ 只有 **{len(eligible)}** 场「方向一致」比赛，不足 3 场，**稳健串不建议下注**。")
+                        st.caption("建议：等更多比赛，或改看比分串。")
+                    else:
+                        combo = []
+                        for md in eligible:
+                            adj_name, adj_prob = md["adj_best"]
+                            pick_odds = None
+                            is_real = False
+                            for opt in md["opts"]:
+                                if opt[0] == adj_name:
+                                    pick_odds = opt[2]
+                                    is_real = opt[3]
+                                    break
+                            if pick_odds is None:
+                                pick_odds = implied_odds(adj_prob * 100)
+                            combo.append((md, (adj_name, adj_prob, pick_odds, is_real, "")))
+
+                        prob = 1
+                        total_odds = 1
+                        for _, opt in combo:
+                            prob *= opt[1]
+                            if opt[2]:
+                                total_odds *= opt[2]
+                        st.write(f"**命中概率：{prob*100:.1f}%** ｜ **总赔率：{total_odds:.2f}**")
+
+                        stable_rows = []
+                        for i, (md, opt) in enumerate(combo, 1):
+                            pick_name, pick_prob, pick_odds, is_real, movement = opt
+                            stable_rows.append({
+                                "场次": i, "比赛": md["比赛"], "推荐": pick_name,
+                                "概率": f"{pick_prob*100:.1f}%",
+                                "赔率": fmt_odds(pick_odds),
+                                "赔率来源": "真实" if is_real else "隐含",
+                                "方向一致": md["direction_agreement"],
+                            })
+                        st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
 
                     # 备选串（每场取调整后第二高概率）
-                    st.markdown("**备选串（每场取调整后第二高概率）：**")
+                    st.markdown("**备选串（调整后第二高概率）：**")
                     combo_b = []
                     for md in matches_data:
-                        # 重新计算调整后所有选项排序
-                        adj_pred_opt = None
-                        for opt in md["opts"]:
-                            if opt[0] == md["adj_best"][0]:
-                                adj_pred_opt = opt
-                                break
-                        # 取原选项里第二高的
                         if len(md["opts"]) >= 2:
                             second_opt = md["opts"][1]
                             combo_b.append((md, second_opt))
@@ -1648,8 +1672,7 @@ with tab2:
                             "概率": f"{pick_prob*100:.1f}%",
                             "赔率": fmt_odds(pick_odds),
                             "赔率来源": "真实" if is_real else "隐含",
-                            "盘口走势": movement if movement else "—",
-                            "一致性": "—",
+                            "方向一致": md["direction_agreement"],
                         })
                     st.dataframe(pd.DataFrame(stable_rows_b), use_container_width=True, hide_index=True)
 
@@ -1677,6 +1700,7 @@ with tab2:
                             "比分1": md["main_score"][0],
                             "比分2": md["alt_score"][0],
                             "盘口走势": best_opt[4] if best_opt[4] else "—",
+                            "方向一致": md["direction_agreement"],
                             "角色": "主胆" if best_idx == (i-1) else "拖",
                         })
 
@@ -1727,8 +1751,8 @@ with tab2:
                     )
 
                     st.divider()
-                    st.subheader("💾 一键下载（含推荐 3 场 + 当天全部预测）")
-                    st.caption(f"本次推荐 {len(rec_rows)} 场，当天全部预测 {len(all_today_rows)} 场")
+                    st.subheader("💾 一键下载")
+                    st.caption(f"推荐 {len(rec_rows)} 场，当天全部预测 {len(all_today_rows)} 场")
 
                     st.download_button(
                         "📥 下载本次推荐 Excel",
@@ -1738,8 +1762,6 @@ with tab2:
                         key="dl_all_excel",
                         type="primary",
                     )
-
-                    st.info("💡 文件请保存好。Tab 5 复盘时，上传这个 Excel 就能自动比对。")
 
 # ========== Tab 3 ==========
 with tab3:
@@ -1872,7 +1894,7 @@ with tab5:
                     rec_df = full_meta[rec_mask].copy()
                     st.markdown(f"### 🎯 推荐比赛 **{len(rec_df)} 场**")
                     if len(rec_df) > 0:
-                        show_cols = [c for c in ["场次", "比赛", "联赛", "时间", "推荐方向", "推荐概率", "调整后方向", "调整后概率", "调整后比分1", "调整后比分2", "赔率", "比分1", "比分2", "角色"] if c in rec_df.columns]
+                        show_cols = [c for c in ["场次", "比赛", "联赛", "时间", "推荐方向", "推荐概率", "调整后方向", "调整后概率", "调整后比分1", "调整后比分2", "赔率", "比分1", "比分2", "角色", "方向一致"] if c in rec_df.columns]
                         st.dataframe(rec_df[show_cols], use_container_width=True, hide_index=True)
 
                 if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
@@ -1951,7 +1973,6 @@ with tab5:
                                     "调整后比分": f"{m.get('调整后比分1', '—')} / {m.get('调整后比分2', '—')}",
                                     "实际比分": "未结束/无数据",
                                     "原推荐命中": "—", "调整后命中": "—",
-                                    "大小球命中": "—",
                                     "比分1命中": "—", "比分2命中": "—", "方向对但比分错": "—",
                                 })
                                 continue
@@ -1962,18 +1983,10 @@ with tab5:
                                 adj_win_str = "✅" if adj_win_hit else "❌"
                             else:
                                 adj_win_str = "—"
-                            if "大球" in rec_dir:
-                                ou_hit, _, _ = judge_over_under_hit("大球", actual)
-                                ou_str = "✅" if ou_hit else "❌"
-                            elif "小球" in rec_dir:
-                                ou_hit, _, _ = judge_over_under_hit("小球", actual)
-                                ou_str = "✅" if ou_hit else "❌"
-                            else:
-                                ou_str = "—"
                             if rec_dir in ("主胜", "和局", "客胜"):
                                 win_str = "✅" if win_hit else "❌"
                             else:
-                                win_str = "—"
+                                win_str = "✅" if win_hit else "❌"
                             score1_hit = judge_score_hit(m.get("比分1", "—"), actual)
                             score2_hit = judge_score_hit(m.get("比分2", "—"), actual)
                             direction_but_wrong = "—"
@@ -1987,7 +2000,6 @@ with tab5:
                                 "调整后比分": f"{m.get('调整后比分1', '—')} / {m.get('调整后比分2', '—')}",
                                 "实际比分": actual_str,
                                 "原推荐命中": win_str, "调整后命中": adj_win_str,
-                                "大小球命中": ou_str,
                                 "比分1命中": score1_hit, "比分2命中": score2_hit,
                                 "方向对但比分错": direction_but_wrong,
                             })
@@ -2002,18 +2014,13 @@ with tab5:
                                 ag = [r for r in review_rows if r["调整后命中"] in ("✅", "❌")]
                                 ah = len([r for r in ag if r["调整后命中"] == "✅"])
                                 ar = ah / len(ag) if ag else 0
-                                og = [r for r in review_rows if r["大小球命中"] in ("✅", "❌")]
-                                oh = len([r for r in og if r["大小球命中"] == "✅"])
-                                orr = oh / len(og) if og else 0
-                                c1, c2, c3, c4 = st.columns(4)
+                                c1, c2, c3 = st.columns(3)
                                 with c1:
                                     st.metric("推荐已完赛", f"{total} 场")
                                 with c2:
                                     st.metric("原推荐命中", f"{wr*100:.1f}%", f"{wh}/{len(wg)}" if wg else "无")
                                 with c3:
                                     st.metric("调整后命中", f"{ar*100:.1f}%", f"{ah}/{len(ag)}" if ag else "无")
-                                with c4:
-                                    st.metric("大小球命中", f"{orr*100:.1f}%", f"{oh}/{len(og)}" if og else "无")
 
                     if review_scope in ("复盘当天全部预测", "两者都复盘") and all_today_df is not None and len(all_today_df) > 0:
                         st.markdown("### 📋 当天全部预测复盘")
