@@ -1132,7 +1132,172 @@ def judge_score_hit(pred_score_str, actual_result):
         return "⚠️"
     return "❌"
 
-@st.cache_data(ttl=300, show_spinner=False)
+# ========== 历史回测专用函数 ==========
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_predictions_range(date_from, date_to):
+    all_results = []
+    offset = 0
+    limit = 100
+    while True:
+        try:
+            r = requests.get(
+                f"{BSD_BASE}/predictions/",
+                headers=BSD_HEADERS,
+                params={"date_from": date_from, "date_to": date_to, "limit": limit, "offset": offset},
+                timeout=25,
+            )
+            if r.status_code == 401:
+                return all_results, "Token 无效"
+            if r.status_code != 200:
+                return all_results, f"HTTP {r.status_code}"
+            data = r.json()
+        except Exception as e:
+            return all_results, str(e)
+        results = data.get("results", [])
+        if not results:
+            break
+        all_results.extend(results)
+        if data.get("next") and offset < 20000:
+            offset += limit
+        else:
+            break
+    return all_results, None
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_events_range(date_from, date_to):
+    actual = {}
+    offset = 0
+    limit = 200
+    while True:
+        try:
+            r = requests.get(
+                f"{BSD_BASE}/events/",
+                headers=BSD_HEADERS,
+                params={"date_from": date_from, "date_to": date_to, "limit": limit, "offset": offset},
+                timeout=25,
+            )
+            if r.status_code != 200:
+                break
+            data = r.json()
+        except Exception:
+            break
+        results = data.get("results", [])
+        if not results:
+            break
+        for ev in results:
+            eid = ev.get("id")
+            if not eid:
+                continue
+            h = ev.get("home_score")
+            a = ev.get("away_score")
+            if h is None and "score" in ev:
+                score = ev.get("score")
+                if isinstance(score, list) and len(score) >= 2:
+                    h, a = score[0], score[1]
+                elif isinstance(score, dict):
+                    ft = score.get("ft")
+                    if isinstance(ft, list) and len(ft) >= 2:
+                        h, a = ft[0], ft[1]
+                    else:
+                        h = score.get("home")
+                        a = score.get("away")
+            if h is None or a is None:
+                continue
+            try:
+                actual[eid] = {"home": int(h), "away": int(a)}
+            except:
+                continue
+        if data.get("next") and offset < 20000:
+            offset += limit
+        else:
+            break
+    return actual
+
+def backtest_one(p, actual_map):
+    ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
+    eid = ev.get("id")
+    if not eid or eid not in actual_map:
+        return None
+    actual = actual_map[eid]
+
+    mk = p.get("markets", {}) if isinstance(p.get("markets"), dict) else {}
+    mr = mk.get("match_result", {})
+    eg = mk.get("expected_goals", {})
+    ou = mk.get("over_under", {})
+
+    xg_h_raw = eg.get("home")
+    xg_a_raw = eg.get("away")
+
+    league_name_cn = league_cn(ev.get("league_name", ""))
+    tier = get_match_tier(league_name_cn, ev.get("league_name", ""))
+    trust = get_league_trust_level(league_name_cn)
+    if tier == "friendly":
+        rho = DIXON_COLES_RHO.get("friendly", -0.08)
+    else:
+        rho = DIXON_COLES_RHO.get(trust, -0.05)
+
+    xg_mult = MATCH_TIER_MULTIPLIER.get(tier, 1.0)
+    if xg_h_raw is not None and xg_a_raw is not None:
+        pred = predict_full_dc(float(xg_h_raw) * xg_mult, float(xg_a_raw) * xg_mult, rho=rho)
+    else:
+        pred = None
+
+    prob_home_bz = mr.get("prob_home") or 0
+    prob_draw_bz = mr.get("prob_draw") or 0
+    prob_away_bz = mr.get("prob_away") or 0
+    p_over_raw = ou.get("prob_over_25")
+
+    if pred:
+        hw = pred["hw"] * 100
+        d = pred["d"] * 100
+        aw = pred["aw"] * 100
+        over_pct = pred["over25"] * 100
+    else:
+        hw = prob_home_bz
+        d = prob_draw_bz
+        aw = prob_away_bz
+        over_pct = float(p_over_raw) if p_over_raw is not None else 50.0
+
+    result_opts = [("主胜", hw), ("和局", d), ("客胜", aw)]
+    result_opts.sort(key=lambda x: -x[1])
+    best_result = result_opts[0]
+
+    ou_opts = [("大球", over_pct), ("小球", 100 - over_pct)]
+    ou_opts.sort(key=lambda x: -x[1])
+    best_ou = ou_opts[0]
+
+    h = actual["home"]
+    a = actual["away"]
+    total = h + a
+    if h > a:
+        actual_result = "主胜"
+    elif h == a:
+        actual_result = "和局"
+    else:
+        actual_result = "客胜"
+    actual_ou = "大球" if total >= 3 else "小球"
+
+    result_hit = (best_result[0] == actual_result)
+    ou_hit = (best_ou[0] == actual_ou)
+    confidence = max(best_result[1], best_ou[1])
+
+    return {
+        "event_id": eid,
+        "联赛": league_name_cn,
+        "主队": team_cn(ev.get("home_team", "?")),
+        "客队": team_cn(ev.get("away_team", "?")),
+        "胜平负推荐": best_result[0],
+        "胜平负概率": round(best_result[1], 1),
+        "大小球推荐": best_ou[0],
+        "大小球概率": round(best_ou[1], 1),
+        "实际比分": f"{h}-{a}",
+        "实际胜平负": actual_result,
+        "实际大小球": actual_ou,
+        "胜平负命中": result_hit,
+        "大小球命中": ou_hit,
+        "置信度": round(confidence, 1),
+    }
+
 def fetch_espn_all(date_str):
     try:
         target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
@@ -1214,8 +1379,10 @@ def build_excel(bet_rows, stable_rows, info_rows, review_rows=None, meta_rows=No
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v3.4（比分命中 + 调整对比）")
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘"])
+st.title("⚽ 足球预测 v3.5（历史回测）")
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测"
+])
 
 if not BSD_TOKEN:
     st.error("⚠️ 未检测到 BSD_TOKEN（secrets 和内置回退都为空）。")
@@ -2188,7 +2355,6 @@ with tab5:
                                 with c4:
                                     st.metric("原推荐 ROI", roi_str, roi_delta)
 
-                                # ★ 新增：调整前后对比
                                 if wg and ag:
                                     delta = ar - wr
                                     if delta > 0.02:
@@ -2352,57 +2518,173 @@ with tab5:
             import traceback
             st.code(traceback.format_exc())
 
-st.caption("⚠️ 预测来自 Bzzoiro；赛后复盘需手动上传 Excel。数据永远在你手中。")
+# ========== Tab 6：历史回测 ==========
+with tab6:
+    st.subheader("📈 历史批量回测")
+    st.caption("拉历史预测 + 历史比分，批量计算基础模型命中率。历史拿不到阵容/战意/赔率，所以只测基础模型（Dixon-Coles + 赛事分层）。")
 
-# ========== 历史回测能力测试 ==========
-st.divider()
-st.subheader("🧪 历史批量回测测试")
-st.caption("先测 Bzzoiro 能不能拉到历史预测。")
+    col_a, col_b = st.columns(2)
+    with col_a:
+        bt_from = st.date_input("起始日期", value=date.today() - timedelta(days=7), key="bt_from")
+    with col_b:
+        bt_to = st.date_input("结束日期", value=date.today() - timedelta(days=1), key="bt_to")
 
-col_a, col_b = st.columns(2)
-with col_a:
-    hist_from = st.date_input("起始日期", value=date.today() - timedelta(days=7), key="hist_from")
-with col_b:
-    hist_to = st.date_input("结束日期", value=date.today() - timedelta(days=1), key="hist_to")
+    days_diff = (bt_to - bt_from).days + 1
+    max_days = 30
 
-if st.button("测试拉取", key="btn_hist_test", type="primary"):
-    from_str = hist_from.strftime("%Y-%m-%d")
-    to_str = hist_to.strftime("%Y-%m-%d")
+    if days_diff > max_days:
+        st.warning(f"⚠️ 当前选了 **{days_diff} 天**，超过上限 **{max_days} 天**。请缩短范围。")
+    elif days_diff <= 0:
+        st.error("结束日期必须晚于或等于起始日期。")
+    else:
+        st.caption(f"📅 范围：**{bt_from} ～ {bt_to}**（共 {days_diff} 天）")
 
-    with st.spinner(f"拉取 {from_str} ～ {to_str} 的预测..."):
-        try:
-            r = requests.get(
-                f"{BSD_BASE}/predictions/",
-                headers=BSD_HEADERS,
-                params={"date_from": from_str, "date_to": to_str, "limit": 100},
-                timeout=25,
-            )
-            st.write(f"**HTTP 状态码**：{r.status_code}")
+    if st.button("🚀 开始回测", type="primary", key="btn_backtest"):
+        if days_diff > max_days or days_diff <= 0:
+            st.error("日期范围无效，请重新选择。")
+        else:
+            from_str = bt_from.strftime("%Y-%m-%d")
+            to_str = bt_to.strftime("%Y-%m-%d")
 
-            if r.status_code == 200:
-                data = r.json()
-                results = data.get("results", [])
-                has_next = bool(data.get("next"))
-                st.success(f"✅ 拉到 **{len(results)}** 条预测（本页）｜还有下一页：{'是' if has_next else '否'}")
+            progress = st.progress(0)
+            status = st.empty()
 
-                if results:
-                    st.write("**前 3 条样本：**")
-                    for p in results[:3]:
-                        ev = p.get("event", {})
-                        mk = p.get("markets", {})
-                        xg = mk.get("expected_goals", {})
-                        st.write(f"- **{ev.get('home_team')} vs {ev.get('away_team')}**")
-                        st.write(f"  联赛：{ev.get('league_name')} ｜ 时间：{ev.get('event_date')} ｜ 状态：{ev.get('status')}")
-                        st.write(f"  xG：主 {xg.get('home')} / 客 {xg.get('away')}")
-                        st.write(f"  比分：{ev.get('home_score')}-{ev.get('away_score')}")
-                        st.write("---")
+            status.info(f"① 拉取 {from_str} ～ {to_str} 的预测...")
+            progress.progress(10)
+            preds, bt_err = fetch_predictions_range(from_str, to_str)
 
-                    # 统计有多少场已经有比分
-                    finished = [p for p in results if p.get("event", {}).get("home_score") is not None]
-                    st.info(f"其中 **{len(finished)}/{len(results)}** 场已有比分")
-                else:
-                    st.warning("返回 0 条——可能日期范围无效，或 Bzzoiro 不给历史预测")
+            if bt_err:
+                st.error(f"预测拉取失败：{bt_err}")
             else:
-                st.error(f"接口返回 {r.status_code}：{r.text[:200]}")
-        except Exception as e:
-            st.error(f"请求异常：{e}")
+                st.write(f"✅ 拉到 **{len(preds)}** 条预测")
+                progress.progress(40)
+
+                status.info("② 拉取实际比分...")
+                actual_map = fetch_events_range(from_str, to_str)
+                st.write(f"✅ 拉到 **{len(actual_map)}** 场比分")
+                progress.progress(70)
+
+                status.info("③ 匹配并计算命中率...")
+                bt_rows = []
+                for p in preds:
+                    r = backtest_one(p, actual_map)
+                    if r:
+                        bt_rows.append(r)
+                progress.progress(100)
+                status.empty()
+
+                if not bt_rows:
+                    st.warning("没有可回测的比赛（可能预测和比分没匹配上，或比赛都未结束）")
+                else:
+                    st.success(f"✅ 成功回测 **{len(bt_rows)}** 场")
+
+                    bt_df = pd.DataFrame(bt_rows)
+                    total_bt = len(bt_df)
+                    r_hits = int(bt_df["胜平负命中"].sum())
+                    o_hits = int(bt_df["大小球命中"].sum())
+
+                    c1, c2, c3 = st.columns(3)
+                    with c1:
+                        st.metric("回测场次", total_bt)
+                    with c2:
+                        st.metric("胜平负命中", f"{r_hits/total_bt*100:.1f}%", f"{r_hits}/{total_bt}")
+                    with c3:
+                        st.metric("大小球命中", f"{o_hits/total_bt*100:.1f}%", f"{o_hits}/{total_bt}")
+
+                    st.markdown("### 📊 按胜平负推荐方向")
+                    dir_stats_r = {}
+                    for _, r in bt_df.iterrows():
+                        d = r["胜平负推荐"]
+                        if d not in dir_stats_r:
+                            dir_stats_r[d] = {"t": 0, "h": 0}
+                        dir_stats_r[d]["t"] += 1
+                        if r["胜平负命中"]:
+                            dir_stats_r[d]["h"] += 1
+                    dir_rows_r = []
+                    for d, s in sorted(dir_stats_r.items(), key=lambda x: -x[1]["t"]):
+                        rate = s["h"] / s["t"] * 100 if s["t"] else 0
+                        dir_rows_r.append({
+                            "推荐方向": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"
+                        })
+                    st.dataframe(pd.DataFrame(dir_rows_r), use_container_width=True, hide_index=True)
+
+                    st.markdown("### 📊 按大小球推荐方向")
+                    dir_stats_o = {}
+                    for _, r in bt_df.iterrows():
+                        d = r["大小球推荐"]
+                        if d not in dir_stats_o:
+                            dir_stats_o[d] = {"t": 0, "h": 0}
+                        dir_stats_o[d]["t"] += 1
+                        if r["大小球命中"]:
+                            dir_stats_o[d]["h"] += 1
+                    dir_rows_o = []
+                    for d, s in sorted(dir_stats_o.items(), key=lambda x: -x[1]["t"]):
+                        rate = s["h"] / s["t"] * 100 if s["t"] else 0
+                        dir_rows_o.append({
+                            "推荐方向": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"
+                        })
+                    st.dataframe(pd.DataFrame(dir_rows_o), use_container_width=True, hide_index=True)
+
+                    st.markdown("### 📊 按联赛（至少 3 场）")
+                    lg_stats = {}
+                    for _, r in bt_df.iterrows():
+                        lg = r["联赛"]
+                        if lg not in lg_stats:
+                            lg_stats[lg] = {"t": 0, "rh": 0, "oh": 0}
+                        lg_stats[lg]["t"] += 1
+                        if r["胜平负命中"]:
+                            lg_stats[lg]["rh"] += 1
+                        if r["大小球命中"]:
+                            lg_stats[lg]["oh"] += 1
+                    lg_rows = []
+                    for lg, s in sorted(lg_stats.items(), key=lambda x: -x[1]["t"]):
+                        if s["t"] < 3:
+                            continue
+                        lg_rows.append({
+                            "联赛": lg, "场次": s["t"],
+                            "胜平负命中率": f"{s['rh']/s['t']*100:.1f}%",
+                            "大小球命中率": f"{s['oh']/s['t']*100:.1f}%",
+                        })
+                    if lg_rows:
+                        st.dataframe(pd.DataFrame(lg_rows), use_container_width=True, hide_index=True)
+                    else:
+                        st.info("没有联赛达到 3 场以上，无法分组。")
+
+                    st.markdown("### 📊 按置信度")
+                    buckets = [("<55%", 0, 55), ("55-70%", 55, 70), ("70-85%", 70, 85), ("85%+", 85, 101)]
+                    b_rows = []
+                    for label, lo, hi in buckets:
+                        sub = bt_df[(bt_df["置信度"] >= lo) & (bt_df["置信度"] < hi)]
+                        n = len(sub)
+                        if n == 0:
+                            b_rows.append({"置信度": label, "场次": 0, "胜平负命中率": "—", "大小球命中率": "—"})
+                            continue
+                        b_rows.append({
+                            "置信度": label, "场次": n,
+                            "胜平负命中率": f"{sub['胜平负命中'].sum()/n*100:.1f}%",
+                            "大小球命中率": f"{sub['大小球命中'].sum()/n*100:.1f}%",
+                        })
+                    st.dataframe(pd.DataFrame(b_rows), use_container_width=True, hide_index=True)
+
+                    st.markdown("### 📋 全部明细")
+                    st.dataframe(bt_df, use_container_width=True, hide_index=True)
+
+                    buf = io.BytesIO()
+                    with pd.ExcelWriter(buf, engine='openpyxl') as w:
+                        bt_df.to_excel(w, sheet_name='回测明细', index=False)
+                        if dir_rows_r:
+                            pd.DataFrame(dir_rows_r).to_excel(w, sheet_name='按胜平负方向', index=False)
+                        if dir_rows_o:
+                            pd.DataFrame(dir_rows_o).to_excel(w, sheet_name='按大小球方向', index=False)
+                        if lg_rows:
+                            pd.DataFrame(lg_rows).to_excel(w, sheet_name='按联赛', index=False)
+                        pd.DataFrame(b_rows).to_excel(w, sheet_name='按置信度', index=False)
+                    st.download_button(
+                        "📥 下载回测报告 Excel",
+                        data=buf.getvalue(),
+                        file_name=f"回测_{from_str}_{to_str}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_backtest",
+                    )
+
+st.caption("⚠️ 预测来自 Bzzoiro；赛后复盘需手动上传 Excel；历史回测只测基础模型。数据永远在你手中。")
