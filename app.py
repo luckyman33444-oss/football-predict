@@ -65,6 +65,41 @@ MOTIVATION_WEIGHT = {
     "relegation": {"home": 1.03, "away": 0.98},
 }
 
+# ★ v3.6 新增：联赛质量分级（基于 246 场回测）
+LEAGUE_GRADE = {
+    # S 级：命中率 >60% 且样本充足
+    "中北美国家联赛": "S",
+    "尼日利亚超": "S",
+    "美职联": "S",
+    "英格兰全国联赛": "A",  # 58.3%，接近 S
+    # A 级：50-60%
+    "美国女足": "A",
+    "葡萄牙杯": "A",
+    "欧国联": "A",
+    "巴乙": "B",
+    "西乙": "B",
+    "Emperor Cup": "S",  # 6场100%，样本小但可观察
+    "英甲": "F",  # 25%
+    # F 级：<50%（警示）
+    "国际友谊": "F",
+    "英乙": "F",
+    "墨超": "F",
+    "哥伦比亚甲": "F",
+    "摩洛哥甲": "F",
+    "西班牙女足": "F",
+    "美国USL": "F",  # 胜负41.7%但大小球75%，仍需警示
+    "萨尔超": "F",
+    "秘鲁甲": "F",
+    "智利杯": "F",
+    "海湾运": "F",
+    "挪威杯": "F",
+}
+
+def get_league_grade(league_cn):
+    if not league_cn:
+        return "B"
+    return LEAGUE_GRADE.get(league_cn, "B")
+
 def get_match_tier(league_name_cn, league_name_en=""):
     combined = (league_name_cn or "") + " " + (league_name_en or "")
     if "友谊" in combined or "Friendly" in combined:
@@ -206,7 +241,8 @@ def predict_full_dc(xg_h, xg_a, rho=-0.05):
         h2 = "客胜"
 
     return {"over_scores": over_scores, "under_scores": under_scores, "top_scores": top,
-            "hw": hw, "d": d, "aw": aw, "over25": ov25, "under25": un25, "h1": h1, "h2": h2}
+            "hw": hw, "d": d, "aw": aw, "over25": ov25, "under25": un25, "h1": h1, "h2": h2,
+            "matrix": m}
 
 def fetch_standings(league_id, season):
     if not API_FOOTBALL_KEY:
@@ -913,6 +949,7 @@ def parse_prediction(p):
     league_name_en_raw = ev.get("league_name", "")
     _tier = get_match_tier(league_name_cn, league_name_en_raw)
     _trust = get_league_trust_level(league_name_cn)
+    _grade = get_league_grade(league_name_cn)
     if _tier == "friendly":
         _rho = DIXON_COLES_RHO.get("friendly", -0.08)
     else:
@@ -987,6 +1024,7 @@ def parse_prediction(p):
         "event_id": ev.get("id"),
         "event_date": event_date, "kickoff_dt": kickoff_dt, "时间": time_str,
         "联赛": league_name_cn,
+        "联赛等级": _grade,
         "状态": status_map.get(ev.get("status", ""), ""),
         "主队": team_cn(home_name), "客队": team_cn(away_name),
         "_home_key": canon(home_name), "_away_key": canon(away_name),
@@ -1231,6 +1269,7 @@ def backtest_one(p, actual_map):
     league_name_cn = league_cn(ev.get("league_name", ""))
     tier = get_match_tier(league_name_cn, ev.get("league_name", ""))
     trust = get_league_trust_level(league_name_cn)
+    grade = get_league_grade(league_name_cn)
     if tier == "friendly":
         rho = DIXON_COLES_RHO.get("friendly", -0.08)
     else:
@@ -1281,20 +1320,58 @@ def backtest_one(p, actual_map):
     ou_hit = (best_ou[0] == actual_ou)
     confidence = max(best_result[1], best_ou[1])
 
+    # ★ 比分回测
+    score_main = "—"
+    score_alt = "—"
+    if pred:
+        if best_ou[0] == "大球":
+            scores = pred["over_scores"]
+        else:
+            scores = pred["under_scores"]
+        if scores:
+            score_main = f"{scores[0][0]}-{scores[0][1]}"
+        if len(scores) > 1:
+            score_alt = f"{scores[1][0]}-{scores[1][1]}"
+
+    actual_score_str = f"{h}-{a}"
+
+    def hit_type(pred_s, ah, aa):
+        if pred_s == "—":
+            return "—"
+        try:
+            ph, pa = map(int, pred_s.split("-"))
+        except:
+            return "—"
+        if ph == ah and pa == aa:
+            return "✅完全对"
+        pr = "主胜" if ph > pa else ("和局" if ph == pa else "客胜")
+        ar = "主胜" if ah > aa else ("和局" if ah == aa else "客胜")
+        if pr == ar:
+            return "⚠️方向对"
+        return "❌方向错"
+
+    main_score_hit = hit_type(score_main, h, a)
+    alt_score_hit = hit_type(score_alt, h, a)
+
     return {
         "event_id": eid,
         "联赛": league_name_cn,
+        "等级": grade,
         "主队": team_cn(ev.get("home_team", "?")),
         "客队": team_cn(ev.get("away_team", "?")),
         "胜平负推荐": best_result[0],
         "胜平负概率": round(best_result[1], 1),
         "大小球推荐": best_ou[0],
         "大小球概率": round(best_ou[1], 1),
-        "实际比分": f"{h}-{a}",
+        "主力比分": score_main,
+        "备选比分": score_alt,
+        "实际比分": actual_score_str,
         "实际胜平负": actual_result,
         "实际大小球": actual_ou,
         "胜平负命中": result_hit,
         "大小球命中": ou_hit,
+        "主力比分命中": main_score_hit,
+        "备选比分命中": alt_score_hit,
         "置信度": round(confidence, 1),
     }
 
@@ -1379,7 +1456,7 @@ def build_excel(bet_rows, stable_rows, info_rows, review_rows=None, meta_rows=No
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v3.5（历史回测）")
+st.title("⚽ 足球预测 v3.6（联赛分级 + 比分回测）")
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测"
 ])
@@ -1424,9 +1501,10 @@ with tab1:
             df = df[df["联赛"].isin(sel_leagues)]
 
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
+        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信（基于 246 场回测）")
 
         if not df.empty:
-            display_df = df[["时间", "联赛", "状态", "主队", "客队",
+            display_df = df[["时间", "联赛", "联赛等级", "状态", "主队", "客队",
                              "主力比分", "备选比分", "预测结果",
                              "主胜", "和局", "客胜", "大小球"]].copy()
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
@@ -1549,6 +1627,7 @@ with tab2:
                     for _, row in selected.iterrows():
                         eid = row["event_id"]
                         is_core = eid in core_ids
+                        grade = row.get("联赛等级", "B")
                         o = odds_map.get(eid) or {}
                         mv = movement_map.get(eid) or {}
                         lu = lineup_map.get(eid) or {}
@@ -1701,6 +1780,7 @@ with tab2:
                             "event_id": eid,
                             "比赛": f"{row['主队']} vs {row['客队']}",
                             "时间": row["时间"], "联赛": row["联赛"],
+                            "等级": grade,
                             "状态": row["状态"], "大小球方向": row["大小球"],
                             "是否核心": "⭐ 核心" if is_core else "自动",
                             "opts": opts, "main_score": main_s, "alt_score": alt_s,
@@ -1718,6 +1798,26 @@ with tab2:
                             "direction_agreement": direction_agreement,
                             "_xg_h": xg_h, "_xg_a": xg_a,
                         })
+
+                    # ★ 联赛等级警示
+                    grade_warnings = {
+                        "S": "🟢 高可信（回测命中率 >60%）",
+                        "A": "🟡 可信（50-60%）",
+                        "B": "⚪ 普通",
+                        "F": "🔴 低可信（<50%，谨慎下注）",
+                    }
+                    grade_counts = {}
+                    for md in matches_data:
+                        g = md.get("等级", "B")
+                        grade_counts[g] = grade_counts.get(g, 0) + 1
+                    warning_text = " ｜ ".join([f"{g}: {c}场" for g, c in sorted(grade_counts.items())])
+                    st.info(f"📊 本批联赛等级分布：{warning_text}")
+
+                    f_matches = [md for md in matches_data if md.get("等级") == "F"]
+                    if f_matches:
+                        st.error(f"🔴 **警示：以下 {len(f_matches)} 场为 F 级联赛**（回测命中率 <50%），下注请谨慎：")
+                        for fm in f_matches:
+                            st.write(f"- {fm['比赛']}（{fm['联赛']}）")
 
                     info_rows = []
                     if enable_lineup_info or enable_market_info or enable_motivation or enable_handicap:
@@ -1773,7 +1873,7 @@ with tab2:
                             consistency = judge_consistency(pick_name, movement)
                             adj_name, adj_prob = md["adj_best"]
                             row_data = {
-                                "场次": i, "比赛": md["比赛"],
+                                "场次": i, "等级": md.get("等级", "B"), "比赛": md["比赛"],
                                 "原推荐": f"{pick_name} ({pick_prob*100:.1f}%)",
                                 "盘口走势": movement if movement else "—",
                                 "一致性": f"{consistency['emoji']} {consistency['tag']}",
@@ -1871,7 +1971,7 @@ with tab2:
                         alt_str = f"{md['adj_alt_score']} ({ap*100:.1f}%)"
                         role = "**主胆**" if (best_idx == i) else "拖"
                         rows_for_table.append({
-                            "场次": i + 1, "时间": md["时间"], "比赛": md["比赛"],
+                            "场次": i + 1, "等级": md.get("等级", "B"), "时间": md["时间"], "比赛": md["比赛"],
                             "大小球方向": md["大小球方向"], "来源": md["是否核心"],
                             "状态": md["状态"], "比分1": main_str,
                             "比分2": alt_str if best_idx != i else "—", "角色": role,
@@ -1952,7 +2052,7 @@ with tab2:
                         for i, (md, opt) in enumerate(combo, 1):
                             pick_name, pick_prob, pick_odds, is_real, movement = opt
                             stable_rows.append({
-                                "场次": i, "比赛": md["比赛"], "推荐": pick_name,
+                                "场次": i, "等级": md.get("等级", "B"), "比赛": md["比赛"], "推荐": pick_name,
                                 "概率": f"{pick_prob*100:.1f}%",
                                 "赔率": fmt_odds(pick_odds),
                                 "赔率来源": "真实" if is_real else "隐含",
@@ -1979,7 +2079,7 @@ with tab2:
                     for i, (md, opt) in enumerate(combo_b, 1):
                         pick_name, pick_prob, pick_odds, is_real, movement = opt
                         stable_rows_b.append({
-                            "场次": i, "比赛": md["比赛"], "推荐": pick_name,
+                            "场次": i, "等级": md.get("等级", "B"), "比赛": md["比赛"], "推荐": pick_name,
                             "概率": f"{pick_prob*100:.1f}%",
                             "赔率": fmt_odds(pick_odds),
                             "赔率来源": "真实" if is_real else "隐含",
@@ -1998,6 +2098,7 @@ with tab2:
                             "场次": i,
                             "比赛": md["比赛"],
                             "联赛": md["联赛"],
+                            "等级": md.get("等级", "B"),
                             "时间": md["时间"],
                             "event_id": md["event_id"],
                             "推荐方向": best_opt[0],
@@ -2023,6 +2124,7 @@ with tab2:
                                 "event_id": r["event_id"],
                                 "比赛": f"{r['主队']} vs {r['客队']}",
                                 "联赛": r["联赛"],
+                                "等级": r.get("联赛等级", "B"),
                                 "时间": r["时间"],
                                 "状态": r["状态"],
                                 "预测结果": r["预测结果"],
@@ -2136,7 +2238,7 @@ with tab4:
             for _, row in result.iterrows():
                 c1, c2, c3 = st.columns([5, 2, 1])
                 with c1:
-                    st.write(f"**{row['主队']} vs {row['客队']}** ｜ {row['联赛']} ｜ {row['event_date']} {row['时间']}")
+                    st.write(f"**{row['主队']} vs {row['客队']}** ｜ {row['联赛']}({row.get('联赛等级', 'B')}) ｜ {row['event_date']} {row['时间']}")
                 with c2:
                     st.write(f"主 {row['主胜']} ｜ 和 {row['和局']} ｜ 客 {row['客胜']} ｜ {row['大小球']}")
                 with c3:
@@ -2203,7 +2305,7 @@ with tab5:
                     rec_df = full_meta[rec_mask].copy()
                     st.markdown(f"### 🎯 推荐比赛 **{len(rec_df)} 场**")
                     if len(rec_df) > 0:
-                        show_cols = [c for c in ["场次", "比赛", "联赛", "时间", "推荐方向", "推荐概率", "调整后方向", "调整后概率", "调整后比分1", "调整后比分2", "赔率", "比分1", "比分2", "角色", "方向一致"] if c in rec_df.columns]
+                        show_cols = [c for c in ["场次", "比赛", "联赛", "等级", "时间", "推荐方向", "推荐概率", "调整后方向", "调整后概率", "调整后比分1", "调整后比分2", "赔率", "比分1", "比分2", "角色", "方向一致"] if c in rec_df.columns]
                         st.dataframe(rec_df[show_cols], use_container_width=True, hide_index=True)
 
                 if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
@@ -2231,7 +2333,7 @@ with tab5:
                     st.markdown(f"### 📋 当天其余预测 **{len(all_today_df)} 场**")
                     if len(all_today_df) > 0:
                         with st.expander("展开查看全部预测"):
-                            show2 = [c for c in ["比赛", "联赛", "时间", "预测结果", "大小球", "主胜", "和局", "客胜"] if c in all_today_df.columns]
+                            show2 = [c for c in ["比赛", "联赛", "等级", "时间", "预测结果", "大小球", "主胜", "和局", "客胜"] if c in all_today_df.columns]
                             st.dataframe(all_today_df[show2], use_container_width=True, hide_index=True)
 
             if not date_str:
@@ -2583,6 +2685,14 @@ with tab6:
                     r_hits = int(bt_df["胜平负命中"].sum())
                     o_hits = int(bt_df["大小球命中"].sum())
 
+                    # 比分命中统计
+                    m_full = int((bt_df["主力比分命中"] == "✅完全对").sum())
+                    m_dir = int((bt_df["主力比分命中"] == "⚠️方向对").sum())
+                    m_wrong = int((bt_df["主力比分命中"] == "❌方向错").sum())
+                    a_full = int((bt_df["备选比分命中"] == "✅完全对").sum())
+                    a_dir = int((bt_df["备选比分命中"] == "⚠️方向对").sum())
+                    a_wrong = int((bt_df["备选比分命中"] == "❌方向错").sum())
+
                     c1, c2, c3 = st.columns(3)
                     with c1:
                         st.metric("回测场次", total_bt)
@@ -2590,6 +2700,21 @@ with tab6:
                         st.metric("胜平负命中", f"{r_hits/total_bt*100:.1f}%", f"{r_hits}/{total_bt}")
                     with c3:
                         st.metric("大小球命中", f"{o_hits/total_bt*100:.1f}%", f"{o_hits}/{total_bt}")
+
+                    st.markdown("### 🎯 比分命中率")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        st.markdown("**主力比分**")
+                        st.write(f"- ✅完全对：{m_full} ({m_full/total_bt*100:.1f}%)")
+                        st.write(f"- ⚠️方向对：{m_dir} ({m_dir/total_bt*100:.1f}%)")
+                        st.write(f"- ❌方向错：{m_wrong} ({m_wrong/total_bt*100:.1f}%)")
+                        st.write(f"- **方向命中率（含完全对）：{(m_full+m_dir)/total_bt*100:.1f}%**")
+                    with c2:
+                        st.markdown("**备选比分**")
+                        st.write(f"- ✅完全对：{a_full} ({a_full/total_bt*100:.1f}%)")
+                        st.write(f"- ⚠️方向对：{a_dir} ({a_dir/total_bt*100:.1f}%)")
+                        st.write(f"- ❌方向错：{a_wrong} ({a_wrong/total_bt*100:.1f}%)")
+                        st.write(f"- **方向命中率（含完全对）：{(a_full+a_dir)/total_bt*100:.1f}%**")
 
                     st.markdown("### 📊 按胜平负推荐方向")
                     dir_stats_r = {}
