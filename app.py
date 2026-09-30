@@ -1540,10 +1540,10 @@ with tab2:
                                row["_prob_away"] / 100 if row["_prob_away"] else 0,
                                row["_prob_over"] if row["_prob_over"] else 0,
                                row["_prob_under"] if row["_prob_under"] else 0)
-                window_matches["_conf"] = window_matches.apply(calc_conf, axis=1)
-                core_ids = set(st.session_state.core_matches)
-                core_df = window_matches[window_matches["event_id"].isin(core_ids)].copy()
-                other_df = window_matches[~window_matches["event_id"].isin(core_ids)].copy()
+                             if not core_df.empty:
+                 core_df["_conf"] = core_df.apply(calc_conf, axis=1)
+             if not other_df.empty:
+                 other_df["_conf"] = other_df.apply(calc_conf, axis=1)
                 n_core_in_window = len(core_df)
                 if n_core_in_window >= 3:
                     selected = core_df.sort_values("_conf", ascending=False).head(3)
