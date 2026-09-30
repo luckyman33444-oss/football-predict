@@ -36,8 +36,9 @@ DIXON_COLES_RHO = {
     "friendly": -0.08,
 }
 
+# ★ 改动1：友谊赛系数 0.94 → 0.88
 MATCH_TIER_MULTIPLIER = {
-    "friendly": 0.94,
+    "friendly": 0.88,
     "nations_league": 0.95,
     "qualifier": 0.98,
     "tournament": 1.00,
@@ -145,6 +146,25 @@ def blend_with_market(model_hw, model_d, model_aw, odds_hw, odds_d, odds_aw, tru
         blend_d /= total
         blend_aw /= total
     return blend_hw, blend_d, blend_aw, (m_hw, m_d, m_aw)
+
+# ★ 改动3.1：新增主胜概率封顶函数
+def cap_home_win_prob(hw, d, aw):
+    if hw <= 0.70:
+        return hw, d, aw
+    if hw <= 0.80:
+        capped = hw * 0.95
+    elif hw <= 0.90:
+        capped = hw * 0.90
+    else:
+        capped = hw * 0.85
+    excess = hw - capped
+    total_other = d + aw
+    if total_other <= 0:
+        return capped, d, aw + excess
+    d_new = d + excess * (d / total_other)
+    aw_new = aw + excess * (aw / total_other)
+    total = capped + d_new + aw_new
+    return capped / total, d_new / total, aw_new / total
 
 def predict_full_dc(xg_h, xg_a, rho=-0.05):
     if xg_h is None or xg_a is None:
@@ -473,9 +493,7 @@ LEAGUE_CN.update({
 })
 
 TEAM_CN.update({
-    # —— 土超 / 土耳其 ——
     "Konyaspor": "科尼亚体育",
-    # —— 英格兰低级别 ——
     "Eastleigh": "伊斯特利",
     "Southend United": "绍森德联",
     "Southend": "绍森德联",
@@ -483,7 +501,6 @@ TEAM_CN.update({
     "Sutton United": "萨顿联",
     "Sutton": "萨顿联",
     "Oldham": "奥尔德姆",
-    # —— 美国 USL ——
     "Brooklyn FC": "布鲁克林FC",
     "SC Jacksonville": "杰克逊维尔SC",
     "Sporting Jacksonville": "杰克逊维尔SC",
@@ -493,17 +510,12 @@ TEAM_CN.update({
     "Las Vegas Lights FC": "拉斯维加斯之光",
     "Rhode Island": "罗德岛FC",
     "Indy Eleven": "印地十一",
-    # —— 哥伦比亚 / 南美 ——
     "Atlético Nacional": "麦德林国民竞技",
     "Atletico Nacional": "麦德林国民竞技",
     "Atlético Nacional Medellín": "麦德林国民竞技",
-    # —— 国家队 ——
     "Panama": "巴拿马",
     "Ecuador": "厄瓜多尔",
     "Uzbekistan": "乌兹别克斯坦",
-    "Bolivia": "玻利维亚",
-    "Paraguay": "巴拉圭",
-    "Venezuela": "委内瑞拉",
     "Honduras": "洪都拉斯",
     "Guatemala": "危地马拉",
     "El Salvador": "萨尔瓦多",
@@ -1002,13 +1014,21 @@ def parse_prediction(p):
         "_trust": _trust, "_tier": _tier, "_rho": _rho,
     }
 
+# ★ 改动2：复盘日期窗口前后各放宽 1 天
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_actual_results(date_str):
     actual = {}
     errors = []
     try:
+        base_dt = datetime.strptime(date_str, "%Y-%m-%d")
+        from_dt = (base_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+        to_dt = (base_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+    except Exception:
+        from_dt = date_str
+        to_dt = date_str
+    try:
         r = requests.get(f"{BSD_BASE}/events/", headers=BSD_HEADERS,
-                         params={"date_from": date_str, "date_to": date_str, "limit": 200}, timeout=25)
+                         params={"date_from": from_dt, "date_to": to_dt, "limit": 500}, timeout=25)
         if r.status_code == 200:
             data = r.json()
             results = data.get("results", []) if isinstance(data, dict) else []
@@ -1044,7 +1064,7 @@ def fetch_actual_results(date_str):
     if not actual:
         try:
             r = requests.get(f"{BSD_BASE}/predictions/", headers=BSD_HEADERS,
-                             params={"date_from": date_str, "date_to": date_str, "limit": 200}, timeout=25)
+                             params={"date_from": from_dt, "date_to": to_dt, "limit": 500}, timeout=25)
             if r.status_code == 200:
                 data = r.json()
                 results = data.get("results", []) if isinstance(data, dict) else []
@@ -1199,7 +1219,7 @@ def build_excel(bet_rows, stable_rows, info_rows, review_rows=None, meta_rows=No
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v3.2（工程加固）")
+st.title("⚽ 足球预测 v3.3（置信度分档）")
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘"])
 
 if not BSD_TOKEN:
@@ -1288,6 +1308,7 @@ with tab2:
         enable_dc = st.checkbox("🔬 启用 Dixon-Coles 低比分修正", value=True, key="dc_switch")
         enable_tier = st.checkbox("📊 启用赛事分层校准", value=True, key="tier_switch")
         enable_blend = st.checkbox("🤝 启用盘口融合", value=True, key="blend_switch")
+        enable_cap_home = st.checkbox("🔒 启用主胜概率封顶", value=True, key="cap_home_switch")
     with col2:
         if st.button("🗑️ 清空核心", key="clear_core"):
             st.session_state.core_matches = []
@@ -1456,16 +1477,25 @@ with tab2:
 
                         adj_pred = predict_full_dc(final_xg_h, final_xg_a, rho=rho)
 
+                        # ★ 改动3.2：盘口融合 + 主胜封顶
                         blend_info = ""
-                        if adj_pred and enable_blend:
-                            bh, bd, ba, market_implied = blend_with_market(
-                                adj_pred["hw"], adj_pred["d"], adj_pred["aw"],
-                                hw_real, dr_real, aw_real, trust)
-                            adj_pred["hw"] = bh
-                            adj_pred["d"] = bd
-                            adj_pred["aw"] = ba
-                            if market_implied:
-                                blend_info = f"模型×{BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f} + 市场×{1-BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f}"
+                        cap_info = ""
+                        if adj_pred:
+                            if enable_blend:
+                                bh, bd, ba, market_implied = blend_with_market(
+                                    adj_pred["hw"], adj_pred["d"], adj_pred["aw"],
+                                    hw_real, dr_real, aw_real, trust)
+                                adj_pred["hw"] = bh
+                                adj_pred["d"] = bd
+                                adj_pred["aw"] = ba
+                                if market_implied:
+                                    blend_info = f"模型×{BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f} + 市场×{1-BLEND_WEIGHT_MODEL.get(trust, 0.7):.2f}"
+                            if enable_cap_home:
+                                old_hw = adj_pred["hw"]
+                                adj_pred["hw"], adj_pred["d"], adj_pred["aw"] = cap_home_win_prob(
+                                    adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
+                                if old_hw > 0.70:
+                                    cap_info = f"主胜封顶 {old_hw*100:.1f}%→{adj_pred['hw']*100:.1f}%"
 
                         if adj_pred:
                             adj_best_opts = [
@@ -1501,6 +1531,8 @@ with tab2:
                             full_reason += " ｜ 战意: " + motivation_reason
                         if blend_info:
                             full_reason += " ｜ 盘口融合: " + blend_info
+                        if cap_info:
+                            full_reason += " ｜ " + cap_info
 
                         direction_agreement = judge_direction_agreement(opts[0][0], adj_best[0])
 
@@ -2161,17 +2193,16 @@ with tab5:
                                     st.metric("调整后命中", f"{ar*100:.1f}%", f"{ah}/{len(ag)}" if ag else "无")
                                 with c4:
                                     st.metric("原推荐 ROI", roi_str, roi_delta)
-                                                            # ========== v3.3 新增：按置信度分档命中率 ==========
+
+                        # ★ 新增：按置信度分档命中率
                         st.markdown("### 📊 按置信度分档命中率")
                         st.caption("看模型在哪一档概率最准 —— 理论概率 vs 实际命中率。差距越小越可信。")
-
                         buckets = [
                             ("<55%", 0, 55),
                             ("55-70%", 55, 70),
                             ("70-85%", 70, 85),
                             ("85%+", 85, 101),
                         ]
-
                         valid_recs = []
                         for r in review_rows:
                             if r["原推荐命中"] not in ("✅", "❌"):
@@ -2182,7 +2213,6 @@ with tab5:
                             except Exception:
                                 continue
                             valid_recs.append({"prob": prob_val, "hit": r["原推荐命中"] == "✅"})
-
                         if not valid_recs:
                             st.info("暂无已完赛的推荐比赛，无法分档统计。")
                         else:
@@ -2191,11 +2221,8 @@ with tab5:
                                 in_bucket = [x for x in valid_recs if lo <= x["prob"] < hi]
                                 if not in_bucket:
                                     bucket_rows.append({
-                                        "模型置信度": label,
-                                        "场次": 0,
-                                        "理论命中率": "—",
-                                        "实际命中率": "—",
-                                        "偏差": "—",
+                                        "模型置信度": label, "场次": 0,
+                                        "理论命中率": "—", "实际命中率": "—", "偏差": "—",
                                     })
                                     continue
                                 n = len(in_bucket)
@@ -2210,14 +2237,14 @@ with tab5:
                                 else:
                                     diff_str = f"{diff:+.1f}% ❌"
                                 bucket_rows.append({
-                                    "模型置信度": label,
-                                    "场次": n,
+                                    "模型置信度": label, "场次": n,
                                     "理论命中率": f"{theory:.1f}%",
                                     "实际命中率": f"{actual:.1f}% ({hits}/{n})",
                                     "偏差": diff_str,
                                 })
                             st.dataframe(pd.DataFrame(bucket_rows), use_container_width=True, hide_index=True)
                             st.caption("💡 偏差 ≤±3% 说明该档可信；偏差为负说明模型高估，正说明低估。")
+
                     if review_scope in ("复盘当天全部预测", "两者都复盘") and all_today_df is not None and len(all_today_df) > 0:
                         st.markdown("### 📋 当天全部预测复盘")
                         for _, m in all_today_df.iterrows():
@@ -2315,19 +2342,5 @@ with tab5:
             st.error(f"读取 Excel 失败：{e}")
             import traceback
             st.code(traceback.format_exc())
-
-st.divider()
-with st.expander("🔬 调试：查看/下载比赛原始数据"):
-    debug_eid = st.text_input("输入 event_id", value="216460", key="debug_injury_eid")
-    if st.button("📊 查看阵容 JSON", key="btn_debug_lineup", type="primary"):
-        try:
-            r = requests.get(f"{BSD_BASE}/events/{debug_eid}/lineups/", headers=BSD_HEADERS, timeout=15)
-            st.write(f"状态码：{r.status_code}")
-            if r.status_code == 200:
-                st.json(r.json())
-            else:
-                st.error(r.text)
-        except Exception as e:
-            st.error(f"错误：{e}")
 
 st.caption("⚠️ 预测来自 Bzzoiro；赛后复盘需手动上传 Excel。数据永远在你手中。")
