@@ -27,7 +27,7 @@ H2H_WEIGHT_HIGH = 1.10
 API_FOOTBALL_KEY = _get_secret("API_FOOTBALL_KEY")
 API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
 
-DIXON_COLES_RHO = {"top": -0.05, "mid": -0.08, "low": -0.10, "friendly": -0.08}
+DIXON_COLES_RHO = {"top": -0.07, "mid": -0.10, "low": -0.12, "friendly": -0.10}
 
 MATCH_TIER_MULTIPLIER = {
     "friendly": 0.88, "nations_league": 0.95, "qualifier": 0.98,
@@ -92,13 +92,13 @@ def compute_model_asian_handicap(xg_h, xg_a):
     abs_diff = abs(diff)
     if abs_diff < 0.20:
         return "平手", f"無讓球（xG差 {diff:+.2f}）· 觀望"
-    if abs_diff < 0.50: line = 0.25
-    elif abs_diff < 0.75: line = 0.5
-    elif abs_diff < 1.00: line = 0.75
-    elif abs_diff < 1.25: line = 1.0
-    elif abs_diff < 1.50: line = 1.25
-    elif abs_diff < 1.75: line = 1.5
-    elif abs_diff < 2.00: line = 1.75
+    if abs_diff < 0.60: line = 0.25
+    elif abs_diff < 0.90: line = 0.5
+    elif abs_diff < 1.20: line = 0.75
+    elif abs_diff < 1.50: line = 1.0
+    elif abs_diff < 1.80: line = 1.25
+    elif abs_diff < 2.10: line = 1.5
+    elif abs_diff < 2.40: line = 1.75
     else: line = 2.0
     if diff > 0:
         return f"主讓 {line}", f"看好主勝（xG差 {diff:+.2f}）"
@@ -120,7 +120,7 @@ def compute_score_direction(xg_h, xg_a, prob_hw, prob_d, prob_aw):
 
 def pick_best_result(hw, d, aw):
     max_prob = max(hw, d, aw)
-    if d >= 0.28 and (max_prob - d) < 0.10:
+    if d >= 0.29 and (max_prob - d) < 0.09:
         return ("和局", d)
     if hw >= aw:
         return ("主胜", hw)
