@@ -2353,3 +2353,56 @@ with tab5:
             st.code(traceback.format_exc())
 
 st.caption("⚠️ 预测来自 Bzzoiro；赛后复盘需手动上传 Excel。数据永远在你手中。")
+
+# ========== 历史回测能力测试 ==========
+st.divider()
+st.subheader("🧪 历史批量回测测试")
+st.caption("先测 Bzzoiro 能不能拉到历史预测。")
+
+col_a, col_b = st.columns(2)
+with col_a:
+    hist_from = st.date_input("起始日期", value=date.today() - timedelta(days=7), key="hist_from")
+with col_b:
+    hist_to = st.date_input("结束日期", value=date.today() - timedelta(days=1), key="hist_to")
+
+if st.button("测试拉取", key="btn_hist_test", type="primary"):
+    from_str = hist_from.strftime("%Y-%m-%d")
+    to_str = hist_to.strftime("%Y-%m-%d")
+
+    with st.spinner(f"拉取 {from_str} ～ {to_str} 的预测..."):
+        try:
+            r = requests.get(
+                f"{BSD_BASE}/predictions/",
+                headers=BSD_HEADERS,
+                params={"date_from": from_str, "date_to": to_str, "limit": 100},
+                timeout=25,
+            )
+            st.write(f"**HTTP 状态码**：{r.status_code}")
+
+            if r.status_code == 200:
+                data = r.json()
+                results = data.get("results", [])
+                has_next = bool(data.get("next"))
+                st.success(f"✅ 拉到 **{len(results)}** 条预测（本页）｜还有下一页：{'是' if has_next else '否'}")
+
+                if results:
+                    st.write("**前 3 条样本：**")
+                    for p in results[:3]:
+                        ev = p.get("event", {})
+                        mk = p.get("markets", {})
+                        xg = mk.get("expected_goals", {})
+                        st.write(f"- **{ev.get('home_team')} vs {ev.get('away_team')}**")
+                        st.write(f"  联赛：{ev.get('league_name')} ｜ 时间：{ev.get('event_date')} ｜ 状态：{ev.get('status')}")
+                        st.write(f"  xG：主 {xg.get('home')} / 客 {xg.get('away')}")
+                        st.write(f"  比分：{ev.get('home_score')}-{ev.get('away_score')}")
+                        st.write("---")
+
+                    # 统计有多少场已经有比分
+                    finished = [p for p in results if p.get("event", {}).get("home_score") is not None]
+                    st.info(f"其中 **{len(finished)}/{len(results)}** 场已有比分")
+                else:
+                    st.warning("返回 0 条——可能日期范围无效，或 Bzzoiro 不给历史预测")
+            else:
+                st.error(f"接口返回 {r.status_code}：{r.text[:200]}")
+        except Exception as e:
+            st.error(f"请求异常：{e}")
