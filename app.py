@@ -1527,6 +1527,44 @@ with tab2:
                         fill = other_df.sort_values("_conf", ascending=False)
                         selected = pd.concat([core_df, fill])
                         note = f"⚠️ 核心比赛 {n_core_in_window} 场，其他未开赛比赛不足，当前只有 {len(selected)} 场"
+                            else:
+                # 2. 优先挑出你手动加入的核心比赛
+                core_ids = set(st.session_state.core_matches)
+                core_df = notstarted_all[notstarted_all["event_id"].isin(core_ids)].copy()
+                
+                # 3. 自动补充的其他比赛（放宽到未来 24 小时内）
+                other_df_all = notstarted_all[~notstarted_all["event_id"].isin(core_ids)].copy()
+                end_window_auto = now + timedelta(hours=24)
+                other_df = other_df_all[other_df_all["kickoff_dt"] <= end_window_auto].copy()
+                
+                # 4. 计算信心度
+                def calc_conf(row):
+                    return max(row["_prob_home"] / 100 if row["_prob_home"] else 0,
+                               row["_prob_draw"] / 100 if row["_prob_draw"] else 0,
+                               row["_prob_away"] / 100 if row["_prob_away"] else 0,
+                               row["_prob_over"] if row["_prob_over"] else 0,
+                               row["_prob_under"] if row["_prob_under"] else 0)
+                
+                if not core_df.empty:
+                    core_df["_conf"] = core_df.apply(calc_conf, axis=1)
+                if not other_df.empty:
+                    other_df["_conf"] = other_df.apply(calc_conf, axis=1)
+                
+                # 5. 组合最终推荐场次（优先用核心比赛）
+                n_core_in_window = len(core_df)
+                if n_core_in_window >= 3:
+                    selected = core_df.sort_values("_conf", ascending=False).head(3)
+                    note = f"✅ 使用你手动加入的核心比赛 {len(selected)} 场"
+                elif n_core_in_window > 0:
+                    need = 3 - n_core_in_window
+                    if len(other_df) >= need:
+                        fill = other_df.sort_values("_conf", ascending=False).head(need)
+                        selected = pd.concat([core_df, fill])
+                        note = f"✅ 核心比赛 {n_core_in_window} 场 + 自动补充 {len(fill)} 场"
+                    else:
+                        fill = other_df.sort_values("_conf", ascending=False)
+                        selected = pd.concat([core_df, fill])
+                        note = f"⚠️ 核心比赛 {n_core_in_window} 场，其他未开赛比赛不足，当前只有 {len(selected)} 场"
                 else:
                     if len(other_df) >= 3:
                         selected = other_df.sort_values("_conf", ascending=False).head(3)
@@ -1534,16 +1572,6 @@ with tab2:
                     else:
                         selected = other_df.sort_values("_conf", ascending=False)
                         note = f"⚠️ 未加入核心，未来 24 小时只有 {len(selected)} 场"
-                def calc_conf(row):
-                    return max(row["_prob_home"] / 100 if row["_prob_home"] else 0,
-                               row["_prob_draw"] / 100 if row["_prob_draw"] else 0,
-                               row["_prob_away"] / 100 if row["_prob_away"] else 0,
-                               row["_prob_over"] if row["_prob_over"] else 0,
-                               row["_prob_under"] if row["_prob_under"] else 0)
-                             if not core_df.empty:
-                 core_df["_conf"] = core_df.apply(calc_conf, axis=1)
-             if not other_df.empty:
-                 other_df["_conf"] = other_df.apply(calc_conf, axis=1)
                 n_core_in_window = len(core_df)
                 if n_core_in_window >= 3:
                     selected = core_df.sort_values("_conf", ascending=False).head(3)
