@@ -2161,7 +2161,63 @@ with tab5:
                                     st.metric("调整后命中", f"{ar*100:.1f}%", f"{ah}/{len(ag)}" if ag else "无")
                                 with c4:
                                     st.metric("原推荐 ROI", roi_str, roi_delta)
+                                                            # ========== v3.3 新增：按置信度分档命中率 ==========
+                        st.markdown("### 📊 按置信度分档命中率")
+                        st.caption("看模型在哪一档概率最准 —— 理论概率 vs 实际命中率。差距越小越可信。")
 
+                        buckets = [
+                            ("<55%", 0, 55),
+                            ("55-70%", 55, 70),
+                            ("70-85%", 70, 85),
+                            ("85%+", 85, 101),
+                        ]
+
+                        valid_recs = []
+                        for r in review_rows:
+                            if r["原推荐命中"] not in ("✅", "❌"):
+                                continue
+                            prob_str = str(r.get("推荐概率", "")).replace("%", "").strip()
+                            try:
+                                prob_val = float(prob_str)
+                            except Exception:
+                                continue
+                            valid_recs.append({"prob": prob_val, "hit": r["原推荐命中"] == "✅"})
+
+                        if not valid_recs:
+                            st.info("暂无已完赛的推荐比赛，无法分档统计。")
+                        else:
+                            bucket_rows = []
+                            for label, lo, hi in buckets:
+                                in_bucket = [x for x in valid_recs if lo <= x["prob"] < hi]
+                                if not in_bucket:
+                                    bucket_rows.append({
+                                        "模型置信度": label,
+                                        "场次": 0,
+                                        "理论命中率": "—",
+                                        "实际命中率": "—",
+                                        "偏差": "—",
+                                    })
+                                    continue
+                                n = len(in_bucket)
+                                hits = sum(1 for x in in_bucket if x["hit"])
+                                actual = hits / n * 100
+                                theory = sum(x["prob"] for x in in_bucket) / n
+                                diff = actual - theory
+                                if abs(diff) <= 3:
+                                    diff_str = f"{diff:+.1f}% ✅"
+                                elif abs(diff) <= 8:
+                                    diff_str = f"{diff:+.1f}% ⚠️"
+                                else:
+                                    diff_str = f"{diff:+.1f}% ❌"
+                                bucket_rows.append({
+                                    "模型置信度": label,
+                                    "场次": n,
+                                    "理论命中率": f"{theory:.1f}%",
+                                    "实际命中率": f"{actual:.1f}% ({hits}/{n})",
+                                    "偏差": diff_str,
+                                })
+                            st.dataframe(pd.DataFrame(bucket_rows), use_container_width=True, hide_index=True)
+                            st.caption("💡 偏差 ≤±3% 说明该档可信；偏差为负说明模型高估，正说明低估。")
                     if review_scope in ("复盘当天全部预测", "两者都复盘") and all_today_df is not None and len(all_today_df) > 0:
                         st.markdown("### 📋 当天全部预测复盘")
                         for _, m in all_today_df.iterrows():
