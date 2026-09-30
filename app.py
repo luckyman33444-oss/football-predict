@@ -87,14 +87,11 @@ def get_league_warning(grade):
     if grade == "F": return "🔴 低可信"
     return "⚪ 普通"
 
-# ★★★ 改動 1：平手盤觀望 + 亞盤門檻整體後移 0.10 ★★★
 def compute_model_asian_handicap(xg_h, xg_a):
     diff = xg_h - xg_a
     abs_diff = abs(diff)
-    # 平手盤擴大：< 0.25 一律觀望（回測顯示平手盤命中率僅 36.8%）
-    if abs_diff < 0.25:
-        return "平手", f"无让球（xG差 {diff:+.2f}）· 观望"
-    # 讓球門檻整體後移 0.10
+    if abs_diff < 0.20:
+        return "平手", f"無讓球（xG差 {diff:+.2f}）· 觀望"
     if abs_diff < 0.50: line = 0.25
     elif abs_diff < 0.75: line = 0.5
     elif abs_diff < 1.00: line = 0.75
@@ -104,13 +101,11 @@ def compute_model_asian_handicap(xg_h, xg_a):
     elif abs_diff < 2.00: line = 1.75
     else: line = 2.0
     if diff > 0:
-        return f"主让 {line}", f"看好主胜（xG差 {diff:+.2f}）"
+        return f"主讓 {line}", f"看好主勝（xG差 {diff:+.2f}）"
     else:
-        return f"客让 {line}", f"看好客胜（xG差 {diff:+.2f}）"
+        return f"客讓 {line}", f"看好客勝（xG差 {diff:+.2f}）"
 
-# ★★★ 改動 4：比分方向加入和局傾向 ★★★
 def compute_score_direction(xg_h, xg_a, prob_hw, prob_d, prob_aw):
-    # 回測顯示和局被嚴重低估，和局 >= 28% 且與最大值差距 < 0.10 → 顯示和局
     max_prob = max(prob_hw, prob_d, prob_aw)
     if prob_d >= 0.28 and (max_prob - prob_d) < 0.10:
         return f"和局 {prob_d*100:.1f}% ⚠️ 倾向和局"
@@ -123,16 +118,9 @@ def compute_score_direction(xg_h, xg_a, prob_hw, prob_d, prob_aw):
     else: level = "⚠️ 低"
     return f"{top[0]} {confidence*100:.1f}% {level}"
 
-# ★★★ 改動 3：勝平負推薦加入和局提升 ★★★
 def pick_best_result(hw, d, aw):
-    """
-    回測顯示主勝被高估（73% 推薦率、50% 命中）、和局被低估（0.3% 推薦率）。
-    規則：
-      1. 若和局 >= 24% 且與最大機率差距 < 0.15 → 推和局
-      2. 否則按最大機率推主勝/客勝
-    """
     max_prob = max(hw, d, aw)
-    if d >= 0.24 and (max_prob - d) < 0.15:
+    if d >= 0.28 and (max_prob - d) < 0.10:
         return ("和局", d)
     if hw >= aw:
         return ("主胜", hw)
@@ -234,105 +222,32 @@ def predict_full_dc(xg_h, xg_a, rho=-0.05):
     h2_d = sum(p for (h, a), p in m2.items() if h == a)
     h2_aw = sum(p for (h, a), p in m2.items() if h < a)
     h2 = "主胜" if h2_hw >= max(h2_d, h2_aw) else ("和局" if h2_d >= h2_aw else "客胜")
-    # ★ 加入 best_result
     best_result, best_prob = pick_best_result(hw, d, aw)
+
+    dist = {}
+    for (h, a), p in m.items():
+        dist[h + a] = dist.get(h + a, 0) + p
+
+    ou_lines = {
+        1.5: sum(p for n, p in dist.items() if n >= 2),
+        2.0: sum(p for n, p in dist.items() if n >= 3),
+        2.5: sum(p for n, p in dist.items() if n >= 3),
+        3.0: sum(p for n, p in dist.items() if n >= 4),
+        3.5: sum(p for n, p in dist.items() if n >= 4),
+    }
+    best_line = max(ou_lines.keys(), key=lambda L: max(ou_lines[L], 1 - ou_lines[L]))
+    best_over = ou_lines[best_line] >= 0.5
+    ou_text = f"{'大' if best_over else '小'}{best_line} {max(ou_lines[best_line], 1 - ou_lines[best_line]) * 100:.1f}%"
+
+    ah_line, ah_note = compute_model_asian_handicap(xg_h, xg_a)
+
     return {"over_scores": over_scores, "under_scores": under_scores, "top_scores": top,
             "hw": hw, "d": d, "aw": aw, "over25": ov25, "under25": un25, "h1": h1, "h2": h2,
-            "best_result": best_result, "best_prob": best_prob}
+            "best_result": best_result, "best_prob": best_prob,
+            "ou_text": ou_text, "ou_lines": ou_lines,
+            "ah_line": ah_line, "ah_note": ah_note}
 
-def fetch_standings(league_id, season):
-    if not API_FOOTBALL_KEY: return None
-    try:
-        r = requests.get(f"{API_FOOTBALL_BASE}/standings",
-            headers={"x-apisports-key": API_FOOTBALL_KEY},
-            params={"league": league_id, "season": season}, timeout=15)
-        if r.status_code != 200: return None
-        data = r.json()
-        standings_list = data.get("response", [])
-        if not standings_list: return None
-        league_data = standings_list[0].get("league", {})
-        standings = league_data.get("standings", [])
-        if not standings: return None
-        table = standings[0] if isinstance(standings[0], list) else standings
-        result = {}
-        for row in table:
-            team_name = row.get("team", {}).get("name", "")
-            result[team_name] = {"rank": row.get("rank"), "points": row.get("points")}
-        return result
-    except:
-        return None
-
-def judge_motivation_tier(rank, total_teams, points, max_points):
-    if rank is None or total_teams == 0: return "mid_table"
-    if rank <= 4: return "title_race" if rank <= 2 else "european"
-    if rank >= total_teams - 3: return "relegation"
-    if rank <= 8: return "european"
-    return "mid_table"
-
-def find_team_in_standings(standings, team_name_cn, team_name_en):
-    if not standings: return None
-    for name, info in standings.items():
-        if team_name_cn and (team_name_cn in name or name in team_name_cn): return info
-        if team_name_en and (team_name_en.lower() in name.lower() or name.lower() in team_name_en.lower()): return info
-    return None
-
-def apply_motivation_adjustment(xg_h, xg_a, home_tier, away_tier):
-    home_w = MOTIVATION_WEIGHT.get(home_tier, MOTIVATION_WEIGHT["mid_table"])["home"]
-    away_w = MOTIVATION_WEIGHT.get(away_tier, MOTIVATION_WEIGHT["mid_table"])["away"]
-    return xg_h * home_w, xg_a * away_w, home_w, away_w
-
-BSD_TOKEN = _get_secret("BSD_TOKEN")
-BSD_BASE = "https://sports.bzzoiro.com/api/v2"
-BSD_HEADERS = {"Authorization": f"Token {BSD_TOKEN}"}
-
-ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
-ESPN_LEAGUES = {
-    "eng.1": "英超", "esp.1": "西甲", "ger.1": "德甲", "ita.1": "意甲", "fra.1": "法甲",
-    "uefa.champions": "欧冠", "uefa.europa": "欧联杯", "ned.1": "荷甲", "por.1": "葡超",
-    "bra.1": "巴甲", "usa.1": "美职联", "mex.1": "墨超", "chn.1": "中超", "jpn.1": "日职联",
-    "kor.1": "韩K联", "aus.1": "澳超", "sau.1": "沙特联", "eng.2": "英冠",
-    "tur.1": "土超", "bel.1": "比甲", "sco.1": "苏超",
-}
-
-LEAGUE_CN = {
-    "Premier League": "英超", "LaLiga": "西甲", "Serie A": "意甲",
-    "Bundesliga": "德甲", "Ligue 1": "法甲", "Champions League": "欧冠",
-    "Europa League": "欧联杯", "Eredivisie": "荷甲", "Primeira Liga": "葡超",
-    "Championship": "英冠", "Super Lig": "土超", "Jupiler Pro League": "比甲",
-    "Super League Greece": "希腊超", "Russian Premier League": "俄超",
-    "Ukrainian Premier League": "乌超", "Bundesliga Austria": "奥甲",
-    "Super League Switzerland": "瑞士超", "Superliga Denmark": "丹超",
-    "Allsvenskan": "瑞典超", "Eliteserien": "挪超",
-    "Scottish Premiership": "苏超", "League Two": "英乙",
-    "League One": "英甲", "Ekstraklasa": "波兰甲",
-    "Coppa Italia": "意杯", "Copa del Rey": "国王杯",
-    "Coupe de France": "法国杯", "DFB Pokal": "德国杯",
-    "UEFA Nations League": "欧国联",
-    "Serie A Brazil": "巴甲", "Brasileirão Serie B": "巴乙",
-    "Liga Profesional Argentina": "阿甲", "MLS": "美职联",
-    "Liga MX": "墨超", "NWSL": "美国女足",
-    "Categoría Primera A": "哥伦比亚甲",
-    "Segunda División": "西乙", "Liga F": "西班牙女足",
-    "Chinese Super League": "中超", "J1 League": "日职联",
-    "K League 1": "韩K联", "A-League": "澳超", "Saudi Pro League": "沙特联",
-    "Nigeria Premier Football League": "尼日利亚超",
-    "Botola Pro": "摩洛哥甲",
-    "CONCACAF Nations League": "中北美国家联赛",
-    "International": "国际赛", "Club Friendlies": "俱乐部友谊",
-    "International Friendly Games": "国际友谊",
-    "FIFA World Cup": "世界杯", "UEFA European Championship": "欧洲杯",
-    "Copa America": "美洲杯", "Africa Cup of Nations": "非洲杯",
-    "USL Championship": "美国USL", "United Soccer League": "美国USL",
-    "Liga MX Apertura": "墨超",
-    "Campeonato de Portugal": "葡萄牙杯", "Taça de Portugal": "葡萄牙杯",
-    "National League": "英格兰全国联赛",
-    "National League North": "英议北",
-    "National League South": "英议南",
-}
-
-# ★★★ 改動 5：補了 200+ 隊名中文翻譯 ★★★
 TEAM_CN = {
-    # 英超
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
     "Chelsea": "切尔西", "Crystal Palace": "水晶宫", "Everton": "埃弗顿",
@@ -341,9 +256,7 @@ TEAM_CN = {
     "Newcastle": "纽卡斯尔联", "Nottingham Forest": "诺丁汉森林",
     "Sunderland": "桑德兰", "Tottenham": "托特纳姆热刺",
     "West Ham": "西汉姆联", "Wolves": "狼队", "Wolverhampton": "狼队",
-    "Ipswich Town": "伊普斯维奇", "Coventry City": "考文垂",
-    "Hull City": "赫尔城",
-    # 西甲
+    "Ipswich Town": "伊普斯维奇", "Coventry City": "考文垂", "Hull City": "赫尔城",
     "Real Madrid": "皇家马德里", "Barcelona": "巴塞罗那",
     "Atletico Madrid": "马德里竞技", "Sevilla": "塞维利亚",
     "Real Betis": "皇家贝蒂斯", "Valencia": "瓦伦西亚",
@@ -356,7 +269,6 @@ TEAM_CN = {
     "Levante UD": "莱万特", "Celta Vigo": "塞尔塔",
     "Deportivo de A Coruña": "拉科鲁尼亚", "Real Racing Club": "桑坦德竞技",
     "Málaga CF": "马拉加", "FC Barcelona": "巴塞罗那",
-    # 德甲
     "Bayern Munich": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "莱比锡红牛", "Bayer Leverkusen": "勒沃库森",
     "Eintracht Frankfurt": "法兰克福", "Stuttgart": "斯图加特",
@@ -377,7 +289,6 @@ TEAM_CN = {
     "Karlsruher SC": "卡尔斯鲁厄", "1. FC Kaiserslautern": "凯泽斯劳滕",
     "1. FC Nürnberg": "纽伦堡", "Hannover 96": "汉诺威96",
     "Arminia Bielefeld": "比勒费尔德", "VfL Osnabrück": "奥斯纳布吕克",
-    # 意甲
     "Inter": "国际米兰", "AC Milan": "AC米兰", "Juventus": "尤文图斯",
     "Napoli": "那不勒斯", "Roma": "罗马", "Lazio": "拉齐奥",
     "Atalanta": "亚特兰大", "Fiorentina": "佛罗伦萨", "Bologna": "博洛尼亚",
@@ -390,8 +301,7 @@ TEAM_CN = {
     "Palermo": "巴勒莫", "Cremonese": "克雷莫纳", "Sampdoria": "桑普多利亚",
     "Pisa": "比萨", "Empoli": "恩波利", "Ascoli": "阿斯科利",
     "Potenza Calcio": "波坦察", "Catanzaro": "卡坦扎罗",
-    "Südtirol": "南蒂罗尔", "Juventus": "尤文图斯",
-    # 法甲
+    "Südtirol": "南蒂罗尔",
     "Paris Saint-Germain": "巴黎圣日耳曼", "Marseille": "马赛",
     "Lyon": "里昂", "Monaco": "摩纳哥", "Lille": "里尔",
     "Rennes": "雷恩", "Nice": "尼斯", "Lens": "朗斯",
@@ -401,7 +311,6 @@ TEAM_CN = {
     "Lorient": "洛里昂", "Olympique Lyonnais": "里昂",
     "Olympique de Marseille": "马赛", "Paris FC": "巴黎FC",
     "RC Strasbourg": "斯特拉斯堡", "RC Lens": "朗斯",
-    # 荷甲
     "Ajax": "阿贾克斯", "PSV": "埃因霍温", "PSV Eindhoven": "埃因霍温",
     "Feyenoord": "费耶诺德", "AZ Alkmaar": "阿尔克马尔",
     "FC Twente": "特温特", "FC Utrecht": "乌德勒支",
@@ -412,7 +321,6 @@ TEAM_CN = {
     "SC Cambuur": "坎布尔", "Excelsior": "埃克塞尔西奥",
     "SC Telstar": "特尔斯达", "ADO Den Haag": "海牙",
     "AFC Ajax": "阿贾克斯", "FC Emmen": "埃门",
-    # 葡超
     "Benfica": "本菲卡", "Porto": "波尔图", "Sporting CP": "葡萄牙体育",
     "FC Porto": "波尔图", "Sporting Braga": "布拉加",
     "Vitória SC": "吉马良斯", "FC Arouca": "阿罗卡",
@@ -425,7 +333,6 @@ TEAM_CN = {
     "Liga Portugal Betclic": "葡超",
     "SL Benfica B": "本菲卡B队", "FC Porto B": "波尔图B队",
     "Sporting CP B U21": "葡萄牙体育B队",
-    # 比甲
     "Club Brugge KV": "布鲁日", "Club Brugge": "布鲁日",
     "RSC Anderlecht": "安德莱赫特", "KRC Genk": "亨克",
     "KAA Gent": "根特", "Standard Liège": "标准列日",
@@ -436,14 +343,12 @@ TEAM_CN = {
     "SV Zulte Waregem": "祖尔特瓦雷海姆", "SK Beveren": "贝弗伦",
     "Lommel SK": "洛默尔", "RAAL La Louvière": "拉卢维耶尔",
     "Royale Union Saint-Gilloise": "圣吉罗斯",
-    # 蘇超
     "Celtic": "凯尔特人", "Rangers": "流浪者",
     "Aberdeen": "阿伯丁", "Heart of Midlothian": "哈茨",
     "Hibernian": "希伯尼安", "Dundee FC": "邓迪FC",
     "Dundee United": "邓迪联", "Motherwell": "马瑟韦尔",
     "St. Mirren": "圣米伦", "St. Johnstone": "圣约翰斯通",
     "Kilmarnock": "基尔马诺克", "Falkirk FC": "福尔柯克",
-    # 土超
     "Galatasaray": "加拉塔萨雷", "Fenerbahce": "费内巴切",
     "Beşiktaş JK": "贝西克塔斯", "Trabzonspor": "特拉布宗体育",
     "Başakşehir FK": "巴萨克赛尔", "Konyaspor": "科尼亚体育",
@@ -454,7 +359,6 @@ TEAM_CN = {
     "Çaykur Rizespor": "里泽体育", "Eyüpspor": "埃于普体育",
     "Kocaelispor": "科贾埃利", "Gençlerbirliği": "根塞尔伯里吉",
     "Çorum FK": "乔鲁姆", "Al Faisaly": "费萨里",
-    # 巴西
     "Flamengo": "弗拉门戈", "Palmeiras": "帕尔梅拉斯",
     "Corinthians": "科林蒂安", "São Paulo": "圣保罗",
     "Santos": "桑托斯", "Fluminense": "弗鲁米嫩塞",
@@ -475,7 +379,6 @@ TEAM_CN = {
     "Sport Recife": "累西腓体育", "Avaí": "阿瓦伊",
     "Londrina": "隆德里纳", "Operário-PR": "巴拉纳工人",
     "Atlético Goianiense": "戈亚尼亚竞技", "毕尔巴鄂竞技": "毕尔巴鄂竞技",
-    # 阿根廷
     "Boca Juniors": "博卡青年", "River Plate": "河床",
     "Racing Club": "竞技俱乐部", "Independiente": "独立",
     "San Lorenzo": "圣洛伦索", "Vélez Sarsfield": "萨斯菲尔德",
@@ -496,7 +399,6 @@ TEAM_CN = {
     "Deportivo Riestra": "里斯特拉", "Gimnasia y Esgrima Mendoza": "门多萨体操",
     "Estudiantes de Río Cuarto": "里奥夸尔托学生",
     "Arsenal de Sarandí": "萨兰迪阿森纳", "Colón": "科隆",
-    # 美職聯
     "Inter Miami": "迈阿密国际", "LA Galaxy": "洛杉矶银河",
     "LAFC": "洛杉矶FC", "Los Angeles FC": "洛杉矶FC",
     "New York Red Bulls": "纽约红牛", "New York City FC": "纽约城",
@@ -513,7 +415,6 @@ TEAM_CN = {
     "Sporting Kansas City": "堪萨斯城竞技", "St.Louis City": "圣路易斯城",
     "Toronto FC": "多伦多FC", "Vancouver Whitecaps": "温哥华白帽",
     "San Diego FC": "圣地亚哥FC",
-    # 墨超
     "Cruz Azul": "蓝十字", "Tigres UANL": "老虎大学",
     "Club América": "墨西哥美洲", "墨西哥美洲": "墨西哥美洲",
     "CD Guadalajara": "瓜达拉哈拉", "Club León": "莱昂",
@@ -524,7 +425,6 @@ TEAM_CN = {
     "Querétaro FC": "克雷塔罗", "Atlético San Luis": "圣路易斯竞技",
     "FC Juárez": "华雷斯", "CD Toluca": "托卢卡",
     "Atlante FC": "阿特兰特", "蓝十字": "蓝十字", "老虎大学": "老虎大学",
-    # 中超
     "Shanghai Port": "上海海港", "上海海港": "上海海港",
     "Shandong Taishan": "山东泰山", "山东泰山": "山东泰山",
     "Beijing Guoan": "北京国安", "北京国安": "北京国安",
@@ -536,7 +436,6 @@ TEAM_CN = {
     "Dalian Yingbo FC": "大连英博", "Liaoning Tieren FC": "辽宁铁人",
     "Shenzhen Peng City": "深圳新鹏城",
     "Chongqing Tonglianglong FC": "重庆铜梁龙",
-    # 日職
     "Yokohama F. Marinos": "横滨水手", "Kashima Antlers": "鹿岛鹿角",
     "Gamba Osaka": "大阪钢巴", "Urawa Red Diamonds": "浦和红钻",
     "Cerezo Osaka": "大阪樱花", "Vissel Kobe": "神户胜利船",
@@ -552,14 +451,12 @@ TEAM_CN = {
     "Tokushima Vortis": "德岛漩涡", "Kataller Toyama": "富山胜利",
     "Tegevajaro Miyazaki": "宫崎特格瓦雅罗", "FC Imabari": "今治FC",
     "Tochigi City FC": "枥木市FC", "Fujieda MYFC": "藤枝MYFC",
-    # 韓K
     "Pohang Steelers": "浦项制铁", "Jeonbuk Hyundai Motors": "全北现代",
     "Ulsan HD": "蔚山HD", "FC Seoul": "首尔FC",
     "Incheon United": "仁川联", "Gangwon FC": "江原FC",
     "Gwangju FC": "光州FC", "Jeju SK": "济州SK",
     "Daejeon Hana Citizen": "大田韩亚市民", "Bucheon FC 1995": "富川FC",
     "Gimcheon Sangmu FC": "金泉尚武", "FC Anyang": "安养FC",
-    # 沙特
     "Al Hilal": "利雅得新月", "Al Nassr": "利雅得胜利",
     "Al-Ittihad": "吉达联合", "Al-Ahli": "吉达国民",
     "Al-Shabab": "利雅得青年人", "Al-Ettifaq": "伊蒂法克",
@@ -568,8 +465,6 @@ TEAM_CN = {
     "Al-Hazem": "哈兹姆", "Al-Kholood": "科鲁德",
     "Al-Qadsiah": "卡迪西亚", "Al-Fayha": "费哈",
     "Neom SC": "新未来城", "Diriyah": "迪里耶",
-    "Al Faisaly": "费萨里",
-    # 國家隊
     "England": "英格兰", "France": "法国", "Germany": "德国",
     "Spain": "西班牙", "Italy": "意大利", "Portugal": "葡萄牙",
     "Netherlands": "荷兰", "Belgium": "比利时", "Croatia": "克罗地亚",
@@ -607,7 +502,7 @@ TEAM_CN = {
     "Faroe Islands": "法罗群岛", "Cyprus": "塞浦路斯",
     "Israel": "以色列", "Saudi Arabia": "沙特阿拉伯",
     "Qatar": "卡塔尔", "United Arab Emirates": "阿联酋",
-    "Australia": "澳大利亚", "India": "印度", "Thailand": "泰国",
+    "India": "印度", "Thailand": "泰国",
     "Vietnam": "越南", "Indonesia": "印度尼西亚", "Malaysia": "马来西亚",
     "Singapore": "新加坡", "Philippines": "菲律宾",
     "Hong Kong": "中国香港", "Chinese Taipei": "中华台北",
@@ -636,16 +531,7 @@ TEAM_CN = {
     "Saint Martin": "法属圣马丁",
     "São Tomé and Príncipe": "圣多美和普林西比",
     "Sri Lanka": "斯里兰卡", "Seychelles": "塞舌尔",
-    "Russia": "俄罗斯", "Dominica": "多米尼克",
-    "Sint Maarten": "圣马丁",
-    # 其他國家隊補充
-    "Paraguay": "巴拉圭", "Ecuador": "厄瓜多尔",
-    "Bolivia": "玻利维亚", "Venezuela": "委内瑞拉",
-    "Uzbekistan": "乌兹别克斯坦",
-    "Kyrgyzstan": "吉尔吉斯斯坦", "Tajikistan": "塔吉克斯坦",
-    "Dominica": "多米尼克", "Anguilla": "安圭拉",
-    "Azerbaijan": "阿塞拜疆", "Tajikistan": "塔吉克斯坦",
-    # 其他常見俱樂部
+    "Russia": "俄罗斯",
     "Rapid Wien": "维也纳快速", "SK Rapid Wien": "维也纳快速",
     "SK Sturm Graz": "格拉茨风暴", "Red Bull Salzburg": "萨尔茨堡红牛",
     "LASK": "林茨", "FK Austria Wien": "奥地利维也纳",
@@ -696,7 +582,6 @@ TEAM_CN = {
     "Śląsk Wrocław": "弗罗茨瓦夫", "Wieczysta Kraków": "克拉科夫永恒",
     "Arka Gdynia": "格丁尼亚", "Wisła II Płock": "普沃茨克维斯瓦二队",
     "Chrobry Głogów": "格沃古夫", "Miedź Legnica": "莱格尼察",
-    "Korona II Kielce": "凯尔采科罗纳二队",
     "Podbeskidzie Bielsko-Biała": "别尔斯科-比亚瓦",
     "Hutnik Kraków": "克拉科夫胡特尼克",
     "Znicz Pruszków": "普鲁什库夫", "ŁKS Łódź II": "罗兹ŁKS二队",
@@ -722,28 +607,14 @@ TEAM_CN = {
     "MKS Kluczbork": "克卢奇堡", "KS Lechia Gdańsk": "格但斯克莱赫",
     "Polonia Środa Wielkopolska": "大波兰希罗达",
     "Widzew II Łódź": "罗兹维泽夫二队",
-    "Korona II Kielce": "凯尔采科罗纳二队",
     "Bruk-Bet Termalica Nieciecza": "涅切查",
     "Śląsk II Wrocław": "弗罗茨瓦夫二队",
     "KS Beskid Andrychów": "安德雷胡夫",
     "Górnik Zabrze II": "扎布热矿工二队",
     "Stal Mielec": "梅莱茨钢铁",
-    "Chrobry Głogów": "格沃古夫",
-    "Miedź Legnica": "莱格尼察",
     "MKS Avia Świdnik": "希维德尼克",
     "Lechia Zielona Góra": "绿山城莱赫",
     "Pogoń Grodzisk Mazowiecki": "马佐夫舍格罗济斯克",
-    "Wisła II Płock": "普沃茨克维斯瓦二队",
-    "Korona II Kielce": "凯尔采科罗纳二队",
-    "Śląsk II Wrocław": "弗罗茨瓦夫二队",
-    "Górnik Zabrze II": "扎布热矿工二队",
-    "Lechia Zielona Góra": "绿山城莱赫",
-    "Pogoń Siedlce": "谢德尔采",
-    "OKS Odra Opole": "奥波莱奥德拉",
-    "MKS Kluczbork": "克卢奇堡",
-    "KS Lechia Gdańsk": "格但斯克莱赫",
-    "Polonia Środa Wielkopolska": "大波兰希罗达",
-    # 歐協聯/歐聯常見小球隊
     "DAC 1904": "多瑙斯特雷达", "FK Velež Mostar": "韦莱日莫斯塔尔",
     "Valletta FC": "瓦莱塔", "AEK Larnaca": "AEK拉纳卡",
     "Beitar Jerusalem": "贝塔尔耶路撒冷", "RFS": "RFS里加",
@@ -752,70 +623,38 @@ TEAM_CN = {
     "FC Sion": "锡永", "FC Santa Coloma": "圣科洛马",
     "ML Vitebsk": "维捷布斯克", "FK Sutjeska Nikšić": "苏捷斯卡",
     "FC Zimbru Chişinău": "津布鲁基希讷乌", "FC Noah": "诺亚",
-    "Tromsø IL": "特罗姆瑟", "FC Hradec Králové": "赫拉德茨克拉洛韦",
-    "FC Universitatea Cluj": "克卢日大学", "SK Brann": "布兰",
+    "FC Hradec Králové": "赫拉德茨克拉洛韦",
+    "FC Universitatea Cluj": "克卢日大学",
     "Sheriff Tiraspol": "蒂拉斯波尔警长", "Maccabi Tel Aviv": "特拉维夫马卡比",
-    "Hammarby IF": "哈马比", "RSC Anderlecht": "安德莱赫特",
     "Dinamo Tbilisi": "第比利斯迪纳摩", "FK Žalgiris": "扎尔吉里斯",
     "FC Vaduz": "瓦杜兹", "Atlètic Club Escaldes": "埃斯卡尔德斯",
     "FCSB": "FCSB", "FK Auda": "奥达", "FC St. Gallen 1879": "圣加仑",
-    "Beşiktaş JK": "贝西克塔斯", "FC Twente": "特温特",
     "Ferencváros TC": "费伦茨瓦罗斯", "FK Vojvodina": "伏伊伏丁那",
-    "AFC Ajax": "阿贾克斯", "Paksi FC": "保克什",
-    "Panathinaikos FC": "帕纳辛奈科斯", "Polissya Zhytomyr": "日托米尔波利西亚",
-    "NK Aluminij Kidričevo": "阿卢米尼", "Dinamo City": "地拉那迪纳摩",
-    "NK Varaždin": "瓦拉日丁", "FK Jablonec": "亚布洛内茨",
-    "FC Lugano": "卢加诺", "Dukagjini": "杜卡吉尼",
-    "LNZ Cherkasy": "切尔卡瑟LNZ", "KAA Gent": "根特",
+    "Paksi FC": "保克什", "Panathinaikos FC": "帕纳辛奈科斯",
+    "Polissya Zhytomyr": "日托米尔波利西亚", "Dinamo City": "地拉那迪纳摩",
+    "FK Jablonec": "亚布洛内茨", "FC Lugano": "卢加诺",
+    "Dukagjini": "杜卡吉尼", "LNZ Cherkasy": "切尔卡瑟LNZ",
     "FK Borac Banja Luka": "巴尼亚卢卡战士", "FC Petrocub Hîncesti": "彼得罗古",
-    "MŠK Žilina": "日利纳", "GKS Katowice": "卡托维兹",
-    "Hapoel Tel Aviv": "特拉维夫夏普尔", "Ludogorets": "卢多戈雷茨",
-    "NSÍ Runavík": "鲁纳维克", "FC Koper": "科佩尔",
-    "NK Bravo": "布拉沃", "KF Shkëndija": "什肯迪亚",
-    "HNK Rijeka": "里耶卡", "Derry City": "德里城",
-    "Motherwell": "马瑟韦尔", "HB Tórshavn": "托尔斯港HB",
+    "MŠK Žilina": "日利纳", "Hapoel Tel Aviv": "特拉维夫夏普尔",
+    "Ludogorets": "卢多戈雷茨", "NSÍ Runavík": "鲁纳维克",
+    "FC Koper": "科佩尔", "KF Shkëndija": "什肯迪亚",
+    "Derry City": "德里城", "HB Tórshavn": "托尔斯港HB",
     "Shelbourne": "谢尔本", "Nõmme Kalju": "诺梅卡柳",
-    "HNK Hajduk Split": "哈伊杜克", "Pafos FC": "帕福斯",
-    "FK Partizan": "贝尔格莱德游击", "Una Strassen": "斯特拉森",
-    "Stjarnan Garðabær": "加尔扎拜尔", "Ilves": "伊尔韦斯",
+    "Pafos FC": "帕福斯", "FK Partizan": "贝尔格莱德游击",
+    "Una Strassen": "斯特拉森", "Stjarnan Garðabær": "加尔扎拜尔",
     "Valur Reykjavík": "雷克雅未克瓦鲁尔", "HŠK Zrinjski Mostar": "莫斯塔尔兹林斯基",
-    "Bolívar": "玻利瓦尔", "Grêmio": "格雷米奥",
-    "Corinthians": "科林蒂安", "Remo": "雷莫",
-    "Botafogo": "博塔弗戈", "Vitória": "维多利亚",
-    "Cuiabá": "库亚巴", "Atlético Goianiense": "戈亚尼亚竞技",
-    "Botafogo-SP": "博塔弗戈SP", "Juventude": "尤文图德",
-    "Independiente Santa Fe": "圣菲独立", "Caracas F.C.": "加拉加斯卡拉卡斯",
-    "O'Higgins": "奥希金斯", "UTA Arad": "阿拉德UTA",
-    "SC Oțelul Galați": "加拉茨钢铁", "FF Jaro": "雅罗",
-    "SJK": "SJK", "Radomiak Radom": "拉多姆",
-    "Wieczysta Kraków": "克拉科夫永恒", "Västerås SK": "韦斯特罗斯",
-    "Örgryte IS": "厄格里特", "Arda Kardzhali": "阿尔达克尔贾利",
-    "Slavia Sofia": "索菲亚斯拉维亚", "FC Argeș Pitești": "皮特什蒂阿尔杰什",
-    "FC Petrolul Ploiești": "普洛耶什蒂石油", "Pogoń Szczecin": "什切青",
-    "Legia Warszawa": "华沙莱吉亚", "Llaneros FC": "利亚内罗斯",
-    "Deportivo Pereira": "佩雷拉体育", "Houston Dash": "休斯顿达什",
-    "Bay FC": "湾区FC", "Orlando Pride": "奥兰多荣耀",
-    "Chicago Stars FC": "芝加哥之星", "Birmingham Legion FC": "伯明翰军团",
-    "New Mexico United": "新墨西哥联", "Deportivo Cali": "卡利体育",
-    "Jaguares de Córdoba": "科尔多瓦美洲豹", "Portland Thorns FC": "波特兰荆棘",
-    "NJ/NY Gotham FC": "新泽西/纽约哥谭", "Club Tijuana": "蒂华纳",
-    "Club León": "莱昂", "Atlante FC": "阿特兰特",
-    "墨西哥美洲": "墨西哥美洲", "Gold Coast Knights": "黄金海岸骑士",
-    "Gold Coast United": "黄金海岸联", "Qingdao Hainiu": "青岛海牛",
-    "Tianjin Jinmen Tiger": "天津津门虎", "Pohang Steelers": "浦项制铁",
-    "Jeonbuk Hyundai Motors": "全北现代", "Gimcheon Sangmu FC": "金泉尚武",
-    "Daejeon Hana Citizen": "大田韩亚市民", "Liaoning Tieren FC": "辽宁铁人",
-    "Qingdao West Coast": "青岛西海岸", "上海海港": "上海海港",
-    "上海申花": "上海申花", "Wuhan Three Towns": "武汉三镇",
-    "Chongqing Tonglianglong FC": "重庆铜梁龙", "FC Seoul": "首尔FC",
-    "Ulsan HD": "蔚山HD", "Gwangju FC": "光州FC",
-    "Jeju SK": "济州SK", "FC Anyang": "安养FC",
-    "Gangwon FC": "江原FC", "Incheon United": "仁川联",
-    "Bucheon FC 1995": "富川FC", "Yunnan Yukun": "云南玉昆",
-    "Shenzhen Peng City": "深圳新鹏城", "Chengdu Rongcheng": "成都蓉城",
-    "北京国安": "北京国安", "山东泰山": "山东泰山",
-    "Henan FC": "河南队", "Dalian Yingbo FC": "大连英博",
-    # 其他補充
+    "Bolívar": "玻利瓦尔", "Independiente Santa Fe": "圣菲独立",
+    "Caracas F.C.": "加拉加斯卡拉卡斯", "O'Higgins": "奥希金斯",
+    "UTA Arad": "阿拉德UTA", "SC Oțelul Galați": "加拉茨钢铁",
+    "Arda Kardzhali": "阿尔达克尔贾利", "Slavia Sofia": "索菲亚斯拉维亚",
+    "FC Argeș Pitești": "皮特什蒂阿尔杰什", "FC Petrolul Ploiești": "普洛耶什蒂石油",
+    "Llaneros FC": "利亚内罗斯", "Deportivo Pereira": "佩雷拉体育",
+    "Houston Dash": "休斯顿达什", "Bay FC": "湾区FC",
+    "Orlando Pride": "奥兰多荣耀", "Chicago Stars FC": "芝加哥之星",
+    "Birmingham Legion FC": "伯明翰军团", "New Mexico United": "新墨西哥联",
+    "Deportivo Cali": "卡利体育", "Jaguares de Córdoba": "科尔多瓦美洲豹",
+    "Portland Thorns FC": "波特兰荆棘", "NJ/NY Gotham FC": "新泽西/纽约哥谭",
+    "Gold Coast Knights": "黄金海岸骑士", "Gold Coast United": "黄金海岸联",
     "Sporting Lagos FC": "拉各斯体育", "Rivers United": "河流联",
     "Ranchers Bees": "牧场蜜蜂", "Kano Pillars": "卡诺支柱",
     "Katsina United": "卡齐纳联", "Plateau United": "高原联",
@@ -843,7 +682,15 @@ TEAM_CN = {
     "US Ben Guerdane": "本盖尔丹", "CS Hammam-Lif": "哈马姆利夫",
     "ES Hammam-Sousse": "哈马姆苏斯", "JS Omrane": "奥姆兰",
     "Olympique Béja": "贝雅奥林匹克", "PS Sakiet Eddaïer": "萨基特西迪优素福",
-    "ES Zarzis": "扎尔齐斯", "US Monastir": "莫纳斯提尔",
+    "Brooklyn FC": "布鲁克林FC", "Detroit City FC": "底特律城", "Miami FC": "迈阿密FC",
+    "SC Jacksonville": "杰克逊维尔SC", "Rhode Island FC": "罗德岛FC", "Indy Eleven": "印地十一",
+    "FC Tulsa": "塔尔萨FC", "Las Vegas Lights": "拉斯维加斯之光", "Sacramento Republic FC": "萨克拉门托共和",
+    "Pittsburgh Riverhounds": "匹兹堡猎犬河", "San Antonio FC": "圣安东尼奥FC",
+    "Louisville City FC": "路易斯维尔城", "Orange County SC": "橙县SC", "El Paso Locomotive FC": "埃尔帕索机车",
+    "Colorado Springs Switchbacks FC": "科罗拉多斯普林斯", "Memphis 901 FC": "孟菲斯901",
+    "Oakland Roots SC": "奥克兰根", "Tampa Bay Rowdies": "坦帕湾暴徒", "Phoenix Rising FC": "菲尼克斯崛起",
+    "Charleston Battery": "查尔斯顿电池", "Hartford Athletic": "哈特福德竞技",
+    "Atlético Nacional": "国民竞技", "Junior Barranquilla": "巴兰基亚青年",
 }
 
 def team_cn(name):
@@ -860,6 +707,43 @@ def team_cn(name):
         if base.endswith(suf) and base[:-len(suf)] in TEAM_CN:
             return TEAM_CN[base[:-len(suf)]] + suffix
     return base + suffix
+
+LEAGUE_CN = {
+    "Premier League": "英超", "LaLiga": "西甲", "Serie A": "意甲",
+    "Bundesliga": "德甲", "Ligue 1": "法甲", "Champions League": "欧冠",
+    "Europa League": "欧联杯", "Eredivisie": "荷甲", "Primeira Liga": "葡超",
+    "Championship": "英冠", "Super Lig": "土超", "Jupiler Pro League": "比甲",
+    "Super League Greece": "希腊超", "Russian Premier League": "俄超",
+    "Ukrainian Premier League": "乌超", "Bundesliga Austria": "奥甲",
+    "Super League Switzerland": "瑞士超", "Superliga Denmark": "丹超",
+    "Allsvenskan": "瑞典超", "Eliteserien": "挪超",
+    "Scottish Premiership": "苏超", "League Two": "英乙",
+    "League One": "英甲", "Ekstraklasa": "波兰甲",
+    "Coppa Italia": "意杯", "Copa del Rey": "国王杯",
+    "Coupe de France": "法国杯", "DFB Pokal": "德国杯",
+    "UEFA Nations League": "欧国联",
+    "Serie A Brazil": "巴甲", "Brasileirão Serie B": "巴乙",
+    "Liga Profesional Argentina": "阿甲", "MLS": "美职联",
+    "Liga MX": "墨超", "NWSL": "美国女足",
+    "Categoría Primera A": "哥伦比亚甲",
+    "Segunda División": "西乙", "Liga F": "西班牙女足",
+    "Chinese Super League": "中超", "J1 League": "日职联",
+    "K League 1": "韩K联", "A-League": "澳超", "Saudi Pro League": "沙特联",
+    "Nigeria Premier Football League": "尼日利亚超",
+    "Botola Pro": "摩洛哥甲",
+    "CONCACAF Nations League": "中北美国家联赛",
+    "International": "国际赛", "Club Friendlies": "俱乐部友谊",
+    "International Friendly Games": "国际友谊",
+    "FIFA World Cup": "世界杯", "UEFA European Championship": "欧洲杯",
+    "Copa America": "美洲杯", "Africa Cup of Nations": "非洲杯",
+    "USL Championship": "美国USL", "United Soccer League": "美国USL",
+    "Liga MX Apertura": "墨超",
+    "Campeonato de Portugal": "葡萄牙杯", "Taça de Portugal": "葡萄牙杯",
+    "National League": "英格兰全国联赛",
+    "National League North": "英议北",
+    "National League South": "英议南",
+    "Liga Profesional de Fútbol": "阿甲",
+}
 
 def league_cn(name):
     if not name: return "其他"
@@ -1084,7 +968,6 @@ def fetch_all_predictions():
             if offset > 20000: break
         else: break
     return all_results, None
-
 def parse_prediction(p):
     ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
     mk = p.get("markets", {}) if isinstance(p.get("markets"), dict) else {}
@@ -1131,7 +1014,6 @@ def parse_prediction(p):
     alt_score_p = scores_list[1][1] if len(scores_list) > 1 else 0
     h1 = pred["h1"] if pred else "—"
     h2 = pred["h2"] if pred else "—"
-    # ★ 用模型 best_result 決定預測結果（不再用 Bzzoiro 的 predicted）
     if pred:
         model_result = pred["best_result"]
     else:
@@ -1151,7 +1033,9 @@ def parse_prediction(p):
         "预测结果": model_result,
         "上半场": h1, "下半场": h2,
         "主胜": fp(prob_home), "和局": fp(prob_draw), "客胜": fp(prob_away),
-        "大小球": f"{over_label} {over_pct:.1f}%",
+        "大小球": pred["ou_text"] if pred else f"{over_label} {over_pct:.1f}%",
+        "亚盘": pred["ah_line"] if pred else "平手",
+        "亚盘判断": pred["ah_note"] if pred else "",
         "预期主队进球": f"{xg_h:.2f}" if xg_h else "—",
         "预期客队进球": f"{xg_a:.2f}" if xg_a else "—",
         "_prob_home": prob_home, "_prob_draw": prob_draw, "_prob_away": prob_away,
@@ -1316,7 +1200,6 @@ def backtest_one(p, actual_map):
     else:
         hw, d, aw = prob_home_bz, prob_draw_bz, prob_away_bz
         over_pct = float(p_over_raw) if p_over_raw is not None else 50.0
-    # ★ 用新的 pick_best_result
     if pred:
         best_result_name = pred["best_result"]
         best_result_prob = pred["best_prob"] * 100
@@ -1351,13 +1234,10 @@ def backtest_one(p, actual_map):
         ar = "主胜" if ah > aa else ("和局" if ah == aa else "客胜")
         if pr == ar: return "⚠️方向对"
         return "❌方向错"
-    
-    # ★ 亞盤方向（平手盤改為觀望，命中欄顯示「觀望」不計入統計）
     pred_xg_h = float(xg_h_raw) * xg_mult if xg_h_raw is not None else 1.5
     pred_xg_a = float(xg_a_raw) * xg_mult if xg_a_raw is not None else 1.2
     ah_line, ah_note = compute_model_asian_handicap(pred_xg_h, pred_xg_a)
     score_dir = compute_score_direction(pred_xg_h, pred_xg_a, hw / 100, d / 100, aw / 100)
-    # 平手盤：觀望，命中欄顯示 None（不計入統計）
     if "平手" in ah_line or "觀望" in ah_note or "观望" in ah_note:
         ah_hit = None
     else:
@@ -1371,7 +1251,6 @@ def backtest_one(p, actual_map):
             ah_hit = (a - h) > line_num
         else:
             ah_hit = (h > a)
-    
     return {
         "event_id": eid, "联赛": league_name_cn, "等级": grade,
         "主队": team_cn(ev.get("home_team", "?")),
@@ -1448,7 +1327,7 @@ def build_excel(bet_rows, stable_rows, info_rows, review_rows=None, meta_rows=No
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v3.9（平手盤觀望 + 和局提升 + 中文隊名）")
+st.title("⚽ 足球预测 v4.0（全中文 + 亞洲盤顯示 + 核心聯動）")
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
@@ -1483,9 +1362,13 @@ with tab1:
         sel_leagues = st.multiselect("筛选联赛（不选则显示全部）", all_leagues, default=[], key="lg1")
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
-        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v3.9：平手盤改觀望、和局提升、隊名中文化")
+        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v4.0：全中文 + 亚洲盘 + 核心联动")
         if not df.empty:
-            display_df = df[["时间", "联赛", "联赛等级", "状态", "主队", "客队", "主力比分", "备选比分", "预测结果", "主胜", "和局", "客胜", "大小球"]].copy()
+            display_df = df[[
+                "时间", "联赛", "联赛等级", "状态", "主队", "客队",
+                "主力比分", "备选比分", "预测结果",
+                "主胜", "和局", "客胜", "大小球", "亚盘"
+            ]].copy()
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
             edited = st.data_editor(display_df, use_container_width=True, hide_index=True,
                 column_config={"加入核心": st.column_config.CheckboxColumn("加入核心", help="勾选后点下方按钮保存到核心列表", default=False)},
@@ -1498,8 +1381,18 @@ with tab1:
                     st.success(f"已保存 {len(selected_event_ids)} 场核心比赛。")
                     st.rerun()
             with col_info:
-                if st.session_state.core_matches: st.info(f"📌 当前核心：**{len(st.session_state.core_matches)}** 场")
-
+                if st.session_state.core_matches:
+                    st.info(f"📌 当前核心：**{len(st.session_state.core_matches)}** 场")
+                    core_df = df[df["event_id"].isin(st.session_state.core_matches)].copy()
+                    if not core_df.empty:
+                        st.markdown("### 🎯 已加入核心比赛详情")
+                        st.dataframe(
+                            core_df[[
+                                "时间", "联赛", "主队", "客队", "主力比分", "备选比分",
+                                "预测结果", "大小球", "亚盘", "主胜", "和局", "客胜"
+                            ]],
+                            use_container_width=True, hide_index=True
+                        )
 # ========== Tab 2 ==========
 with tab2:
     now = datetime.now(CST)
@@ -1522,6 +1415,16 @@ with tab2:
     core_count = len(st.session_state.core_matches)
     if core_count: st.info(f"📌 已手动加入 **{core_count}** 场核心比赛")
     else: st.caption("📌 未手动加入核心。可在 **Tab 1** 勾选，或在 **Tab 4** 搜索后加入。")
+
+    # 直接显示核心比赛详情
+    if core_count and not df_all.empty:
+        core_only_df = df_all[df_all["event_id"].isin(st.session_state.core_matches)].copy()
+        if not core_only_df.empty:
+            st.markdown("### 🎯 当前核心比赛（来自 Tab1）")
+            show_cols = ["时间", "联赛", "主队", "客队", "主力比分", "备选比分", "预测结果", "大小球", "亚盘", "主胜", "和局", "客胜"]
+            show_cols = [c for c in show_cols if c in core_only_df.columns]
+            st.dataframe(core_only_df[show_cols], use_container_width=True, hide_index=True)
+
     if st.button("🎯 生成 3串1 推荐", type="primary", key="btn_core"):
         if df_all.empty: st.warning("没有数据可分析。")
         else:
@@ -1636,7 +1539,6 @@ with tab2:
                                 adj_pred["hw"], adj_pred["d"], adj_pred["aw"] = cap_home_win_prob(adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
                                 if old_hw > 0.70: cap_info = f"主胜封顶 {old_hw*100:.1f}%→{adj_pred['hw']*100:.1f}%"
                         if adj_pred:
-                            # ★ 用 pick_best_result 決定調整後推薦
                             best_name, best_prob = pick_best_result(adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
                             adj_best = (best_name, best_prob)
                             if adj_pred["over25"] >= 0.5: adj_scores = adj_pred["over_scores"]
@@ -1656,7 +1558,6 @@ with tab2:
                         direction_agreement = judge_direction_agreement(opts[0][0], adj_best[0])
                         advice_pct = adj_best[1] * 100 if adj_best[1] else 0
                         bet_advice = get_bet_advice(advice_pct)
-                        
                         base_xg_h = row["_xg_h"] or 1.5
                         base_xg_a = row["_xg_a"] or 1.2
                         base_trust = get_league_trust_level(row.get("联赛", ""))
@@ -1676,7 +1577,6 @@ with tab2:
                             "final_xg_h": final_xg_h, "final_xg_a": final_xg_a, "adj_pred": adj_pred,
                             "ah_line": ah_line, "ah_note": ah_note, "score_dir": score_dir,
                         }
-                        
                         matches_data.append({
                             "event_id": eid, "比赛": f"{row['主队']} vs {row['客队']}",
                             "时间": row["时间"], "联赛": row["联赛"], "等级": grade,
@@ -1694,7 +1594,6 @@ with tab2:
                             "model_compare": model_compare,
                             "_xg_h": xg_h, "_xg_a": xg_a,
                         })
-                    
                     grade_counts = {}
                     for md in matches_data:
                         g = md.get("等级", "B")
@@ -1705,9 +1604,8 @@ with tab2:
                     if f_matches:
                         st.error(f"🔴 **警示：以下 {len(f_matches)} 场为 F 级联赛**（回测命中率 <50%），下注请谨慎：")
                         for fm in f_matches: st.write(f"- {fm['比赛']}（{fm['联赛']}）")
-                    
                     st.subheader("🎯 模型对比 & 亚盘方向")
-                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/分层/DC/融合/封顶 ｜ v3.9：平手盤改觀望")
+                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/分层/DC/融合/封顶 ｜ v4.0")
                     compare_rows = []
                     for i, md in enumerate(matches_data, 1):
                         mc = md.get("model_compare", {})
@@ -1742,7 +1640,6 @@ with tab2:
                             "变化": diff_marker,
                         })
                     if compare_rows: st.dataframe(pd.DataFrame(compare_rows), use_container_width=True, hide_index=True)
-                    
                     st.markdown("**📊 亚盘让球方向汇总**")
                     ah_rows = []
                     for i, md in enumerate(matches_data, 1):
@@ -1755,9 +1652,7 @@ with tab2:
                             "比分倾向": mc["score_dir"],
                         })
                     if ah_rows: st.dataframe(pd.DataFrame(ah_rows), use_container_width=True, hide_index=True)
-                    
                     st.divider()
-                    
                     info_rows = []
                     if enable_lineup_info or enable_market_info or enable_motivation or enable_handicap:
                         st.subheader("🔍 半自动情报面板")
@@ -1824,7 +1719,6 @@ with tab2:
                             st.warning(f"⚠️ 发现 **{len(direction_mismatch)}** 场原推荐与调整后方向不一致：")
                             for d in direction_mismatch: st.write(f"- **{d['比赛']}**：原推荐 {d['原推荐']}，调整后 {d['调整后推荐']}")
                         st.divider()
-                    
                     st.subheader("🎲 比分串（3串1，基于调整后推荐）")
                     best_idx = None; best_ratio = 0
                     for i, md in enumerate(matches_data):
@@ -2003,7 +1897,7 @@ with tab4:
             for _, row in result.iterrows():
                 c1, c2, c3 = st.columns([5, 2, 1])
                 with c1: st.write(f"**{row['主队']} vs {row['客队']}** ｜ {row['联赛']}({row.get('联赛等级', 'B')}) ｜ {row['event_date']} {row['时间']}")
-                with c2: st.write(f"主 {row['主胜']} ｜ 和 {row['和局']} ｜ 客 {row['客胜']} ｜ {row['大小球']}")
+                with c2: st.write(f"主 {row['主胜']} ｜ 和 {row['和局']} ｜ 客 {row['客胜']} ｜ {row['大小球']} ｜ {row['亚盘']}")
                 with c3:
                     is_core = row["event_id"] in st.session_state.core_matches
                     if is_core:
@@ -2258,7 +2152,7 @@ with tab5:
 
 # ========== Tab 6：历史回测 ==========
 with tab6:
-    st.subheader("📈 历史批量回测（v3.9：平手盤觀望 + 和局提升）")
+    st.subheader("📈 历史批量回测（v4.0：全中文 + 亚洲盘）")
     st.caption("拉历史预测 + 历史比分，批量计算命中率。平手盤不計入亞盤統計。")
     col_a, col_b = st.columns(2)
     with col_a: bt_from = st.date_input("起始日期", value=date.today() - timedelta(days=7), key="bt_from")
@@ -2294,7 +2188,6 @@ with tab6:
                 else:
                     st.success(f"✅ 成功回测 **{len(bt_rows)}** 场")
                     bt_df = pd.DataFrame(bt_rows)
-                    # ★ 亞盤統計排除平手盤（ah_hit 為 None）
                     bt_ah = bt_df[bt_df["亚盘命中"].notna()].copy()
                     total_bt = len(bt_df)
                     total_ah = len(bt_ah)
@@ -2312,7 +2205,6 @@ with tab6:
                     with c2: st.metric("胜平负命中", f"{r_hits/total_bt*100:.1f}%", f"{r_hits}/{total_bt}")
                     with c3: st.metric("大小球命中", f"{o_hits/total_bt*100:.1f}%", f"{o_hits}/{total_bt}")
                     with c4: st.metric("亚盘方向命中", f"{ah_hits/total_ah*100:.1f}%" if total_ah > 0 else "—", f"{ah_hits}/{total_ah}（不含平手观望）")
-                    
                     st.markdown("### 🎯 比分命中率")
                     c1, c2 = st.columns(2)
                     with c1:
@@ -2327,7 +2219,6 @@ with tab6:
                         st.write(f"- ⚠️方向对：{a_dir} ({a_dir/total_bt*100:.1f}%)")
                         st.write(f"- ❌方向错：{a_wrong} ({a_wrong/total_bt*100:.1f}%)")
                         st.write(f"- **方向命中率：{(a_full+a_dir)/total_bt*100:.1f}%**")
-                    
                     st.markdown("### 📊 按亚盘让球方向统计（平手观望已排除）")
                     ah_stats = {}
                     for _, r in bt_ah.iterrows():
@@ -2337,14 +2228,12 @@ with tab6:
                         ah_stats[key]["t"] += 1
                         if r["亚盘命中"]: ah_stats[key]["h"] += 1
                     ah_rows = []
-                    # 平手觀望單獨統計
                     flat_count = len(bt_df) - total_ah
                     ah_rows.append({"亚盘方向": "平手（观望，不计命中）", "场次": flat_count, "命中": "—", "命中率": "—"})
                     for d, s in sorted(ah_stats.items(), key=lambda x: -x[1]["t"]):
                         rate = s["h"] / s["t"] * 100 if s["t"] else 0
                         ah_rows.append({"亚盘方向": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"})
                     st.dataframe(pd.DataFrame(ah_rows), use_container_width=True, hide_index=True)
-                    
                     st.markdown("### 📊 按胜平负推荐方向")
                     dir_stats_r = {}
                     for _, r in bt_df.iterrows():
@@ -2357,7 +2246,6 @@ with tab6:
                         rate = s["h"] / s["t"] * 100 if s["t"] else 0
                         dir_rows_r.append({"推荐方向": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"})
                     st.dataframe(pd.DataFrame(dir_rows_r), use_container_width=True, hide_index=True)
-                    
                     st.markdown("### 📊 按大小球推荐方向")
                     dir_stats_o = {}
                     for _, r in bt_df.iterrows():
@@ -2370,7 +2258,6 @@ with tab6:
                         rate = s["h"] / s["t"] * 100 if s["t"] else 0
                         dir_rows_o.append({"推荐方向": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"})
                     st.dataframe(pd.DataFrame(dir_rows_o), use_container_width=True, hide_index=True)
-                    
                     st.markdown("### 📊 按联赛（至少 3 场）")
                     lg_stats = {}
                     for _, r in bt_df.iterrows():
@@ -2391,7 +2278,6 @@ with tab6:
                                         "大小球命中率": f"{s['oh']/s['t']*100:.1f}%",
                                         "亚盘命中率": ah_rate})
                     if lg_rows: st.dataframe(pd.DataFrame(lg_rows), use_container_width=True, hide_index=True)
-                    
                     st.markdown("### 📊 按置信度")
                     buckets = [("<55%", 0, 55), ("55-70%", 55, 70), ("70-85%", 70, 85), ("85%+", 85, 101)]
                     b_rows = []
@@ -2408,7 +2294,6 @@ with tab6:
                                        "大小球命中率": f"{sub['大小球命中'].sum()/n*100:.1f}%",
                                        "亚盘命中率": ah_rate})
                     st.dataframe(pd.DataFrame(b_rows), use_container_width=True, hide_index=True)
-                    
                     st.markdown("### 📋 全部明细")
                     show_cols = ["联赛", "等级", "主队", "客队", "模型xG", "亚盘方向", "亚盘判断", "亚盘命中",
                                  "比分方向", "胜平负推荐", "胜平负概率", "大小球推荐", "大小球概率",
@@ -2416,7 +2301,6 @@ with tab6:
                                  "主力比分命中", "备选比分命中", "置信度"]
                     show_cols = [c for c in show_cols if c in bt_df.columns]
                     st.dataframe(bt_df[show_cols], use_container_width=True, hide_index=True)
-                    
                     buf = io.BytesIO()
                     with pd.ExcelWriter(buf, engine='openpyxl') as w:
                         bt_df.to_excel(w, sheet_name='回测明细', index=False)
@@ -2429,4 +2313,4 @@ with tab6:
                         file_name=f"回测_{from_str}_{to_str}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_backtest")
 
-st.caption("⚠️ v3.9：平手盤改觀望、亞盤門檻後移、和局提升、隊名中文化。数据永远在你手中。")
+st.caption("⚠️ v4.0：全中文 + 亞洲盤顯示 + 核心聯動。数据永远在你手中。")
