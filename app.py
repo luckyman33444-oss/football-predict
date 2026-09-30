@@ -247,6 +247,59 @@ def predict_full_dc(xg_h, xg_a, rho=-0.05):
             "ou_text": ou_text, "ou_lines": ou_lines,
             "ah_line": ah_line, "ah_note": ah_note}
 
+BSD_TOKEN = _get_secret("BSD_TOKEN")
+BSD_BASE = "https://sports.bzzoiro.com/api/v2"
+BSD_HEADERS = {"Authorization": f"Token {BSD_TOKEN}"}
+
+ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
+ESPN_LEAGUES = {
+    "eng.1": "英超", "esp.1": "西甲", "ger.1": "德甲", "ita.1": "意甲", "fra.1": "法甲",
+    "uefa.champions": "欧冠", "uefa.europa": "欧联杯", "ned.1": "荷甲", "por.1": "葡超",
+    "bra.1": "巴甲", "usa.1": "美职联", "mex.1": "墨超", "chn.1": "中超", "jpn.1": "日职联",
+    "kor.1": "韩K联", "aus.1": "澳超", "sau.1": "沙特联", "eng.2": "英冠",
+    "tur.1": "土超", "bel.1": "比甲", "sco.1": "苏超",
+}
+
+def fetch_standings(league_id, season):
+    if not API_FOOTBALL_KEY: return None
+    try:
+        r = requests.get(f"{API_FOOTBALL_BASE}/standings",
+            headers={"x-apisports-key": API_FOOTBALL_KEY},
+            params={"league": league_id, "season": season}, timeout=15)
+        if r.status_code != 200: return None
+        data = r.json()
+        standings_list = data.get("response", [])
+        if not standings_list: return None
+        league_data = standings_list[0].get("league", {})
+        standings = league_data.get("standings", [])
+        if not standings: return None
+        table = standings[0] if isinstance(standings[0], list) else standings
+        result = {}
+        for row in table:
+            team_name = row.get("team", {}).get("name", "")
+            result[team_name] = {"rank": row.get("rank"), "points": row.get("points")}
+        return result
+    except:
+        return None
+
+def judge_motivation_tier(rank, total_teams, points, max_points):
+    if rank is None or total_teams == 0: return "mid_table"
+    if rank <= 4: return "title_race" if rank <= 2 else "european"
+    if rank >= total_teams - 3: return "relegation"
+    if rank <= 8: return "european"
+    return "mid_table"
+
+def find_team_in_standings(standings, team_name_cn, team_name_en):
+    if not standings: return None
+    for name, info in standings.items():
+        if team_name_cn and (team_name_cn in name or name in team_name_cn): return info
+        if team_name_en and (team_name_en.lower() in name.lower() or name.lower() in team_name_en.lower()): return info
+    return None
+
+def apply_motivation_adjustment(xg_h, xg_a, home_tier, away_tier):
+    home_w = MOTIVATION_WEIGHT.get(home_tier, MOTIVATION_WEIGHT["mid_table"])["home"]
+    away_w = MOTIVATION_WEIGHT.get(away_tier, MOTIVATION_WEIGHT["mid_table"])["away"]
+    return xg_h * home_w, xg_a * away_w, home_w, away_w
 TEAM_CN = {
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
