@@ -87,28 +87,33 @@ def get_league_warning(grade):
     if grade == "F": return "🔴 低可信"
     return "⚪ 普通"
 
-# ★ 新增：根据 xG 差值换算亚洲盘口让球数
+# ★★★ 改動 1：平手盤觀望 + 亞盤門檻整體後移 0.10 ★★★
 def compute_model_asian_handicap(xg_h, xg_a):
     diff = xg_h - xg_a
     abs_diff = abs(diff)
-    if abs_diff < 0.15: line = 0.0
-    elif abs_diff < 0.40: line = 0.25
-    elif abs_diff < 0.65: line = 0.5
-    elif abs_diff < 0.90: line = 0.75
-    elif abs_diff < 1.15: line = 1.0
-    elif abs_diff < 1.40: line = 1.25
-    elif abs_diff < 1.65: line = 1.5
-    elif abs_diff < 1.90: line = 1.75
+    # 平手盤擴大：< 0.25 一律觀望（回測顯示平手盤命中率僅 36.8%）
+    if abs_diff < 0.25:
+        return "平手", f"无让球（xG差 {diff:+.2f}）· 观望"
+    # 讓球門檻整體後移 0.10
+    if abs_diff < 0.50: line = 0.25
+    elif abs_diff < 0.75: line = 0.5
+    elif abs_diff < 1.00: line = 0.75
+    elif abs_diff < 1.25: line = 1.0
+    elif abs_diff < 1.50: line = 1.25
+    elif abs_diff < 1.75: line = 1.5
+    elif abs_diff < 2.00: line = 1.75
     else: line = 2.0
-    if abs_diff < 0.15:
-        return "平手", f"无让球（xG差 {diff:+.2f}）"
     if diff > 0:
         return f"主让 {line}", f"看好主胜（xG差 {diff:+.2f}）"
     else:
         return f"客让 {line}", f"看好客胜（xG差 {diff:+.2f}）"
 
-# ★ 新增：根据概率给出比分方向
+# ★★★ 改動 4：比分方向加入和局傾向 ★★★
 def compute_score_direction(xg_h, xg_a, prob_hw, prob_d, prob_aw):
+    # 回測顯示和局被嚴重低估，和局 >= 28% 且與最大值差距 < 0.10 → 顯示和局
+    max_prob = max(prob_hw, prob_d, prob_aw)
+    if prob_d >= 0.28 and (max_prob - prob_d) < 0.10:
+        return f"和局 {prob_d*100:.1f}% ⚠️ 倾向和局"
     opts = [("主胜", prob_hw), ("和局", prob_d), ("客胜", prob_aw)]
     opts.sort(key=lambda x: -x[1])
     top = opts[0]
@@ -117,6 +122,21 @@ def compute_score_direction(xg_h, xg_a, prob_hw, prob_d, prob_aw):
     elif confidence >= 0.55: level = "✅ 中"
     else: level = "⚠️ 低"
     return f"{top[0]} {confidence*100:.1f}% {level}"
+
+# ★★★ 改動 3：勝平負推薦加入和局提升 ★★★
+def pick_best_result(hw, d, aw):
+    """
+    回測顯示主勝被高估（73% 推薦率、50% 命中）、和局被低估（0.3% 推薦率）。
+    規則：
+      1. 若和局 >= 24% 且與最大機率差距 < 0.15 → 推和局
+      2. 否則按最大機率推主勝/客勝
+    """
+    max_prob = max(hw, d, aw)
+    if d >= 0.24 and (max_prob - d) < 0.15:
+        return ("和局", d)
+    if hw >= aw:
+        return ("主胜", hw)
+    return ("客胜", aw)
 
 def get_match_tier(league_name_cn, league_name_en=""):
     combined = (league_name_cn or "") + " " + (league_name_en or "")
@@ -214,8 +234,11 @@ def predict_full_dc(xg_h, xg_a, rho=-0.05):
     h2_d = sum(p for (h, a), p in m2.items() if h == a)
     h2_aw = sum(p for (h, a), p in m2.items() if h < a)
     h2 = "主胜" if h2_hw >= max(h2_d, h2_aw) else ("和局" if h2_d >= h2_aw else "客胜")
+    # ★ 加入 best_result
+    best_result, best_prob = pick_best_result(hw, d, aw)
     return {"over_scores": over_scores, "under_scores": under_scores, "top_scores": top,
-            "hw": hw, "d": d, "aw": aw, "over25": ov25, "under25": un25, "h1": h1, "h2": h2}
+            "hw": hw, "d": d, "aw": aw, "over25": ov25, "under25": un25, "h1": h1, "h2": h2,
+            "best_result": best_result, "best_prob": best_prob}
 
 def fetch_standings(league_id, season):
     if not API_FOOTBALL_KEY: return None
@@ -307,7 +330,9 @@ LEAGUE_CN = {
     "National League South": "英议南",
 }
 
+# ★★★ 改動 5：補了 200+ 隊名中文翻譯 ★★★
 TEAM_CN = {
+    # 英超
     "Arsenal": "阿森纳", "Aston Villa": "阿斯顿维拉", "Bournemouth": "伯恩茅斯",
     "Brentford": "布伦特福德", "Brighton": "布莱顿", "Burnley": "伯恩利",
     "Chelsea": "切尔西", "Crystal Palace": "水晶宫", "Everton": "埃弗顿",
@@ -315,7 +340,10 @@ TEAM_CN = {
     "Manchester City": "曼城", "Manchester United": "曼联",
     "Newcastle": "纽卡斯尔联", "Nottingham Forest": "诺丁汉森林",
     "Sunderland": "桑德兰", "Tottenham": "托特纳姆热刺",
-    "West Ham": "西汉姆联", "Wolves": "狼队",
+    "West Ham": "西汉姆联", "Wolves": "狼队", "Wolverhampton": "狼队",
+    "Ipswich Town": "伊普斯维奇", "Coventry City": "考文垂",
+    "Hull City": "赫尔城",
+    # 西甲
     "Real Madrid": "皇家马德里", "Barcelona": "巴塞罗那",
     "Atletico Madrid": "马德里竞技", "Sevilla": "塞维利亚",
     "Real Betis": "皇家贝蒂斯", "Valencia": "瓦伦西亚",
@@ -323,32 +351,225 @@ TEAM_CN = {
     "Athletic Club": "毕尔巴鄂竞技", "Real Sociedad": "皇家社会",
     "Girona": "赫罗纳", "Osasuna": "奥萨苏纳", "Elche": "埃尔切",
     "Mallorca": "马洛卡", "Almería": "阿尔梅里亚", "Cádiz": "加的斯",
+    "Deportivo Alavés": "阿拉维斯", "Getafe": "赫塔菲",
+    "Rayo Vallecano": "巴列卡诺", "Espanyol": "西班牙人",
+    "Levante UD": "莱万特", "Celta Vigo": "塞尔塔",
+    "Deportivo de A Coruña": "拉科鲁尼亚", "Real Racing Club": "桑坦德竞技",
+    "Málaga CF": "马拉加", "FC Barcelona": "巴塞罗那",
+    # 德甲
     "Bayern Munich": "拜仁慕尼黑", "Borussia Dortmund": "多特蒙德",
     "RB Leipzig": "莱比锡红牛", "Bayer Leverkusen": "勒沃库森",
     "Eintracht Frankfurt": "法兰克福", "Stuttgart": "斯图加特",
     "Wolfsburg": "沃尔夫斯堡", "Union Berlin": "柏林联合", "Freiburg": "弗赖堡",
+    "FC Bayern München": "拜仁慕尼黑", "VfB Stuttgart": "斯图加特",
+    "1. FC Union Berlin": "柏林联合", "SC Freiburg": "弗赖堡",
+    "TSG Hoffenheim": "霍芬海姆", "FC Augsburg": "奥格斯堡",
+    "SV Werder Bremen": "云达不来梅", "FC Schalke 04": "沙尔克04",
+    "Hamburger SV": "汉堡", "1. FC Köln": "科隆",
+    "Borussia M'gladbach": "门兴格拉德巴赫", "1. FSV Mainz 05": "美因茨",
+    "SC Paderborn 07": "帕德博恩", "SV 07 Elversberg": "埃尔弗斯贝格",
+    "1. FC Heidenheim": "海登海姆", "Holstein Kiel": "基尔",
+    "VfL Bochum 1848": "波鸿", "SpVgg Greuther Fürth": "菲尔特",
+    "Eintracht Braunschweig": "布伦瑞克", "SG Dynamo Dresden": "德累斯顿迪纳摩",
+    "Hertha BSC": "柏林赫塔", "1. FC Magdeburg": "马格德堡",
+    "FC St. Pauli": "圣保利", "VfL Wolfsburg": "沃尔夫斯堡",
+    "Darmstadt 98": "达姆施塔特", "Energie Cottbus": "科特布斯",
+    "Karlsruher SC": "卡尔斯鲁厄", "1. FC Kaiserslautern": "凯泽斯劳滕",
+    "1. FC Nürnberg": "纽伦堡", "Hannover 96": "汉诺威96",
+    "Arminia Bielefeld": "比勒费尔德", "VfL Osnabrück": "奥斯纳布吕克",
+    # 意甲
     "Inter": "国际米兰", "AC Milan": "AC米兰", "Juventus": "尤文图斯",
     "Napoli": "那不勒斯", "Roma": "罗马", "Lazio": "拉齐奥",
     "Atalanta": "亚特兰大", "Fiorentina": "佛罗伦萨", "Bologna": "博洛尼亚",
     "Torino": "都灵", "Udinese": "乌迪内斯", "Genoa": "热那亚",
+    "Parma": "帕尔马", "Cagliari": "卡利亚里", "Como": "科莫",
+    "Lecce": "莱切", "Venezia": "威尼斯", "Monza": "蒙扎",
+    "Sassuolo": "萨索洛", "Frosinone": "弗罗西诺内",
+    "Hellas Verona": "维罗纳", "SSC Napoli": "那不勒斯",
+    "AS Roma": "罗马", "L.R. Vicenza": "维琴察", "Catania": "卡塔尼亚",
+    "Palermo": "巴勒莫", "Cremonese": "克雷莫纳", "Sampdoria": "桑普多利亚",
+    "Pisa": "比萨", "Empoli": "恩波利", "Ascoli": "阿斯科利",
+    "Potenza Calcio": "波坦察", "Catanzaro": "卡坦扎罗",
+    "Südtirol": "南蒂罗尔", "Juventus": "尤文图斯",
+    # 法甲
     "Paris Saint-Germain": "巴黎圣日耳曼", "Marseille": "马赛",
     "Lyon": "里昂", "Monaco": "摩纳哥", "Lille": "里尔",
     "Rennes": "雷恩", "Nice": "尼斯", "Lens": "朗斯",
+    "Stade Rennais": "雷恩", "Stade Brestois": "布雷斯特",
+    "Toulouse": "图卢兹", "Troyes": "特鲁瓦", "Angers": "昂热",
+    "Auxerre": "欧塞尔", "Le Havre": "勒阿弗尔", "Le Mans": "勒芒",
+    "Lorient": "洛里昂", "Olympique Lyonnais": "里昂",
+    "Olympique de Marseille": "马赛", "Paris FC": "巴黎FC",
+    "RC Strasbourg": "斯特拉斯堡", "RC Lens": "朗斯",
+    # 荷甲
     "Ajax": "阿贾克斯", "PSV": "埃因霍温", "PSV Eindhoven": "埃因霍温",
-    "Feyenoord": "费耶诺德",
+    "Feyenoord": "费耶诺德", "AZ Alkmaar": "阿尔克马尔",
+    "FC Twente": "特温特", "FC Utrecht": "乌德勒支",
+    "SC Heerenveen": "海伦芬", "FC Groningen": "格罗宁根",
+    "NEC Nijmegen": "奈梅亨", "Go Ahead Eagles": "前进之鹰",
+    "PEC Zwolle": "兹沃勒", "Sparta Rotterdam": "鹿特丹斯巴达",
+    "Fortuna Sittard": "福图纳锡塔德", "Willem II Tilburg": "蒂尔堡威廉二世",
+    "SC Cambuur": "坎布尔", "Excelsior": "埃克塞尔西奥",
+    "SC Telstar": "特尔斯达", "ADO Den Haag": "海牙",
+    "AFC Ajax": "阿贾克斯", "FC Emmen": "埃门",
+    # 葡超
     "Benfica": "本菲卡", "Porto": "波尔图", "Sporting CP": "葡萄牙体育",
+    "FC Porto": "波尔图", "Sporting Braga": "布拉加",
+    "Vitória SC": "吉马良斯", "FC Arouca": "阿罗卡",
+    "Rio Ave": "里奥阿维", "Moreirense": "莫雷伦斯",
+    "CS Marítimo": "马里迪莫", "Santa Clara": "圣克拉拉",
+    "Estoril Praia": "埃斯托里尔", "Famalicão": "法马利康",
+    "FC Alverca": "阿尔韦尔卡", "Casa Pia": "卡萨皮亚",
+    "Gil Vicente": "吉尔维森特", "CD Nacional": "国民队",
+    "CF Estrela Amadora": "阿马多拉之星", "Académico Viseu FC": "维塞乌",
+    "Liga Portugal Betclic": "葡超",
+    "SL Benfica B": "本菲卡B队", "FC Porto B": "波尔图B队",
+    "Sporting CP B U21": "葡萄牙体育B队",
+    # 比甲
+    "Club Brugge KV": "布鲁日", "Club Brugge": "布鲁日",
+    "RSC Anderlecht": "安德莱赫特", "KRC Genk": "亨克",
+    "KAA Gent": "根特", "Standard Liège": "标准列日",
+    "Royal Antwerp FC": "安特卫普", "Cercle Brugge": "色格拉布鲁日",
+    "KV Mechelen": "梅赫伦", "KV Kortrijk": "科特赖克",
+    "KVC Westerlo": "韦斯特洛", "Oud-Heverlee Leuven": "勒芬",
+    "Sint-Truidense VV": "圣图尔登", "RC Sporting Charleroi": "沙勒罗瓦",
+    "SV Zulte Waregem": "祖尔特瓦雷海姆", "SK Beveren": "贝弗伦",
+    "Lommel SK": "洛默尔", "RAAL La Louvière": "拉卢维耶尔",
+    "Royale Union Saint-Gilloise": "圣吉罗斯",
+    # 蘇超
     "Celtic": "凯尔特人", "Rangers": "流浪者",
+    "Aberdeen": "阿伯丁", "Heart of Midlothian": "哈茨",
+    "Hibernian": "希伯尼安", "Dundee FC": "邓迪FC",
+    "Dundee United": "邓迪联", "Motherwell": "马瑟韦尔",
+    "St. Mirren": "圣米伦", "St. Johnstone": "圣约翰斯通",
+    "Kilmarnock": "基尔马诺克", "Falkirk FC": "福尔柯克",
+    # 土超
     "Galatasaray": "加拉塔萨雷", "Fenerbahce": "费内巴切",
+    "Beşiktaş JK": "贝西克塔斯", "Trabzonspor": "特拉布宗体育",
+    "Başakşehir FK": "巴萨克赛尔", "Konyaspor": "科尼亚体育",
+    "Kayserispor": "开塞利体育", "Alanyaspor": "阿拉尼亚体育",
+    "Gaziantep FK": "加济安泰普", "Kasımpaşa": "卡森帕萨",
+    "Samsunspor": "萨姆松体育", "Göztepe": "戈兹特佩",
+    "Erzurumspor FK": "埃尔祖鲁姆", "Amed Sportif Faaliyetler": "阿梅德体育",
+    "Çaykur Rizespor": "里泽体育", "Eyüpspor": "埃于普体育",
+    "Kocaelispor": "科贾埃利", "Gençlerbirliği": "根塞尔伯里吉",
+    "Çorum FK": "乔鲁姆", "Al Faisaly": "费萨里",
+    # 巴西
     "Flamengo": "弗拉门戈", "Palmeiras": "帕尔梅拉斯",
+    "Corinthians": "科林蒂安", "São Paulo": "圣保罗",
+    "Santos": "桑托斯", "Fluminense": "弗鲁米嫩塞",
+    "Vasco da Gama": "瓦斯科达伽马", "Botafogo": "博塔弗戈",
+    "Atlético Mineiro": "米内罗竞技", "Cruzeiro": "克鲁塞罗",
+    "Grêmio": "格雷米奥", "Internacional": "巴西国际",
+    "Red Bull Bragantino": "红牛布拉甘蒂诺", "Athletico": "巴拉纳竞技",
+    "Bahia": "巴伊亚", "Vitória": "维多利亚",
+    "Coritiba": "科里蒂巴", "Chapecoense": "沙佩科恩斯",
+    "Mirassol": "米拉索尔", "Remo": "雷莫",
+    "Cuiabá": "库亚巴", "Criciúma": "克里西乌马",
+    "Juventude": "尤文图德", "Fortaleza": "福塔莱萨",
+    "Ceará": "塞阿拉", "América Mineiro": "米内罗美洲",
+    "Goiás": "戈亚斯", "Náutico": "瑙蒂科",
+    "São Bernardo": "圣贝尔纳多", "Botafogo-SP": "博塔弗戈SP",
+    "Ponte Preta": "庞特普雷塔", "Novorizontino": "新奥里藏蒂诺",
+    "Vila Nova FC": "维拉诺瓦", "CRB": "CRB",
+    "Sport Recife": "累西腓体育", "Avaí": "阿瓦伊",
+    "Londrina": "隆德里纳", "Operário-PR": "巴拉纳工人",
+    "Atlético Goianiense": "戈亚尼亚竞技", "毕尔巴鄂竞技": "毕尔巴鄂竞技",
+    # 阿根廷
     "Boca Juniors": "博卡青年", "River Plate": "河床",
+    "Racing Club": "竞技俱乐部", "Independiente": "独立",
+    "San Lorenzo": "圣洛伦索", "Vélez Sarsfield": "萨斯菲尔德",
+    "Estudiantes de La Plata": "拉普拉塔大学生",
+    "Gimnasia y Esgrima": "拉普拉塔体操",
+    "Huracán": "飓风", "Rosario Central": "罗萨里奥中央",
+    "Newell's Old Boys": "纽维尔老男孩", "Talleres": "塔列雷斯",
+    "CA Talleres": "塔列雷斯", "Instituto De Córdoba": "科尔多瓦学院",
+    "Belgrano": "贝尔格拉诺", "Club Atlético Belgrano": "贝尔格拉诺",
+    "Argentinos Juniors": "阿根廷青年人", "Tigre": "蒂格雷",
+    "CA Lanús": "拉努斯", "Banfield": "班菲尔德",
+    "Defensa y Justicia": "防卫与正义", "Aldosivi": "阿尔多西维",
+    "Central Córdoba": "中央科尔多瓦", "Barracas Central": "巴拉克中央",
+    "Club Atlético Platense": "普拉滕斯",
+    "Club Atlético Unión de Santa Fe": "圣菲联",
+    "CA Independiente": "独立", "Independiente Rivadavia": "里瓦达维亚独立",
+    "Atlético Tucumán": "图库曼竞技", "Sarmiento": "萨米恩托",
+    "Deportivo Riestra": "里斯特拉", "Gimnasia y Esgrima Mendoza": "门多萨体操",
+    "Estudiantes de Río Cuarto": "里奥夸尔托学生",
+    "Arsenal de Sarandí": "萨兰迪阿森纳", "Colón": "科隆",
+    # 美職聯
     "Inter Miami": "迈阿密国际", "LA Galaxy": "洛杉矶银河",
     "LAFC": "洛杉矶FC", "Los Angeles FC": "洛杉矶FC",
-    "New York Red Bulls": "纽约红牛",
+    "New York Red Bulls": "纽约红牛", "New York City FC": "纽约城",
+    "Atlanta United": "亚特兰大联", "Austin FC": "奥斯汀FC",
+    "Charlotte FC": "夏洛特FC", "Chicago Fire": "芝加哥火焰",
+    "FC Cincinnati": "辛辛那提FC", "Colorado Rapids": "科罗拉多急流",
+    "Columbus Crew": "哥伦布机员", "FC Dallas": "达拉斯FC",
+    "DC United": "华盛顿联", "Houston Dynamo": "休斯顿迪纳摩",
+    "Minnesota United": "明尼苏达联", "CF Montréal": "蒙特利尔",
+    "Nashville SC": "纳什维尔", "New England Revolution": "新英格兰革命",
+    "Orlando City SC": "奥兰多城", "Philadelphia Union": "费城联",
+    "Portland Timbers": "波特兰伐木者", "Real Salt Lake": "皇家盐湖城",
+    "San Jose Earthquakes": "圣何塞地震", "Seattle Sounders FC": "西雅图海湾人",
+    "Sporting Kansas City": "堪萨斯城竞技", "St.Louis City": "圣路易斯城",
+    "Toronto FC": "多伦多FC", "Vancouver Whitecaps": "温哥华白帽",
+    "San Diego FC": "圣地亚哥FC",
+    # 墨超
     "Cruz Azul": "蓝十字", "Tigres UANL": "老虎大学",
-    "Club América": "墨西哥美洲",
-    "Shanghai Port": "上海海港", "Shandong Taishan": "山东泰山",
-    "Beijing Guoan": "北京国安", "Shanghai Shenhua": "上海申花",
+    "Club América": "墨西哥美洲", "墨西哥美洲": "墨西哥美洲",
+    "CD Guadalajara": "瓜达拉哈拉", "Club León": "莱昂",
+    "Club Tijuana": "蒂华纳", "Atlas FC": "阿特拉斯",
+    "Pumas UNAM": "美洲狮", "CF Monterrey": "蒙特雷",
+    "Club Necaxa": "内卡萨", "CF Pachuca": "帕丘卡",
+    "Santos Laguna": "桑托斯拉古纳", "Club Puebla": "普埃布拉",
+    "Querétaro FC": "克雷塔罗", "Atlético San Luis": "圣路易斯竞技",
+    "FC Juárez": "华雷斯", "CD Toluca": "托卢卡",
+    "Atlante FC": "阿特兰特", "蓝十字": "蓝十字", "老虎大学": "老虎大学",
+    # 中超
+    "Shanghai Port": "上海海港", "上海海港": "上海海港",
+    "Shandong Taishan": "山东泰山", "山东泰山": "山东泰山",
+    "Beijing Guoan": "北京国安", "北京国安": "北京国安",
+    "Shanghai Shenhua": "上海申花", "上海申花": "上海申花",
+    "Chengdu Rongcheng": "成都蓉城", "Wuhan Three Towns": "武汉三镇",
+    "Zhejiang": "浙江队", "Henan FC": "河南队",
+    "Tianjin Jinmen Tiger": "天津津门虎", "Yunnan Yukun": "云南玉昆",
+    "Qingdao Hainiu": "青岛海牛", "Qingdao West Coast": "青岛西海岸",
+    "Dalian Yingbo FC": "大连英博", "Liaoning Tieren FC": "辽宁铁人",
+    "Shenzhen Peng City": "深圳新鹏城",
+    "Chongqing Tonglianglong FC": "重庆铜梁龙",
+    # 日職
+    "Yokohama F. Marinos": "横滨水手", "Kashima Antlers": "鹿岛鹿角",
+    "Gamba Osaka": "大阪钢巴", "Urawa Red Diamonds": "浦和红钻",
+    "Cerezo Osaka": "大阪樱花", "Vissel Kobe": "神户胜利船",
+    "FC Tokyo": "东京FC", "Tokyo Verdy": "东京绿茵",
+    "Kawasaki Frontale": "川崎前锋", "Sanfrecce Hiroshima": "广岛三箭",
+    "Nagoya Grampus": "名古屋鲸八", "Kashiwa Reysol": "柏太阳神",
+    "Machida Zelvia": "町田泽维亚", "Shimizu S-Pulse": "清水心跳",
+    "Kyoto Sanga FC": "京都不死鸟", "Avispa Fukuoka": "福冈黄蜂",
+    "V-Varen Nagasaki": "长崎成功丸", "Fagiano Okayama": "冈山雉鸡",
+    "JEF United Chiba": "千叶市原", "Mito Hollyhock": "水户蜀葵",
+    "Sagan Tosu": "鸟栖砂岩", "Ventforet Kofu": "甲府风林",
+    "Jubilo Iwata": "磐田喜悦", "Hokkaido Consadole Sapporo": "札幌冈萨多",
+    "Tokushima Vortis": "德岛漩涡", "Kataller Toyama": "富山胜利",
+    "Tegevajaro Miyazaki": "宫崎特格瓦雅罗", "FC Imabari": "今治FC",
+    "Tochigi City FC": "枥木市FC", "Fujieda MYFC": "藤枝MYFC",
+    # 韓K
+    "Pohang Steelers": "浦项制铁", "Jeonbuk Hyundai Motors": "全北现代",
+    "Ulsan HD": "蔚山HD", "FC Seoul": "首尔FC",
+    "Incheon United": "仁川联", "Gangwon FC": "江原FC",
+    "Gwangju FC": "光州FC", "Jeju SK": "济州SK",
+    "Daejeon Hana Citizen": "大田韩亚市民", "Bucheon FC 1995": "富川FC",
+    "Gimcheon Sangmu FC": "金泉尚武", "FC Anyang": "安养FC",
+    # 沙特
     "Al Hilal": "利雅得新月", "Al Nassr": "利雅得胜利",
+    "Al-Ittihad": "吉达联合", "Al-Ahli": "吉达国民",
+    "Al-Shabab": "利雅得青年人", "Al-Ettifaq": "伊蒂法克",
+    "Al-Taawoun": "布赖代合作", "Al-Fateh": "哈萨征服",
+    "Al-Riyadh": "利雅得", "Al-Khaleej": "哈利吉",
+    "Al-Hazem": "哈兹姆", "Al-Kholood": "科鲁德",
+    "Al-Qadsiah": "卡迪西亚", "Al-Fayha": "费哈",
+    "Neom SC": "新未来城", "Diriyah": "迪里耶",
+    "Al Faisaly": "费萨里",
+    # 國家隊
     "England": "英格兰", "France": "法国", "Germany": "德国",
     "Spain": "西班牙", "Italy": "意大利", "Portugal": "葡萄牙",
     "Netherlands": "荷兰", "Belgium": "比利时", "Croatia": "克罗地亚",
@@ -367,6 +588,262 @@ TEAM_CN = {
     "Tunisia": "突尼斯", "Algeria": "阿尔及利亚", "Egypt": "埃及",
     "Senegal": "塞内加尔", "Nigeria": "尼日利亚", "Ghana": "加纳",
     "Cameroon": "喀麦隆", "South Africa": "南非",
+    "Norway": "挪威", "Denmark": "丹麦", "Sweden": "瑞典",
+    "Poland": "波兰", "Austria": "奥地利", "Switzerland": "瑞士",
+    "Serbia": "塞尔维亚", "Greece": "希腊", "Türkiye": "土耳其",
+    "Ukraine": "乌克兰", "Romania": "罗马尼亚", "Hungary": "匈牙利",
+    "Czechia": "捷克", "Slovakia": "斯洛伐克", "Slovenia": "斯洛文尼亚",
+    "Scotland": "苏格兰", "Wales": "威尔士", "Ireland": "爱尔兰",
+    "Northern Ireland": "北爱尔兰", "Iceland": "冰岛",
+    "Finland": "芬兰", "Estonia": "爱沙尼亚", "Latvia": "拉脱维亚",
+    "Lithuania": "立陶宛", "Belarus": "白俄罗斯", "Moldova": "摩尔多瓦",
+    "Georgia": "格鲁吉亚", "Armenia": "亚美尼亚", "Azerbaijan": "阿塞拜疆",
+    "Kazakhstan": "哈萨克斯坦", "Bulgaria": "保加利亚",
+    "Albania": "阿尔巴尼亚", "North Macedonia": "北马其顿",
+    "Montenegro": "黑山", "Bosnia & Herzegovina": "波黑",
+    "Kosovo": "科索沃", "Malta": "马耳他", "Luxembourg": "卢森堡",
+    "Liechtenstein": "列支敦士登", "Andorra": "安道尔",
+    "San Marino": "圣马力诺", "Gibraltar": "直布罗陀",
+    "Faroe Islands": "法罗群岛", "Cyprus": "塞浦路斯",
+    "Israel": "以色列", "Saudi Arabia": "沙特阿拉伯",
+    "Qatar": "卡塔尔", "United Arab Emirates": "阿联酋",
+    "Australia": "澳大利亚", "India": "印度", "Thailand": "泰国",
+    "Vietnam": "越南", "Indonesia": "印度尼西亚", "Malaysia": "马来西亚",
+    "Singapore": "新加坡", "Philippines": "菲律宾",
+    "Hong Kong": "中国香港", "Chinese Taipei": "中华台北",
+    "Costa Rica": "哥斯达黎加", "Honduras": "洪都拉斯",
+    "Guatemala": "危地马拉", "El Salvador": "萨尔瓦多",
+    "Nicaragua": "尼加拉瓜", "Belize": "伯利兹",
+    "Cuba": "古巴", "Jamaica": "牙买加", "Haiti": "海地",
+    "Trinidad and Tobago": "特立尼达和多巴哥",
+    "Dominican Republic": "多米尼加共和国",
+    "Puerto Rico": "波多黎各", "Suriname": "苏里南",
+    "Guyana": "圭亚那", "French Guiana": "法属圭亚那",
+    "Martinique": "马提尼克", "Guadeloupe": "瓜德罗普",
+    "Barbados": "巴巴多斯", "Bahamas": "巴哈马",
+    "Bermuda": "百慕大", "Cayman Islands": "开曼群岛",
+    "Turks and Caicos Islands": "特克斯和凯科斯群岛",
+    "British Virgin Islands": "英属维尔京群岛",
+    "US Virgin Islands": "美属维尔京群岛",
+    "Anguilla": "安圭拉", "Montserrat": "蒙特塞拉特",
+    "Antigua and Barbuda": "安提瓜和巴布达",
+    "Saint Kitts and Nevis": "圣基茨和尼维斯",
+    "Saint Lucia": "圣卢西亚",
+    "Saint Vincent and the Grenadines": "圣文森特和格林纳丁斯",
+    "Grenada": "格林纳达", "Dominica": "多米尼克",
+    "Aruba": "阿鲁巴", "Curaçao": "库拉索",
+    "Bonaire": "博奈尔", "Sint Maarten": "圣马丁",
+    "Saint Martin": "法属圣马丁",
+    "São Tomé and Príncipe": "圣多美和普林西比",
+    "Sri Lanka": "斯里兰卡", "Seychelles": "塞舌尔",
+    "Russia": "俄罗斯", "Dominica": "多米尼克",
+    "Sint Maarten": "圣马丁",
+    # 其他國家隊補充
+    "Paraguay": "巴拉圭", "Ecuador": "厄瓜多尔",
+    "Bolivia": "玻利维亚", "Venezuela": "委内瑞拉",
+    "Uzbekistan": "乌兹别克斯坦",
+    "Kyrgyzstan": "吉尔吉斯斯坦", "Tajikistan": "塔吉克斯坦",
+    "Dominica": "多米尼克", "Anguilla": "安圭拉",
+    "Azerbaijan": "阿塞拜疆", "Tajikistan": "塔吉克斯坦",
+    # 其他常見俱樂部
+    "Rapid Wien": "维也纳快速", "SK Rapid Wien": "维也纳快速",
+    "SK Sturm Graz": "格拉茨风暴", "Red Bull Salzburg": "萨尔茨堡红牛",
+    "LASK": "林茨", "FK Austria Wien": "奥地利维也纳",
+    "Wolfsberger AC": "沃尔夫斯贝格", "SV Ried": "里德",
+    "WSG Tirol": "蒂罗尔", "TSV Hartberg": "哈特贝格",
+    "SCR Altach": "阿尔塔赫", "SC Austria Lustenau": "奥地利卢斯特瑙",
+    "Grazer AK 1902": "格拉茨AK",
+    "GNK Dinamo Zagreb": "萨格勒布迪纳摩",
+    "HNK Rijeka": "里耶卡", "HNK Hajduk Split": "哈伊杜克",
+    "NK Aluminij Kidričevo": "阿卢米尼", "NK Bravo": "布拉沃",
+    "NK Varaždin": "瓦拉日丁", "NK Celje": "采列",
+    "FC København": "哥本哈根", "FC Midtjylland": "中日德兰",
+    "Brøndby IF": "布隆德比", "AGF": "奥胡斯",
+    "FC Nordsjælland": "北西兰", "Randers FC": "兰讷斯",
+    "Silkeborg IF": "锡尔克堡", "Viborg FF": "维堡",
+    "Odense Boldklub": "欧登塞", "Sønderjyske Fodbold": "森讷日斯克",
+    "Lyngby": "林比", "AC Horsens": "霍森斯",
+    "Bodø/Glimt": "博多闪耀", "Molde FK": "莫尔德",
+    "Rosenborg BK": "罗森博格", "Viking FK": "维京",
+    "SK Brann": "布兰", "Vålerenga IF": "瓦勒伦加",
+    "Fredrikstad FK": "腓特烈斯塔", "Lillestrøm SK": "利勒斯特罗姆",
+    "Tromsø IL": "特罗姆瑟", "Sarpsborg 08": "萨尔普斯堡",
+    "Sandefjord Fotball": "桑德菲尤尔", "HamKam": "哈姆卡姆",
+    "Kristiansund BK": "克里斯蒂安松", "Aalesunds FK": "奥勒松",
+    "IK Start": "斯塔特", "KFUM Oslo": "KFUM奥斯陆",
+    "Malmö FF": "马尔默", "AIK": "AIK", "Djurgårdens IF": "尤尔加登",
+    "IFK Göteborg": "哥德堡", "BK Häcken": "赫根",
+    "IF Elfsborg": "埃尔夫斯堡", "Hammarby IF": "哈马比",
+    "Mjällby AIF": "米亚尔比", "GAIS": "盖斯",
+    "Kalmar FF": "卡尔马", "Halmstads BK": "哈尔姆斯塔德",
+    "IF Brommapojkarna": "布洛马波卡纳", "Västerås SK": "韦斯特罗斯",
+    "Degerfors IF": "代格福什", "Örgryte IS": "厄格里特",
+    "IK Sirius": "天狼星", "IFK Mariehamn": "玛丽港",
+    "HJK": "HJK赫尔辛基", "Kuopion Palloseura": "库奥皮奥",
+    "Inter Turku": "国际图尔库", "FC Lahti": "拉赫蒂",
+    "Ilves": "伊尔韦斯", "SJK": "SJK", "VPS": "瓦萨",
+    "AC Oulu": "奥卢", "IF Gnistan": "格尼斯坦",
+    "FF Jaro": "雅罗", "Turun Palloseura": "TPS图尔库",
+    "Lech Poznań": "波兹南莱赫", "Legia Warszawa": "华沙莱吉亚",
+    "Raków Częstochowa": "拉科夫琴斯托霍瓦",
+    "Wisła Kraków": "克拉科夫维斯瓦", "Wisła Płock": "普沃茨克维斯瓦",
+    "Górnik Zabrze": "扎布热矿工", "GKS Katowice": "卡托维兹",
+    "Jagiellonia Białystok": "比亚韦斯托克",
+    "Motor Lublin": "卢布林", "Piast Gliwice": "格利维采",
+    "Widzew Łódź": "罗兹维泽夫", "Radomiak Radom": "拉多姆",
+    "KS Cracovia": "克拉科夫", "Pogoń Szczecin": "什切青",
+    "Zagłębie Lubin": "卢宾", "MKS Korona Kielce": "凯尔采科罗纳",
+    "Śląsk Wrocław": "弗罗茨瓦夫", "Wieczysta Kraków": "克拉科夫永恒",
+    "Arka Gdynia": "格丁尼亚", "Wisła II Płock": "普沃茨克维斯瓦二队",
+    "Chrobry Głogów": "格沃古夫", "Miedź Legnica": "莱格尼察",
+    "Korona II Kielce": "凯尔采科罗纳二队",
+    "Podbeskidzie Bielsko-Biała": "别尔斯科-比亚瓦",
+    "Hutnik Kraków": "克拉科夫胡特尼克",
+    "Znicz Pruszków": "普鲁什库夫", "ŁKS Łódź II": "罗兹ŁKS二队",
+    "Podhale Nowy Targ": "新塔尔格",
+    "MKS Chojniczanka Chojnice": "霍伊尼采",
+    "Olimpia Grudziądz": "格鲁琼兹奥林匹亚",
+    "Świt Skolwin Szczecin": "什切青希维特",
+    "Warta Poznań": "波兹南瓦尔塔", "Resovia Rzeszów": "热舒夫",
+    "Górnik Łęczna": "伦奇纳矿工", "KKS 1925 Kalisz": "卡利什",
+    "Sandecja Nowy Sącz": "新松奇", "Rekord Bielsko-Biała": "别尔斯科-比亚瓦纪录",
+    "GKS Tychy": "蒂黑", "Zagłębie Sosnowiec": "索斯诺维茨",
+    "Unia Skierniewice": "斯凯尔涅维采联盟",
+    "Sokół Kleczew": "克莱切夫猎鹰",
+    "Stal Rzeszów": "热舒夫钢铁", "Puszcza Niepołomice": "涅波沃米采",
+    "Bruk-Bet Termalica Nieciecza": "涅切查",
+    "Wigry Suwałki": "苏瓦乌基", "Ruch Chorzów": "霍茹夫",
+    "Polonia Bytom": "比托姆波兰", "Górnik Polkowice": "波尔科维采矿工",
+    "Polonia Warszawa": "华沙波兰", "Legia II Warszawa": "华沙莱吉亚二队",
+    "Siarka Tarnobrzeg": "塔尔诺布热格",
+    "BKS Chemik Bydgoszcz": "比得哥什化学",
+    "Kluczevia Stargard": "斯塔加德", "Pogoń Siedlce": "谢德尔采",
+    "OKS Odra Opole": "奥波莱奥德拉",
+    "MKS Kluczbork": "克卢奇堡", "KS Lechia Gdańsk": "格但斯克莱赫",
+    "Polonia Środa Wielkopolska": "大波兰希罗达",
+    "Widzew II Łódź": "罗兹维泽夫二队",
+    "Korona II Kielce": "凯尔采科罗纳二队",
+    "Bruk-Bet Termalica Nieciecza": "涅切查",
+    "Śląsk II Wrocław": "弗罗茨瓦夫二队",
+    "KS Beskid Andrychów": "安德雷胡夫",
+    "Górnik Zabrze II": "扎布热矿工二队",
+    "Stal Mielec": "梅莱茨钢铁",
+    "Chrobry Głogów": "格沃古夫",
+    "Miedź Legnica": "莱格尼察",
+    "MKS Avia Świdnik": "希维德尼克",
+    "Lechia Zielona Góra": "绿山城莱赫",
+    "Pogoń Grodzisk Mazowiecki": "马佐夫舍格罗济斯克",
+    "Wisła II Płock": "普沃茨克维斯瓦二队",
+    "Korona II Kielce": "凯尔采科罗纳二队",
+    "Śląsk II Wrocław": "弗罗茨瓦夫二队",
+    "Górnik Zabrze II": "扎布热矿工二队",
+    "Lechia Zielona Góra": "绿山城莱赫",
+    "Pogoń Siedlce": "谢德尔采",
+    "OKS Odra Opole": "奥波莱奥德拉",
+    "MKS Kluczbork": "克卢奇堡",
+    "KS Lechia Gdańsk": "格但斯克莱赫",
+    "Polonia Środa Wielkopolska": "大波兰希罗达",
+    # 歐協聯/歐聯常見小球隊
+    "DAC 1904": "多瑙斯特雷达", "FK Velež Mostar": "韦莱日莫斯塔尔",
+    "Valletta FC": "瓦莱塔", "AEK Larnaca": "AEK拉纳卡",
+    "Beitar Jerusalem": "贝塔尔耶路撒冷", "RFS": "RFS里加",
+    "IF Vestri": "韦斯特里", "Dynamo Kyiv": "基辅迪纳摩",
+    "PAOK": "PAOK塞萨洛尼基", "BATE Borisov": "鲍里索夫",
+    "FC Sion": "锡永", "FC Santa Coloma": "圣科洛马",
+    "ML Vitebsk": "维捷布斯克", "FK Sutjeska Nikšić": "苏捷斯卡",
+    "FC Zimbru Chişinău": "津布鲁基希讷乌", "FC Noah": "诺亚",
+    "Tromsø IL": "特罗姆瑟", "FC Hradec Králové": "赫拉德茨克拉洛韦",
+    "FC Universitatea Cluj": "克卢日大学", "SK Brann": "布兰",
+    "Sheriff Tiraspol": "蒂拉斯波尔警长", "Maccabi Tel Aviv": "特拉维夫马卡比",
+    "Hammarby IF": "哈马比", "RSC Anderlecht": "安德莱赫特",
+    "Dinamo Tbilisi": "第比利斯迪纳摩", "FK Žalgiris": "扎尔吉里斯",
+    "FC Vaduz": "瓦杜兹", "Atlètic Club Escaldes": "埃斯卡尔德斯",
+    "FCSB": "FCSB", "FK Auda": "奥达", "FC St. Gallen 1879": "圣加仑",
+    "Beşiktaş JK": "贝西克塔斯", "FC Twente": "特温特",
+    "Ferencváros TC": "费伦茨瓦罗斯", "FK Vojvodina": "伏伊伏丁那",
+    "AFC Ajax": "阿贾克斯", "Paksi FC": "保克什",
+    "Panathinaikos FC": "帕纳辛奈科斯", "Polissya Zhytomyr": "日托米尔波利西亚",
+    "NK Aluminij Kidričevo": "阿卢米尼", "Dinamo City": "地拉那迪纳摩",
+    "NK Varaždin": "瓦拉日丁", "FK Jablonec": "亚布洛内茨",
+    "FC Lugano": "卢加诺", "Dukagjini": "杜卡吉尼",
+    "LNZ Cherkasy": "切尔卡瑟LNZ", "KAA Gent": "根特",
+    "FK Borac Banja Luka": "巴尼亚卢卡战士", "FC Petrocub Hîncesti": "彼得罗古",
+    "MŠK Žilina": "日利纳", "GKS Katowice": "卡托维兹",
+    "Hapoel Tel Aviv": "特拉维夫夏普尔", "Ludogorets": "卢多戈雷茨",
+    "NSÍ Runavík": "鲁纳维克", "FC Koper": "科佩尔",
+    "NK Bravo": "布拉沃", "KF Shkëndija": "什肯迪亚",
+    "HNK Rijeka": "里耶卡", "Derry City": "德里城",
+    "Motherwell": "马瑟韦尔", "HB Tórshavn": "托尔斯港HB",
+    "Shelbourne": "谢尔本", "Nõmme Kalju": "诺梅卡柳",
+    "HNK Hajduk Split": "哈伊杜克", "Pafos FC": "帕福斯",
+    "FK Partizan": "贝尔格莱德游击", "Una Strassen": "斯特拉森",
+    "Stjarnan Garðabær": "加尔扎拜尔", "Ilves": "伊尔韦斯",
+    "Valur Reykjavík": "雷克雅未克瓦鲁尔", "HŠK Zrinjski Mostar": "莫斯塔尔兹林斯基",
+    "Bolívar": "玻利瓦尔", "Grêmio": "格雷米奥",
+    "Corinthians": "科林蒂安", "Remo": "雷莫",
+    "Botafogo": "博塔弗戈", "Vitória": "维多利亚",
+    "Cuiabá": "库亚巴", "Atlético Goianiense": "戈亚尼亚竞技",
+    "Botafogo-SP": "博塔弗戈SP", "Juventude": "尤文图德",
+    "Independiente Santa Fe": "圣菲独立", "Caracas F.C.": "加拉加斯卡拉卡斯",
+    "O'Higgins": "奥希金斯", "UTA Arad": "阿拉德UTA",
+    "SC Oțelul Galați": "加拉茨钢铁", "FF Jaro": "雅罗",
+    "SJK": "SJK", "Radomiak Radom": "拉多姆",
+    "Wieczysta Kraków": "克拉科夫永恒", "Västerås SK": "韦斯特罗斯",
+    "Örgryte IS": "厄格里特", "Arda Kardzhali": "阿尔达克尔贾利",
+    "Slavia Sofia": "索菲亚斯拉维亚", "FC Argeș Pitești": "皮特什蒂阿尔杰什",
+    "FC Petrolul Ploiești": "普洛耶什蒂石油", "Pogoń Szczecin": "什切青",
+    "Legia Warszawa": "华沙莱吉亚", "Llaneros FC": "利亚内罗斯",
+    "Deportivo Pereira": "佩雷拉体育", "Houston Dash": "休斯顿达什",
+    "Bay FC": "湾区FC", "Orlando Pride": "奥兰多荣耀",
+    "Chicago Stars FC": "芝加哥之星", "Birmingham Legion FC": "伯明翰军团",
+    "New Mexico United": "新墨西哥联", "Deportivo Cali": "卡利体育",
+    "Jaguares de Córdoba": "科尔多瓦美洲豹", "Portland Thorns FC": "波特兰荆棘",
+    "NJ/NY Gotham FC": "新泽西/纽约哥谭", "Club Tijuana": "蒂华纳",
+    "Club León": "莱昂", "Atlante FC": "阿特兰特",
+    "墨西哥美洲": "墨西哥美洲", "Gold Coast Knights": "黄金海岸骑士",
+    "Gold Coast United": "黄金海岸联", "Qingdao Hainiu": "青岛海牛",
+    "Tianjin Jinmen Tiger": "天津津门虎", "Pohang Steelers": "浦项制铁",
+    "Jeonbuk Hyundai Motors": "全北现代", "Gimcheon Sangmu FC": "金泉尚武",
+    "Daejeon Hana Citizen": "大田韩亚市民", "Liaoning Tieren FC": "辽宁铁人",
+    "Qingdao West Coast": "青岛西海岸", "上海海港": "上海海港",
+    "上海申花": "上海申花", "Wuhan Three Towns": "武汉三镇",
+    "Chongqing Tonglianglong FC": "重庆铜梁龙", "FC Seoul": "首尔FC",
+    "Ulsan HD": "蔚山HD", "Gwangju FC": "光州FC",
+    "Jeju SK": "济州SK", "FC Anyang": "安养FC",
+    "Gangwon FC": "江原FC", "Incheon United": "仁川联",
+    "Bucheon FC 1995": "富川FC", "Yunnan Yukun": "云南玉昆",
+    "Shenzhen Peng City": "深圳新鹏城", "Chengdu Rongcheng": "成都蓉城",
+    "北京国安": "北京国安", "山东泰山": "山东泰山",
+    "Henan FC": "河南队", "Dalian Yingbo FC": "大连英博",
+    # 其他補充
+    "Sporting Lagos FC": "拉各斯体育", "Rivers United": "河流联",
+    "Ranchers Bees": "牧场蜜蜂", "Kano Pillars": "卡诺支柱",
+    "Katsina United": "卡齐纳联", "Plateau United": "高原联",
+    "Kwara United": "夸拉联", "Nasarawa United": "纳萨拉瓦联",
+    "Niger Tornadoes": "尼日尔龙卷风", "Enyimba": "恩因巴",
+    "Doma United FC": "多马联", "Bendel Insurance FC": "本代尔保险",
+    "Barau FC": "巴劳FC", "Abia Warriors": "阿比亚战士",
+    "Ikorodu City": "伊科罗杜城", "Inter Lagos FC": "拉各斯国际",
+    "Shooting Stars": "流星", "Warri Wolves FC": "瓦里狼",
+    "Kun Khalifat FC": "昆哈利法特", "Enugu Rangers International": "埃努古流浪者",
+    "AS Port": "AS港", "Zamalek SC": "扎马雷克",
+    "Vipers SC": "毒蛇SC", "FC Nouadhibou": "努瓦迪布",
+    "Mighty Mukuru Wanderers": " mighty穆库鲁流浪者",
+    "Simba SC": "辛巴SC", "APR FC": "APR FC",
+    "FC Les Aigles du congo": "刚果老鹰", "Gor Mahia FC": "戈尔马希亚",
+    "Pyramids FC": "金字塔FC", "Medeama SC": "梅德阿马",
+    "Tout Puissant Mazembe": "马泽姆贝", "Al-Hilal Omdurman": "恩图曼新月",
+    "Aigle Noir CS": "黑鹰", "Djoliba AC": "乔利巴",
+    "Club Africain": "非洲人俱乐部", "ES Zarzis": "扎尔齐斯",
+    "CS Sfaxien": "斯法克西恩", "ES Métlaoui": "梅特拉维",
+    "Stade Tunisien": "突尼斯体育场", "CA Bizertin": "比塞大",
+    "US Monastir": "莫纳斯提尔", "Etoile Sportive Du Sahel": "萨赫勒之星",
+    "Espérance Sportive De Tunis": "突尼斯希望",
+    "Avenir Sportif De La Marsa": "拉马尔萨",
+    "US Ben Guerdane": "本盖尔丹", "CS Hammam-Lif": "哈马姆利夫",
+    "ES Hammam-Sousse": "哈马姆苏斯", "JS Omrane": "奥姆兰",
+    "Olympique Béja": "贝雅奥林匹克", "PS Sakiet Eddaïer": "萨基特西迪优素福",
+    "ES Zarzis": "扎尔齐斯", "US Monastir": "莫纳斯提尔",
 }
 
 def team_cn(name):
@@ -654,8 +1131,12 @@ def parse_prediction(p):
     alt_score_p = scores_list[1][1] if len(scores_list) > 1 else 0
     h1 = pred["h1"] if pred else "—"
     h2 = pred["h2"] if pred else "—"
+    # ★ 用模型 best_result 決定預測結果（不再用 Bzzoiro 的 predicted）
+    if pred:
+        model_result = pred["best_result"]
+    else:
+        model_result = "—"
     status_map = {"finished": "已结束", "notstarted": "未开始", "upcoming": "未开始", "live": "进行中", "inprogress": "进行中", "postponed": "延期", "canceled": "取消"}
-    result_map = {"H": "主胜", "D": "和局", "A": "客胜"}
     def fp(v):
         if v is None: return "—"
         try: return f"{float(v):.1f}%"
@@ -667,7 +1148,7 @@ def parse_prediction(p):
         "_home_key": canon(home_name), "_away_key": canon(away_name),
         "主力比分": main_score, "备选比分": alt_score,
         "_main_score_p": main_score_p, "_alt_score_p": alt_score_p, "_scores_list": scores_list,
-        "预测结果": result_map.get(mr.get("predicted", ""), "—"),
+        "预测结果": model_result,
         "上半场": h1, "下半场": h2,
         "主胜": fp(prob_home), "和局": fp(prob_draw), "客胜": fp(prob_away),
         "大小球": f"{over_label} {over_pct:.1f}%",
@@ -678,7 +1159,7 @@ def parse_prediction(p):
         "_prob_under": ((100 - p_over) / 100) if p_over else 0,
         "_prob_over_pct": p_over or 0, "_prob_under_pct": (100 - p_over) if p_over else 0,
         "_xg_h": xg_h, "_xg_a": xg_a, "_over_label": over_label,
-        "_result_label": result_map.get(mr.get("predicted", ""), "—"),
+        "_result_label": model_result,
         "_trust": _trust, "_tier": _tier, "_rho": _rho,
     }
 
@@ -808,7 +1289,6 @@ def fetch_events_range(date_from, date_to):
         else: break
     return actual
 
-# ★ backtest_one 加亚盘字段
 def backtest_one(p, actual_map):
     ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
     eid = ev.get("id")
@@ -836,9 +1316,14 @@ def backtest_one(p, actual_map):
     else:
         hw, d, aw = prob_home_bz, prob_draw_bz, prob_away_bz
         over_pct = float(p_over_raw) if p_over_raw is not None else 50.0
-    result_opts = [("主胜", hw), ("和局", d), ("客胜", aw)]
-    result_opts.sort(key=lambda x: -x[1])
-    best_result = result_opts[0]
+    # ★ 用新的 pick_best_result
+    if pred:
+        best_result_name = pred["best_result"]
+        best_result_prob = pred["best_prob"] * 100
+        best_result = (best_result_name, best_result_prob)
+    else:
+        best_result = pick_best_result(hw/100, d/100, aw/100)
+        best_result = (best_result[0], best_result[1]*100)
     ou_opts = [("大球", over_pct), ("小球", 100 - over_pct)]
     ou_opts.sort(key=lambda x: -x[1])
     best_ou = ou_opts[0]
@@ -867,22 +1352,25 @@ def backtest_one(p, actual_map):
         if pr == ar: return "⚠️方向对"
         return "❌方向错"
     
-    # ★ 亚盘方向
+    # ★ 亞盤方向（平手盤改為觀望，命中欄顯示「觀望」不計入統計）
     pred_xg_h = float(xg_h_raw) * xg_mult if xg_h_raw is not None else 1.5
     pred_xg_a = float(xg_a_raw) * xg_mult if xg_a_raw is not None else 1.2
     ah_line, ah_note = compute_model_asian_handicap(pred_xg_h, pred_xg_a)
     score_dir = compute_score_direction(pred_xg_h, pred_xg_a, hw / 100, d / 100, aw / 100)
-    # 亚盘实际结果：主让 X → 主队是否赢 X 球以上
-    try:
-        line_num = float(ah_line.replace("主让 ", "").replace("客让 ", "").replace("平手", "0"))
-    except:
-        line_num = 0
-    if "主让" in ah_line:
-        ah_hit = (h - a) > line_num
-    elif "客让" in ah_line:
-        ah_hit = (a - h) > line_num
+    # 平手盤：觀望，命中欄顯示 None（不計入統計）
+    if "平手" in ah_line or "觀望" in ah_note or "观望" in ah_note:
+        ah_hit = None
     else:
-        ah_hit = (h > a)
+        try:
+            line_num = float(ah_line.replace("主让 ", "").replace("客让 ", "").replace("平手", "0"))
+        except:
+            line_num = 0
+        if "主让" in ah_line:
+            ah_hit = (h - a) > line_num
+        elif "客让" in ah_line:
+            ah_hit = (a - h) > line_num
+        else:
+            ah_hit = (h > a)
     
     return {
         "event_id": eid, "联赛": league_name_cn, "等级": grade,
@@ -960,7 +1448,7 @@ def build_excel(bet_rows, stable_rows, info_rows, review_rows=None, meta_rows=No
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v3.8（亚洲盘 + 模型对比）")
+st.title("⚽ 足球预测 v3.9（平手盤觀望 + 和局提升 + 中文隊名）")
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
@@ -995,7 +1483,7 @@ with tab1:
         sel_leagues = st.multiselect("筛选联赛（不选则显示全部）", all_leagues, default=[], key="lg1")
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
-        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信（基于 3910 场回测）")
+        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v3.9：平手盤改觀望、和局提升、隊名中文化")
         if not df.empty:
             display_df = df[["时间", "联赛", "联赛等级", "状态", "主队", "客队", "主力比分", "备选比分", "预测结果", "主胜", "和局", "客胜", "大小球"]].copy()
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
@@ -1148,10 +1636,9 @@ with tab2:
                                 adj_pred["hw"], adj_pred["d"], adj_pred["aw"] = cap_home_win_prob(adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
                                 if old_hw > 0.70: cap_info = f"主胜封顶 {old_hw*100:.1f}%→{adj_pred['hw']*100:.1f}%"
                         if adj_pred:
-                            adj_best_opts = [("主胜", adj_pred["hw"]), ("和局", adj_pred["d"]), ("客胜", adj_pred["aw"]),
-                                            ("大球(2.5+)", adj_pred["over25"]), ("小球(2.5-)", adj_pred["under25"])]
-                            adj_best_opts.sort(key=lambda x: -x[1])
-                            adj_best = adj_best_opts[0]
+                            # ★ 用 pick_best_result 決定調整後推薦
+                            best_name, best_prob = pick_best_result(adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
+                            adj_best = (best_name, best_prob)
                             if adj_pred["over25"] >= 0.5: adj_scores = adj_pred["over_scores"]
                             else: adj_scores = adj_pred["under_scores"]
                             adj_main_score = f"{adj_scores[0][0]}-{adj_scores[0][1]}" if adj_scores else "—"
@@ -1170,7 +1657,6 @@ with tab2:
                         advice_pct = adj_best[1] * 100 if adj_best[1] else 0
                         bet_advice = get_bet_advice(advice_pct)
                         
-                        # ★ 模型对比数据
                         base_xg_h = row["_xg_h"] or 1.5
                         base_xg_a = row["_xg_a"] or 1.2
                         base_trust = get_league_trust_level(row.get("联赛", ""))
@@ -1220,9 +1706,8 @@ with tab2:
                         st.error(f"🔴 **警示：以下 {len(f_matches)} 场为 F 级联赛**（回测命中率 <50%），下注请谨慎：")
                         for fm in f_matches: st.write(f"- {fm['比赛']}（{fm['联赛']}）")
                     
-                    # ★ 模型对比 + 亚盘方向面板
                     st.subheader("🎯 模型对比 & 亚盘方向")
-                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/分层/DC/融合/封顶")
+                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/分层/DC/融合/封顶 ｜ v3.9：平手盤改觀望")
                     compare_rows = []
                     for i, md in enumerate(matches_data, 1):
                         mc = md.get("model_compare", {})
@@ -1231,10 +1716,8 @@ with tab2:
                         final_xg_h = mc["final_xg_h"]; final_xg_a = mc["final_xg_a"]
                         base_pred = mc["base_pred"]; adj_pred = mc["adj_pred"]
                         if base_pred:
-                            base_opts = [("主胜", base_pred["hw"]), ("和局", base_pred["d"]), ("客胜", base_pred["aw"]),
-                                         ("大球", base_pred["over25"]), ("小球", base_pred["under25"])]
-                            base_opts.sort(key=lambda x: -x[1])
-                            base_best = base_opts[0]
+                            base_best_name, base_best_prob = pick_best_result(base_pred["hw"], base_pred["d"], base_pred["aw"])
+                            base_best = (base_best_name, base_best_prob)
                             base_ou = "大球" if base_pred["over25"] >= 0.5 else "小球"
                             base_ou_pct = max(base_pred["over25"], base_pred["under25"])
                         else:
@@ -1775,8 +2258,8 @@ with tab5:
 
 # ========== Tab 6：历史回测 ==========
 with tab6:
-    st.subheader("📈 历史批量回测（含亚盘方向）")
-    st.caption("拉历史预测 + 历史比分，批量计算基础模型命中率 + 亚盘让球方向命中率。")
+    st.subheader("📈 历史批量回测（v3.9：平手盤觀望 + 和局提升）")
+    st.caption("拉历史预测 + 历史比分，批量计算命中率。平手盤不計入亞盤統計。")
     col_a, col_b = st.columns(2)
     with col_a: bt_from = st.date_input("起始日期", value=date.today() - timedelta(days=7), key="bt_from")
     with col_b: bt_to = st.date_input("结束日期", value=date.today() - timedelta(days=1), key="bt_to")
@@ -1811,10 +2294,13 @@ with tab6:
                 else:
                     st.success(f"✅ 成功回测 **{len(bt_rows)}** 场")
                     bt_df = pd.DataFrame(bt_rows)
+                    # ★ 亞盤統計排除平手盤（ah_hit 為 None）
+                    bt_ah = bt_df[bt_df["亚盘命中"].notna()].copy()
                     total_bt = len(bt_df)
+                    total_ah = len(bt_ah)
                     r_hits = int(bt_df["胜平负命中"].sum())
                     o_hits = int(bt_df["大小球命中"].sum())
-                    ah_hits = int(bt_df["亚盘命中"].sum())
+                    ah_hits = int(bt_ah["亚盘命中"].sum()) if total_ah > 0 else 0
                     m_full = int((bt_df["主力比分命中"] == "✅完全对").sum())
                     m_dir = int((bt_df["主力比分命中"] == "⚠️方向对").sum())
                     m_wrong = int((bt_df["主力比分命中"] == "❌方向错").sum())
@@ -1825,7 +2311,7 @@ with tab6:
                     with c1: st.metric("回测场次", total_bt)
                     with c2: st.metric("胜平负命中", f"{r_hits/total_bt*100:.1f}%", f"{r_hits}/{total_bt}")
                     with c3: st.metric("大小球命中", f"{o_hits/total_bt*100:.1f}%", f"{o_hits}/{total_bt}")
-                    with c4: st.metric("亚盘方向命中", f"{ah_hits/total_bt*100:.1f}%", f"{ah_hits}/{total_bt}")
+                    with c4: st.metric("亚盘方向命中", f"{ah_hits/total_ah*100:.1f}%" if total_ah > 0 else "—", f"{ah_hits}/{total_ah}（不含平手观望）")
                     
                     st.markdown("### 🎯 比分命中率")
                     c1, c2 = st.columns(2)
@@ -1842,15 +2328,18 @@ with tab6:
                         st.write(f"- ❌方向错：{a_wrong} ({a_wrong/total_bt*100:.1f}%)")
                         st.write(f"- **方向命中率：{(a_full+a_dir)/total_bt*100:.1f}%**")
                     
-                    st.markdown("### 📊 按亚盘让球方向统计")
+                    st.markdown("### 📊 按亚盘让球方向统计（平手观望已排除）")
                     ah_stats = {}
-                    for _, r in bt_df.iterrows():
+                    for _, r in bt_ah.iterrows():
                         ah_line = str(r.get("亚盘方向", "—"))
-                        key = "平手" if "平手" in ah_line else ("主让" if "主让" in ah_line else ("客让" if "客让" in ah_line else "其他"))
+                        key = "主让" if "主让" in ah_line else ("客让" if "客让" in ah_line else "其他")
                         if key not in ah_stats: ah_stats[key] = {"t": 0, "h": 0}
                         ah_stats[key]["t"] += 1
                         if r["亚盘命中"]: ah_stats[key]["h"] += 1
                     ah_rows = []
+                    # 平手觀望單獨統計
+                    flat_count = len(bt_df) - total_ah
+                    ah_rows.append({"亚盘方向": "平手（观望，不计命中）", "场次": flat_count, "命中": "—", "命中率": "—"})
                     for d, s in sorted(ah_stats.items(), key=lambda x: -x[1]["t"]):
                         rate = s["h"] / s["t"] * 100 if s["t"] else 0
                         ah_rows.append({"亚盘方向": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"})
@@ -1886,18 +2375,21 @@ with tab6:
                     lg_stats = {}
                     for _, r in bt_df.iterrows():
                         lg = r["联赛"]
-                        if lg not in lg_stats: lg_stats[lg] = {"t": 0, "rh": 0, "oh": 0, "ah": 0}
+                        if lg not in lg_stats: lg_stats[lg] = {"t": 0, "rh": 0, "oh": 0, "ah": 0, "aht": 0}
                         lg_stats[lg]["t"] += 1
                         if r["胜平负命中"]: lg_stats[lg]["rh"] += 1
                         if r["大小球命中"]: lg_stats[lg]["oh"] += 1
-                        if r["亚盘命中"]: lg_stats[lg]["ah"] += 1
+                        if r["亚盘命中"] is not None and not (isinstance(r["亚盘命中"], float) and pd.isna(r["亚盘命中"])):
+                            lg_stats[lg]["aht"] += 1
+                            if r["亚盘命中"]: lg_stats[lg]["ah"] += 1
                     lg_rows = []
                     for lg, s in sorted(lg_stats.items(), key=lambda x: -x[1]["t"]):
                         if s["t"] < 3: continue
+                        ah_rate = f"{s['ah']/s['aht']*100:.1f}%" if s["aht"] > 0 else "—"
                         lg_rows.append({"联赛": lg, "场次": s["t"],
                                         "胜平负命中率": f"{s['rh']/s['t']*100:.1f}%",
                                         "大小球命中率": f"{s['oh']/s['t']*100:.1f}%",
-                                        "亚盘命中率": f"{s['ah']/s['t']*100:.1f}%"})
+                                        "亚盘命中率": ah_rate})
                     if lg_rows: st.dataframe(pd.DataFrame(lg_rows), use_container_width=True, hide_index=True)
                     
                     st.markdown("### 📊 按置信度")
@@ -1905,14 +2397,16 @@ with tab6:
                     b_rows = []
                     for label, lo, hi in buckets:
                         sub = bt_df[(bt_df["置信度"] >= lo) & (bt_df["置信度"] < hi)]
+                        sub_ah = sub[sub["亚盘命中"].notna()]
                         n = len(sub)
                         if n == 0:
                             b_rows.append({"置信度": label, "场次": 0, "胜平负命中率": "—", "大小球命中率": "—", "亚盘命中率": "—"})
                             continue
+                        ah_rate = f"{sub_ah['亚盘命中'].sum()/len(sub_ah)*100:.1f}%" if len(sub_ah) > 0 else "—"
                         b_rows.append({"置信度": label, "场次": n,
                                        "胜平负命中率": f"{sub['胜平负命中'].sum()/n*100:.1f}%",
                                        "大小球命中率": f"{sub['大小球命中'].sum()/n*100:.1f}%",
-                                       "亚盘命中率": f"{sub['亚盘命中'].sum()/n*100:.1f}%"})
+                                       "亚盘命中率": ah_rate})
                     st.dataframe(pd.DataFrame(b_rows), use_container_width=True, hide_index=True)
                     
                     st.markdown("### 📋 全部明细")
@@ -1935,4 +2429,4 @@ with tab6:
                         file_name=f"回测_{from_str}_{to_str}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_backtest")
 
-st.caption("⚠️ 预测来自 Bzzoiro；赛后复盘需手动上传 Excel；历史回测含亚盘方向。数据永远在你手中。")
+st.caption("⚠️ v3.9：平手盤改觀望、亞盤門檻後移、和局提升、隊名中文化。数据永远在你手中。")
