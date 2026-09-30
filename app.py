@@ -464,6 +464,85 @@ TEAM_CN = {
     "Dominican Republic": "多米尼加",
 }
 
+# ========== v3.3 补充：中文翻译映射 ==========
+LEAGUE_CN.update({
+    "National League": "英格兰全国联赛",
+    "National League North": "英议北",
+    "National League South": "英议南",
+    "CONCACAF Nations League": "中北美国家联赛",
+})
+
+TEAM_CN.update({
+    # —— 土超 / 土耳其 ——
+    "Konyaspor": "科尼亚体育",
+    # —— 英格兰低级别 ——
+    "Eastleigh": "伊斯特利",
+    "Southend United": "绍森德联",
+    "Southend": "绍森德联",
+    "Tamworth": "塔姆沃思",
+    "Sutton United": "萨顿联",
+    "Sutton": "萨顿联",
+    "Oldham": "奥尔德姆",
+    # —— 美国 USL ——
+    "Brooklyn FC": "布鲁克林FC",
+    "SC Jacksonville": "杰克逊维尔SC",
+    "Sporting Jacksonville": "杰克逊维尔SC",
+    "FC Tulsa": "塔尔萨FC",
+    "Tulsa": "塔尔萨FC",
+    "Las Vegas Lights": "拉斯维加斯之光",
+    "Las Vegas Lights FC": "拉斯维加斯之光",
+    "Rhode Island": "罗德岛FC",
+    "Indy Eleven": "印地十一",
+    # —— 哥伦比亚 / 南美 ——
+    "Atlético Nacional": "麦德林国民竞技",
+    "Atletico Nacional": "麦德林国民竞技",
+    "Atlético Nacional Medellín": "麦德林国民竞技",
+    # —— 国家队 ——
+    "Panama": "巴拿马",
+    "Ecuador": "厄瓜多尔",
+    "Uzbekistan": "乌兹别克斯坦",
+    "Bolivia": "玻利维亚",
+    "Paraguay": "巴拉圭",
+    "Venezuela": "委内瑞拉",
+    "Honduras": "洪都拉斯",
+    "Guatemala": "危地马拉",
+    "El Salvador": "萨尔瓦多",
+    "Jamaica": "牙买加",
+    "Curacao": "库拉索",
+    "Suriname": "苏里南",
+    "Trinidad & Tobago": "特立尼达和多巴哥",
+    "United Arab Emirates": "阿联酋",
+    "Saudi Arabia": "沙特阿拉伯",
+    "Qatar": "卡塔尔",
+    "Iraq": "伊拉克",
+    "Iran": "伊朗",
+    "Kuwait": "科威特",
+    "Bahrain": "巴林",
+    "Oman": "阿曼",
+    "India": "印度",
+    "Thailand": "泰国",
+    "Vietnam": "越南",
+    "Indonesia": "印尼",
+    "Malaysia": "马来西亚",
+    "Singapore": "新加坡",
+    "Philippines": "菲律宾",
+    "Hong Kong": "中国香港",
+    "Chinese Taipei": "中国台北",
+    "North Korea": "朝鲜",
+    "Morocco": "摩洛哥",
+    "Tunisia": "突尼斯",
+    "Algeria": "阿尔及利亚",
+    "Egypt": "埃及",
+    "Senegal": "塞内加尔",
+    "Ivory Coast": "科特迪瓦",
+    "Côte d'Ivoire": "科特迪瓦",
+    "Ghana": "加纳",
+    "Cameroon": "喀麦隆",
+    "Nigeria": "尼日利亚",
+    "South Africa": "南非",
+    "Cape Verde": "佛得角",
+})
+
 def team_cn(name):
     if not name:
         return "?"
