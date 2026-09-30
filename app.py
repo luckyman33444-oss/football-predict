@@ -2272,12 +2272,18 @@ with tab5:
                                 ou_str = "✅" if ou_hit else "❌"
                             else:
                                 ou_str = "—"
+                                                        score1 = str(m.get("主力比分", "—"))
+                            score2 = str(m.get("备选比分", "—"))
+                            score1_hit = judge_score_hit(score1, actual)
+                            score2_hit = judge_score_hit(score2, actual)
                             all_rows.append({
                                 "比赛": m["比赛"], "联赛": m["联赛"],
                                 "预测结果": pred_result,
                                 "大小球": ou_dir,
                                 "实际比分": actual_str,
+                                "主力比分": score1, "备选比分": score2,
                                 "胜负命中": win_str, "大小球命中": ou_str,
+                                "比分1命中": score1_hit, "比分2命中": score2_hit,
                             })
                         if all_rows:
                             all_review_df = pd.DataFrame(all_rows)
