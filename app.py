@@ -120,7 +120,7 @@ def compute_score_direction(xg_h, xg_a, prob_hw, prob_d, prob_aw):
 
 def pick_best_result(hw, d, aw):
     max_prob = max(hw, d, aw)
-    if d >= 0.29 and (max_prob - d) < 0.09:
+    if d >= 0.32 and (max_prob - d) < 0.06:   # 改这里
         return ("和局", d)
     if hw >= aw:
         return ("主胜", hw)
