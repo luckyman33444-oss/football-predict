@@ -7,7 +7,6 @@ import io
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 CST = timezone(timedelta(hours=8))
 
-# ========== 密钥读取（优先 secrets，缺失时回退到内置值）==========
 _FALLBACK_SECRETS = {
     "BSD_TOKEN": "5d8f48995ad96cead191f0611fdc042ece77b77c",
     "API_FOOTBALL_KEY": "d00cc95c3d639618d9313dc86f883685",
@@ -36,7 +35,6 @@ DIXON_COLES_RHO = {
     "friendly": -0.08,
 }
 
-# ★ 改动1：友谊赛系数 0.94 → 0.88
 MATCH_TIER_MULTIPLIER = {
     "friendly": 0.88,
     "nations_league": 0.95,
@@ -147,7 +145,6 @@ def blend_with_market(model_hw, model_d, model_aw, odds_hw, odds_d, odds_aw, tru
         blend_aw /= total
     return blend_hw, blend_d, blend_aw, (m_hw, m_d, m_aw)
 
-# ★ 改动3.1：新增主胜概率封顶函数
 def cap_home_win_prob(hw, d, aw):
     if hw <= 0.70:
         return hw, d, aw
@@ -484,7 +481,6 @@ TEAM_CN = {
     "Dominican Republic": "多米尼加",
 }
 
-# ========== v3.3 补充：中文翻译映射 ==========
 LEAGUE_CN.update({
     "National League": "英格兰全国联赛",
     "National League North": "英议北",
@@ -1014,7 +1010,6 @@ def parse_prediction(p):
         "_trust": _trust, "_tier": _tier, "_rho": _rho,
     }
 
-# ★ 改动2：复盘日期窗口前后各放宽 1 天
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_actual_results(date_str):
     actual = {}
@@ -1219,7 +1214,7 @@ def build_excel(bet_rows, stable_rows, info_rows, review_rows=None, meta_rows=No
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v3.3（置信度分档）")
+st.title("⚽ 足球预测 v3.4（比分命中 + 调整对比）")
 tab1, tab2, tab3, tab4, tab5 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘"])
 
 if not BSD_TOKEN:
@@ -1477,7 +1472,6 @@ with tab2:
 
                         adj_pred = predict_full_dc(final_xg_h, final_xg_a, rho=rho)
 
-                        # ★ 改动3.2：盘口融合 + 主胜封顶
                         blend_info = ""
                         cap_info = ""
                         if adj_pred:
@@ -2194,7 +2188,16 @@ with tab5:
                                 with c4:
                                     st.metric("原推荐 ROI", roi_str, roi_delta)
 
-                        # ★ 新增：按置信度分档命中率
+                                # ★ 新增：调整前后对比
+                                if wg and ag:
+                                    delta = ar - wr
+                                    if delta > 0.02:
+                                        st.success(f"✅ **调整让命中率提升 {delta*100:+.1f}%**（原 {wr*100:.1f}% → 调整后 {ar*100:.1f}%）")
+                                    elif delta < -0.02:
+                                        st.warning(f"⚠️ **调整后反而变差 {delta*100:.1f}%**（原 {wr*100:.1f}% → 调整后 {ar*100:.1f}%）——考虑调低盘口融合权重")
+                                    else:
+                                        st.info(f"➖ **调整前后基本持平**（原 {wr*100:.1f}% → 调整后 {ar*100:.1f}%，差 {delta*100:+.1f}%）")
+
                         st.markdown("### 📊 按置信度分档命中率")
                         st.caption("看模型在哪一档概率最准 —— 理论概率 vs 实际命中率。差距越小越可信。")
                         buckets = [
@@ -2272,7 +2275,7 @@ with tab5:
                                 ou_str = "✅" if ou_hit else "❌"
                             else:
                                 ou_str = "—"
-                                                        score1 = str(m.get("主力比分", "—"))
+                            score1 = str(m.get("主力比分", "—"))
                             score2 = str(m.get("备选比分", "—"))
                             score1_hit = judge_score_hit(score1, actual)
                             score2_hit = judge_score_hit(score2, actual)
