@@ -732,12 +732,13 @@ def backtest_one(p, actual_map):
     result_hit = (best_result[0] == actual_result)
     ou_hit = (best_ou[0] == actual_ou)
     confidence = max(best_result[1], best_ou[1])
-    score_main = "—"; score_alt = "—"
+    score_main = "—"; score_alt = "—"; score_top3 = ""
     if pred:
         if best_ou[0] == "大球": scores = pred["over_scores"]
         else: scores = pred["under_scores"]
         if scores: score_main = f"{scores[0][0]}-{scores[0][1]}"
         if len(scores) > 1: score_alt = f"{scores[1][0]}-{scores[1][1]}"
+        score_top3 = ",".join([f"{s[0]}-{s[1]}" for s in scores[:5]])
     actual_score_str = f"{h}-{a}"
     def hit_type(pred_s, ah, aa):
         if pred_s == "—": return "—"
@@ -793,6 +794,8 @@ def backtest_one(p, actual_map):
         "胜平负命中": result_hit, "大小球命中": ou_hit,
         "主力比分命中": hit_type(score_main, h, a),
         "备选比分命中": hit_type(score_alt, h, a),
+        "前3候选": score_top3,
+        "前3命中": "✅" if actual_score_str in score_top3.split(",") else "❌",
         "置信度": round(confidence, 1),
     }
 

@@ -33,6 +33,10 @@ for i, p in enumerate(preds):
     except Exception:
         continue
     if r:
+        # 从原始预测里取日期
+        ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
+        ev_date = ev.get("date") or ev.get("start_time") or ev.get("commence_time") or ""
+        r["日期"] = str(ev_date)[:10]
         rows.append(r)
     if (i + 1) % 200 == 0:
         print(f"   已处理 {i+1}/{len(preds)}")
@@ -44,3 +48,4 @@ if not rows:
 df = pd.DataFrame(rows)
 df.to_csv("detail.csv", index=False, encoding="utf-8-sig")
 print(f"saved {len(df)} rows to detail.csv")
+print(f"列名: {list(df.columns)}")

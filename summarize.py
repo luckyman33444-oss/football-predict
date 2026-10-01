@@ -1,30 +1,21 @@
 import time
 import pandas as pd
 
-# ============ 这里切换模式 ============
-# "all"   = 全量（不过滤）
-# "black" = 黑名单（踢掉差联赛）
-# "white" = 白名单（只留好联赛）
-MODE = "black"
-
 EXCLUDE_LEAGUES = {"阿甲", "英冠", "哥伦比亚甲", "Liga Portugal 2", "Copa Libertadores", "摩洛哥甲"}
 INCLUDE_LEAGUES = {"意甲", "日职联", "Pro League", "Parva Liga", "Superliga", "尼日利亚超"}
-# =====================================
 
 df = pd.read_csv("detail.csv")
 
-if "联赛" in df.columns:
-    if MODE == "black":
-        df = df[~df["联赛"].isin(EXCLUDE_LEAGUES)].copy()
-    elif MODE == "white":
-        df = df[df["联赛"].isin(INCLUDE_LEAGUES)].copy()
+def tag(lg):
+    if lg in INCLUDE_LEAGUES: return "⭐精选"
+    if lg in EXCLUDE_LEAGUES: return "⚠️避雷"
+    return "普通"
 
 def rate(series):
     s = series.astype(str).str.lower()
     return s.isin(["true", "1", "是", "命中"]).mean()
 
 lines = []
-lines.append(f"模式: {MODE}")
 lines.append(f"总场次: {len(df)}")
 
 if "胜平负命中" in df.columns:
@@ -36,17 +27,19 @@ if "亚盘命中" in df.columns:
 if "大小球命中" in df.columns:
     lines.append(f"大小球命中率: {rate(df['大小球命中']):.1%}")
 
-if "主力比分命中" in df.columns:
-    m = df["主力比分命中"].astype(str)
-    valid = m[~m.isin(["—", "-", "nan", "None", ""])]
-    if len(valid):
-        lines.append(f"主力比分完全对: {len(valid)}场，{valid.str.contains('完全对').mean():.1%}")
-
-if "备选比分命中" in df.columns:
-    m = df["备选比分命中"].astype(str)
-    valid = m[~m.isin(["—", "-", "nan", "None", ""])]
-    if len(valid):
-        lines.append(f"备选比分方向/完全对: {len(valid)}场，{valid.str.contains('完全对|方向对').mean():.1%}")
+if "联赛" in df.columns and "胜平负命中" in df.columns:
+    df["_tag"] = df["联赛"].map(tag)
+    lines.append("\n=== 按标签 ===")
+    for k in ["⭐精选", "普通", "⚠️避雷"]:
+        sub = df[df["_tag"] == k]
+        if len(sub) == 0: continue
+        line = f"  {k}: {len(sub)}场，胜平负 {rate(sub['胜平负命中']):.1%}"
+        if "亚盘命中" in sub.columns:
+            ah = sub["亚盘命中"].dropna()
+            ah = ah[ah.astype(str).str.lower() != "none"]
+            if len(ah):
+                line += f" / 亚盘 {rate(ah):.1%}"
+        lines.append(line)
 
 if "胜平负推荐" in df.columns and "胜平负命中" in df.columns:
     lines.append("\n按胜平负推荐:")
@@ -80,7 +73,7 @@ with open("summary.md", "w", encoding="utf-8") as f:
     f.write(text)
 
 stamp = time.strftime("%Y%m%d_%H%M")
-with open(f"summary_{MODE}_{stamp}.md", "w", encoding="utf-8") as f:
+with open(f"summary_tagged_{stamp}.md", "w", encoding="utf-8") as f:
     f.write(text)
 
-print(f"summary saved (mode={MODE})")
+print(f"summary saved (tagged)")
