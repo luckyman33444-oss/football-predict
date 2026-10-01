@@ -165,6 +165,10 @@ def predict_full_dc(xg_h, xg_a, rho=-0.05):
     aw = sum(p for (h, a), p in m.items() if h < a)
     ov25 = sum(p for (h, a), p in m.items() if h + a >= 3)
     un25 = 1 - ov25
+    main_over = sorted([(h, a, p) for (h, a), p in m.items() if h > a and h + a >= 3], key=lambda x: -x[2])[:5]
+    main_under = sorted([(h, a, p) for (h, a), p in m.items() if h > a and h + a <= 2], key=lambda x: -x[2])[:5]
+    away_over = sorted([(h, a, p) for (h, a), p in m.items() if h < a and h + a >= 3], key=lambda x: -x[2])[:5]
+    away_under = sorted([(h, a, p) for (h, a), p in m.items() if h < a and h + a <= 2], key=lambda x: -x[2])[:5]
     over_scores = sorted([(h, a, p) for (h, a), p in m.items() if h + a >= 3], key=lambda x: -x[2])[:4]
     under_scores = sorted([(h, a, p) for (h, a), p in m.items() if h + a <= 2], key=lambda x: -x[2])[:4]
     top = sorted(m.items(), key=lambda x: -x[1])[:4]
@@ -197,6 +201,8 @@ def predict_full_dc(xg_h, xg_a, rho=-0.05):
     ah_line, ah_note = compute_model_asian_handicap(xg_h, xg_a)
 
     return {"over_scores": over_scores, "under_scores": under_scores, "top_scores": top,
+            "main_over": main_over, "main_under": main_under,
+            "away_over": away_over, "away_under": away_under,
             "hw": hw, "d": d, "aw": aw, "over25": ov25, "under25": un25, "h1": h1, "h2": h2,
             "best_result": best_result, "best_prob": best_prob,
             "ou_text": ou_text, "ou_lines": ou_lines,
