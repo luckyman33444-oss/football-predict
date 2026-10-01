@@ -48,11 +48,9 @@ with tab1:
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
         st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.6：全中文 + 亚洲盘 + 核心联动")
         if not df.empty:
-            df = df.copy()
-            df["第三比分"] = df["_scores_list"].apply(lambda x: x[2][0] if isinstance(x, list) and len(x) > 2 else "—")
             display_df = df[[
                 "时间", "联赛", "联赛等级", "状态", "主队", "客队",
-                "主力比分", "备选比分", "第三比分", "预测结果",
+                "主力比分", "备选比分", "预测结果",
                 "主胜", "和局", "客胜", "大小球", "亚盘"
             ]].copy()
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
@@ -75,7 +73,7 @@ with tab1:
                         st.dataframe(
                             core_df[[
                                 "时间", "联赛", "主队", "客队", "主力比分", "备选比分",
-                                "第三比分", "预测结果", "大小球", "亚盘", "主胜", "和局", "客胜"
+                                "预测结果", "大小球", "亚盘", "主胜", "和局", "客胜"
                             ]],
                             use_container_width=True, hide_index=True
                         )
@@ -433,8 +431,8 @@ with tab2:
                     rows_for_table = []
                     for i, md in enumerate(matches_data):
                         mp = md["adj_main_prob"]; ap = md["adj_alt_prob"]
-                        main_str = "1-1"
-                        alt_str = "1-0"
+                        main_str = f"{md['adj_main_score']} ({mp*100:.1f}%)"
+                        alt_str = f"{md['adj_alt_score']} ({ap*100:.1f}%)"
                         role = "**主胆**" if (best_idx == i) else "拖"
                         rows_for_table.append({"场次": i + 1, "等级": md.get("等级", "B"), "时间": md["时间"], "比赛": md["比赛"],
                                                "大小球方向": md["大小球方向"], "来源": md["是否核心"],
@@ -445,17 +443,19 @@ with tab2:
                     if best_idx is not None:
                         st.markdown(f"**策略：第 {best_idx+1} 场做主胆**")
                         other_idx = [i for i in range(3) if i != best_idx]
-                        _SA = "1-1"; _SB = "1-0"
-                        for i1, s1 in enumerate([_SA, _SB], 1):
-                            for i2, s2 in enumerate([_SA, _SB], 1):
-                                bet_rows.append({"注单": f"注{(i1-1)*2+i2}", f"第{best_idx+1}场(主胆)": _SA,
+                        main_s_str = matches_data[best_idx]["adj_main_score"]
+                        o1_main = matches_data[other_idx[0]]["adj_main_score"]; o1_alt = matches_data[other_idx[0]]["adj_alt_score"]
+                        o2_main = matches_data[other_idx[1]]["adj_main_score"]; o2_alt = matches_data[other_idx[1]]["adj_alt_score"]
+                        for i1, s1 in enumerate([o1_main, o1_alt], 1):
+                            for i2, s2 in enumerate([o2_main, o2_alt], 1):
+                                bet_rows.append({"注单": f"注{(i1-1)*2+i2}", f"第{best_idx+1}场(主胆)": main_s_str,
                                                  f"第{other_idx[0]+1}场": s1, f"第{other_idx[1]+1}场": s2})
                         st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     else:
                         st.markdown("**三场无明显主胆，每场选 2 个比分（共 8 注）**")
-                        s1_list = ["1-1", "1-0"]
-                        s2_list = ["1-1", "1-0"]
-                        s3_list = ["1-1", "1-0"]
+                        s1_list = [matches_data[0]["adj_main_score"], matches_data[0]["adj_alt_score"]]
+                        s2_list = [matches_data[1]["adj_main_score"], matches_data[1]["adj_alt_score"]]
+                        s3_list = [matches_data[2]["adj_main_score"], matches_data[2]["adj_alt_score"]]
                         n = 1
                         for a in s1_list:
                             for b in s2_list:
@@ -534,7 +534,7 @@ with tab2:
                                                    "联赛": r["联赛"], "等级": r.get("联赛等级", "B"), "时间": r["时间"],
                                                    "状态": r["状态"], "预测结果": r["预测结果"], "大小球": r["大小球"],
                                                    "主胜": r["主胜"], "和局": r["和局"], "客胜": r["客胜"],
-                                                   "主力比分": r["主力比分"], "备选比分": r["备选比分"], "第三比分": (r["_scores_list"][2][0] if isinstance(r.get("_scores_list"), list) and len(r["_scores_list"]) > 2 else "—")})
+                                                   "主力比分": r["主力比分"], "备选比分": r["备选比分"]})
                     meta_combined = [{"存档时间": f"{today_str_save} {now_time}", "推荐场次": len(rec_rows),
                                       "当天全部预测场次": len(all_today_rows), "核心比赛": "是" if core_count > 0 else "否"}]
                     for r in rec_rows: meta_combined.append(r)
@@ -800,15 +800,11 @@ with tab5:
                                 ou_str = "✅" if ou_hit else "❌"
                             else: ou_str = "—"
                             score1 = str(m.get("主力比分", "—")); score2 = str(m.get("备选比分", "—"))
-                            score3 = str(m.get("第三比分", "—"))
                             score1_hit = judge_score_hit(score1, actual); score2_hit = judge_score_hit(score2, actual)
-                            score3_hit = judge_score_hit(score3, actual)
-                            _any3 = "✅" if (score1_hit == "✅" or score2_hit == "✅" or score3_hit == "✅") else "❌"
                             all_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "预测结果": pred_result, "大小球": ou_dir,
-                                             "实际比分": actual_str, "主力比分": score1, "备选比分": score2, "第三比分": score3,
+                                             "实际比分": actual_str, "主力比分": score1, "备选比分": score2,
                                              "胜负命中": win_str, "大小球命中": ou_str,
-                                             "比分1命中": score1_hit, "比分2命中": score2_hit, "比分3命中": score3_hit,
-                                             "比分前3命中": _any3})
+                                             "比分1命中": score1_hit, "比分2命中": score2_hit})
                         if all_rows:
                             all_review_df = pd.DataFrame(all_rows)
                             st.dataframe(all_review_df, use_container_width=True, hide_index=True)
@@ -816,13 +812,10 @@ with tab5:
                             wh2 = len([r for r in wg2 if r["胜负命中"] == "✅"]); wr2 = wh2 / len(wg2) if wg2 else 0
                             og2 = [r for r in all_rows if r["大小球命中"] in ("✅", "❌")]
                             oh2 = len([r for r in og2 if r["大小球命中"] == "✅"]); orr2 = oh2 / len(og2) if og2 else 0
-                            bg2 = [r for r in all_rows if r["比分前3命中"] in ("✅", "❌")]
-                            bh2 = len([r for r in bg2 if r["比分前3命中"] == "✅"]); br2 = bh2 / len(bg2) if bg2 else 0
-                            c1, c2, c3, c4 = st.columns(4)
+                            c1, c2, c3 = st.columns(3)
                             with c1: st.metric("全部预测已完赛", f"{len(all_rows)} 场")
                             with c2: st.metric("胜负命中", f"{wr2*100:.1f}%", f"{wh2}/{len(wg2)}" if wg2 else "无")
                             with c3: st.metric("大小球命中", f"{orr2*100:.1f}%", f"{oh2}/{len(og2)}" if og2 else "无")
-                            with c4: st.metric("比分前3命中", f"{br2*100:.1f}%", f"{bh2}/{len(bg2)}" if bg2 else "无")
                             st.markdown("### 📊 按联赛统计")
                             ls = {}
                             for r in all_rows:

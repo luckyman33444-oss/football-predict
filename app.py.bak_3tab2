@@ -75,7 +75,7 @@ with tab1:
                         st.dataframe(
                             core_df[[
                                 "时间", "联赛", "主队", "客队", "主力比分", "备选比分",
-                                "第三比分", "预测结果", "大小球", "亚盘", "主胜", "和局", "客胜"
+                                "预测结果", "大小球", "亚盘", "主胜", "和局", "客胜"
                             ]],
                             use_container_width=True, hide_index=True
                         )
@@ -800,15 +800,11 @@ with tab5:
                                 ou_str = "✅" if ou_hit else "❌"
                             else: ou_str = "—"
                             score1 = str(m.get("主力比分", "—")); score2 = str(m.get("备选比分", "—"))
-                            score3 = str(m.get("第三比分", "—"))
                             score1_hit = judge_score_hit(score1, actual); score2_hit = judge_score_hit(score2, actual)
-                            score3_hit = judge_score_hit(score3, actual)
-                            _any3 = "✅" if (score1_hit == "✅" or score2_hit == "✅" or score3_hit == "✅") else "❌"
                             all_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "预测结果": pred_result, "大小球": ou_dir,
-                                             "实际比分": actual_str, "主力比分": score1, "备选比分": score2, "第三比分": score3,
+                                             "实际比分": actual_str, "主力比分": score1, "备选比分": score2,
                                              "胜负命中": win_str, "大小球命中": ou_str,
-                                             "比分1命中": score1_hit, "比分2命中": score2_hit, "比分3命中": score3_hit,
-                                             "比分前3命中": _any3})
+                                             "比分1命中": score1_hit, "比分2命中": score2_hit})
                         if all_rows:
                             all_review_df = pd.DataFrame(all_rows)
                             st.dataframe(all_review_df, use_container_width=True, hide_index=True)
