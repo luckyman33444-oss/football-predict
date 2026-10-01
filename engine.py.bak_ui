@@ -522,15 +522,10 @@ def parse_prediction(p):
             else: over_label, over_pct = "小球", 100 - p_over
         else: over_label, over_pct = "—", 0
     if pred:
-        # V5.6 A+: 模型前3 ∪ 全局8池（与 backtest_one 同步）
-        if over_label == "大球": _base = pred["over_scores"]
-        elif over_label == "小球": _base = pred["under_scores"]
-        else: _base = pred["top_scores"]
-        _merged = list(_base[:3])
-        _exist = {(h, a) for h, a, _ in _merged}
-        for _h, _a in [(1,1),(1,0),(2,1),(0,1),(0,0),(2,0),(1,2),(2,2)]:
-            if (_h, _a) not in _exist: _merged.append((_h, _a, 0.0))
-        scores_list = [(f"{h}-{a}", pr) for h, a, pr in _merged]
+        if over_label == "大球": chosen_scores = pred["over_scores"]
+        elif over_label == "小球": chosen_scores = pred["under_scores"]
+        else: chosen_scores = pred["top_scores"]
+        scores_list = [(f"{h}-{a}", pr) for h, a, pr in chosen_scores]
     else: scores_list = []
     main_score = scores_list[0][0] if scores_list else "—"
     alt_score = scores_list[1][0] if len(scores_list) > 1 else "—"

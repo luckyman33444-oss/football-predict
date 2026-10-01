@@ -11,7 +11,7 @@ st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v5.6（全中文 + 亞洲盤顯示 + 核心聯動）")
+st.title("⚽ 足球预测 v4.0（全中文 + 亞洲盤顯示 + 核心聯動）")
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
@@ -46,7 +46,7 @@ with tab1:
         sel_leagues = st.multiselect("筛选联赛（不选则显示全部）", all_leagues, default=[], key="lg1")
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
-        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.6：全中文 + 亚洲盘 + 核心联动")
+        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v4.0：全中文 + 亚洲盘 + 核心联动")
         if not df.empty:
             display_df = df[[
                 "时间", "联赛", "联赛等级", "状态", "主队", "客队",
@@ -239,12 +239,8 @@ with tab2:
                         if adj_pred:
                             best_name, best_prob = pick_best_result(adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
                             adj_best = (best_name, best_prob)
-                            # V5.6 A+: 模型前3 ∪ 全局8池（与 backtest_one 同步）
-                            _b = adj_pred["over_scores"] if adj_pred["over25"] >= 0.5 else adj_pred["under_scores"]
-                            _m = list(_b[:3]); _e = {(s[0], s[1]) for s in _m}
-                            for _h, _a in [(1,1),(1,0),(2,1),(0,1),(0,0),(2,0),(1,2),(2,2)]:
-                                if (_h, _a) not in _e: _m.append((_h, _a, 0.0))
-                            adj_scores = _m
+                            if adj_pred["over25"] >= 0.5: adj_scores = adj_pred["over_scores"]
+                            else: adj_scores = adj_pred["under_scores"]
                             adj_main_score = f"{adj_scores[0][0]}-{adj_scores[0][1]}" if adj_scores else "—"
                             adj_alt_score = f"{adj_scores[1][0]}-{adj_scores[1][1]}" if len(adj_scores) > 1 else "—"
                             adj_main_prob = adj_scores[0][2] if adj_scores else 0
@@ -307,7 +303,7 @@ with tab2:
                         st.error(f"🔴 **警示：以下 {len(f_matches)} 场为 F 级联赛**（回测命中率 <50%），下注请谨慎：")
                         for fm in f_matches: st.write(f"- {fm['比赛']}（{fm['联赛']}）")
                     st.subheader("🎯 模型对比 & 亚盘方向")
-                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/分层/DC/融合/封顶 ｜ v5.6")
+                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/分层/DC/融合/封顶 ｜ v4.0")
                     compare_rows = []
                     for i, md in enumerate(matches_data, 1):
                         mc = md.get("model_compare", {})
@@ -854,7 +850,7 @@ with tab5:
 
 # ========== Tab 6：历史回测 ==========
 with tab6:
-    st.subheader("📈 历史批量回测（v5.6：全中文 + 亚洲盘）")
+    st.subheader("📈 历史批量回测（v5.0：全中文 + 亚洲盘）")
     st.caption("拉历史预测 + 历史比分，批量计算命中率。平手盤不計入亞盤統計。")
     col_a, col_b = st.columns(2)
     with col_a: bt_from = st.date_input("起始日期", value=date.today() - timedelta(days=7), key="bt_from")
@@ -1025,4 +1021,4 @@ with tab6:
                         file_name=f"回测_{from_str}_{to_str}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_backtest")
 
-st.caption("⚠️ v5.6：全中文 + 亞洲盤顯示 + 核心聯動。数据永远在你手中。")
+st.caption("⚠️ v5.0：全中文 + 亞洲盤顯示 + 核心聯動。数据永远在你手中。")
