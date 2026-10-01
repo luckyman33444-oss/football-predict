@@ -1135,3 +1135,10 @@ TEAM_CN.update({
 
 TEAM_CN.update({"Apollon Limassol": "阿波罗利马索尔"})
 
+
+TEAM_CN.update({
+    "DR Congo": "刚果民主共和国",
+    "Uganda": "乌干达",
+    "Mauritius": "毛里求斯",
+})
+
