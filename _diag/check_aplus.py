@@ -1,0 +1,10 @@
+import pandas as pd
+df = pd.read_csv('detail.csv')
+df = df[df['前3候选'].notna()].copy()
+hit = (df['前3命中'].astype(str).str.strip() == '✅')
+print(f"有候选场次: {len(df)}")
+print(f"前3候选 命中率: {hit.mean()*100:.1f}%")
+print(f"前3候选 命中数: {hit.sum()}")
+print()
+print("前3候选 出现次数 top5:")
+print(df['前3候选'].value_counts().head(5))

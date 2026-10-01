@@ -1,0 +1,11 @@
+import pandas as pd
+df = pd.read_csv('detail.csv')
+df = df[df['前3候选'].notna() & df['实际胜平负'].notna()].copy()
+hit = (df['比分方向'].astype(str).str.strip() == df['实际胜平负'].astype(str).str.strip())
+print(f"模型'比分方向'命中: {hit.mean()*100:.1f}%  (n={len(df)})")
+print()
+print("模型判各方向的场次分布:")
+print(df['比分方向'].value_counts().to_string())
+print()
+print("实际各方向分布:")
+print(df['实际胜平负'].value_counts().to_string())
