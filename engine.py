@@ -49,7 +49,7 @@ def get_league_warning(grade):
 def compute_model_asian_handicap(xg_h, xg_a):
     diff = xg_h - xg_a
     abs_diff = abs(diff)
-    if abs_diff < 0.15:
+    if abs_diff < 0.25:
         return "平手", f"無讓球（xG差 {diff:+.2f}）· 觀望"
     if abs_diff < 0.45: line = 0.25
     elif abs_diff < 0.75: line = 0.5
@@ -78,9 +78,6 @@ def compute_score_direction(xg_h, xg_a, prob_hw, prob_d, prob_aw):
     return f"{top[0]} {confidence*100:.1f}% {level}"
 
 def pick_best_result(hw, d, aw):
-    max_prob = max(hw, d, aw)
-    if d >= 0.28 and (max_prob - d) < 0.10:
-        return ("和局", d)
     if hw >= aw:
         return ("主胜", hw)
     return ("客胜", aw)
@@ -689,6 +686,7 @@ def fetch_events_range(date_from, date_to):
         else: break
     return actual
 
+EXCLUDE_LEAGUES = {"阿甲", "英冠", "哥伦比亚甲", "Liga Portugal 2", "Copa Libertadores", "摩洛哥甲"}
 def backtest_one(p, actual_map):
     ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
     eid = ev.get("id")
