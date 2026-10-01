@@ -13,7 +13,6 @@ INCLUDE_LEAGUES = {"意甲", "日职联", "Pro League", "Parva Liga", "Superliga
 
 df = pd.read_csv("detail.csv")
 
-# 联赛过滤
 if "联赛" in df.columns:
     if MODE == "black":
         df = df[~df["联赛"].isin(EXCLUDE_LEAGUES)].copy()
