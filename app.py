@@ -11,7 +11,7 @@ st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v5.6（全中文 + 亞洲盤顯示 + 核心聯動）")
+st.title("⚽ 足球预测 v5.8（全中文 + 亚洲盘 + 市场强度筛选）")
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测", "⭐ 高置信清单"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
@@ -46,17 +46,29 @@ with tab1:
         sel_leagues = st.multiselect("筛选联赛（不选则显示全部）", all_leagues, default=[], key="lg1")
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
-        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.6：全中文 + 亚洲盘 + 核心联动")
+        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.8：市场亚盘 + 市场差/大小球强度筛选")
         if not df.empty:
             df = df.copy()
             df["第三比分"] = df["_scores_list"].apply(lambda x: x[2][0] if isinstance(x, list) and len(x) > 2 else "—")
             # D2: 平局概率 + 高置信
             df["平局概率"] = df["市场和局_pct"].apply(lambda x: f"{x:.1f}%" if x is not None and x != "—" else "—")
             df["高置信"] = df["高置信"].fillna("—") if "高置信" in df.columns else "—"
+            _ph = pd.to_numeric(df.get("_prob_home"), errors="coerce").fillna(0)
+            _pa = pd.to_numeric(df.get("_prob_away"), errors="coerce").fillna(0)
+            _po = pd.to_numeric(df.get("_prob_over_pct"), errors="coerce").fillna(0)
+            df["市场差"] = (_ph - _pa).abs()
+            df["大小球强度"] = _po.apply(lambda x: max(x, 100 - x))
+            def _tag(r):
+                t = []
+                if r["市场差"] >= 35: t.append("主客强")
+                if r["大小球强度"] >= 60: t.append("大小强")
+                if isinstance(r.get("市场和局_pct"), (int, float)) and r["市场和局_pct"] < 22: t.append("和局低")
+                return "＋".join(t) if t else "—"
+            df["强信号"] = df.apply(_tag, axis=1)
             display_df = df[[
                 "时间", "联赛", "联赛等级", "状态", "主队", "客队",
                 "主力比分", "备选比分", "第三比分", "预测结果",
-                "主胜", "和局", "客胜", "平局概率", "高置信", "大小球", "亚盘"
+                "主胜", "和局", "客胜", "平局概率", "高置信", "强信号", "大小球", "亚盘"
             ]].copy()
             display_df = display_df.rename(columns={"预测结果": "模型判断"})
             if "市场判断" in df.columns:
@@ -320,7 +332,7 @@ with tab2:
                         st.error(f"🔴 **警示：以下 {len(f_matches)} 场为 F 级联赛**（回测命中率 <50%），下注请谨慎：")
                         for fm in f_matches: st.write(f"- {fm['比赛']}（{fm['联赛']}）")
                     st.subheader("🎯 模型对比 & 亚盘方向")
-                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/分层/DC/融合/封顶 ｜ v5.6")
+                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/分层/DC/融合/封顶 ｜ v5.8")
                     compare_rows = []
                     for i, md in enumerate(matches_data, 1):
                         mc = md.get("model_compare", {})
@@ -876,7 +888,7 @@ with tab5:
 
 # ========== Tab 6：历史回测 ==========
 with tab6:
-    st.subheader("📈 历史批量回测（v5.6：全中文 + 亚洲盘）")
+    st.subheader("📈 历史批量回测（v5.8：全中文 + 亚洲盘 + 市场亚盘）")
     st.caption("拉历史预测 + 历史比分，批量计算命中率。平手盤不計入亞盤統計。")
     col_a, col_b = st.columns(2)
     with col_a: bt_from = st.date_input("起始日期", value=date.today() - timedelta(days=7), key="bt_from")
@@ -1141,4 +1153,4 @@ with tab7:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key="dl_tab7")
 
-st.caption("⚠️ v5.6：全中文 + 亞洲盤顯示 + 核心聯動。数据永远在你手中。")
+st.caption("⚠️ v5.8：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
