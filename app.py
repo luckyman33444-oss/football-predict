@@ -12,7 +12,7 @@ if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
 st.title("⚽ 足球预测 v5.6（全中文 + 亞洲盤顯示 + 核心聯動）")
-tab1, tab2, tab3, tab4, tab5, tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测", "⭐ 高置信清单"])
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测", "⭐ 高置信清单"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
 if not API_FOOTBALL_KEY: st.warning("⚠️ 未检测到 API_FOOTBALL_KEY")
@@ -58,6 +58,9 @@ with tab1:
                 "主力比分", "备选比分", "第三比分", "预测结果",
                 "主胜", "和局", "客胜", "平局概率", "高置信", "大小球", "亚盘"
             ]].copy()
+            display_df = display_df.rename(columns={"预测结果": "模型判断"})
+            if "市场判断" in df.columns:
+                display_df.insert(display_df.columns.get_loc("模型判断") + 1, "市场判断", df["市场判断"].values)
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
             edited = st.data_editor(display_df, use_container_width=True, hide_index=True,
                 column_config={"加入核心": st.column_config.CheckboxColumn("加入核心", help="勾选后点下方按钮保存到核心列表", default=False)},
