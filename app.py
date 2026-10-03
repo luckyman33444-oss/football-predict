@@ -144,11 +144,21 @@ with tab2:
                 end_window_auto = now + timedelta(hours=24)
                 other_df = other_df_all[other_df_all["kickoff_dt"] <= end_window_auto].copy()
                 def calc_conf(row):
-                    return max(row["_prob_home"] / 100 if row["_prob_home"] else 0,
+                    base = max(row["_prob_home"] / 100 if row["_prob_home"] else 0,
                                row["_prob_draw"] / 100 if row["_prob_draw"] else 0,
                                row["_prob_away"] / 100 if row["_prob_away"] else 0,
                                row["_prob_over"] if row["_prob_over"] else 0,
                                row["_prob_under"] if row["_prob_under"] else 0)
+                    # V5.8 强信号加分：市场差≥35 / 大小球强度≥60 / 和局<22
+                    _ph = row.get("_prob_home") or 0
+                    _pa = row.get("_prob_away") or 0
+                    _po = row.get("_prob_over_pct") or 0
+                    _pd = row.get("_prob_draw") or 100
+                    bonus = 0.0
+                    if abs(_ph - _pa) >= 35: bonus += 0.10
+                    if max(_po, 100 - _po) >= 60: bonus += 0.05
+                    if _pd < 22: bonus += 0.05
+                    return base + bonus
                 if not core_df.empty: core_df["_conf"] = core_df.apply(calc_conf, axis=1)
                 if not other_df.empty: other_df["_conf"] = other_df.apply(calc_conf, axis=1)
                 n_core_in_window = len(core_df)
