@@ -739,6 +739,14 @@ def backtest_one(p, actual_map):
     ou_opts = [("大球", over_pct), ("小球", 100 - over_pct)]
     ou_opts.sort(key=lambda x: -x[1])
     best_ou = ou_opts[0]
+
+    # === V5.8 市场大小球 ===
+    if p_over_raw is not None:
+        _mp_over = float(p_over_raw)
+        market_ou_rec = "大球" if _mp_over >= 50 else "小球"
+        market_ou_pct = round(max(_mp_over, 100 - _mp_over), 1)
+    else:
+        market_ou_rec = None; market_ou_pct = None
     h = actual["home"]; a = actual["away"]; total = h + a
     if h > a: actual_result = "主胜"
     elif h == a: actual_result = "和局"
@@ -746,6 +754,8 @@ def backtest_one(p, actual_map):
     actual_ou = "大球" if total >= 3 else "小球"
     result_hit = (best_result[0] == actual_result)
     ou_hit = (best_ou[0] == actual_ou)
+    market_ou_hit = (market_ou_rec == actual_ou) if market_ou_rec else None
+    market_ou_hit = (market_ou_rec == actual_ou) if market_ou_rec else None
     confidence = max(best_result[1], best_ou[1])
     score_main = "—"; score_alt = "—"; score_top3 = ""
     if pred:
@@ -874,6 +884,7 @@ def backtest_one(p, actual_map):
         "比分方向": score_dir,
         "胜平负推荐": best_result[0], "胜平负概率": round(best_result[1], 1),
         "大小球推荐": best_ou[0], "大小球概率": round(best_ou[1], 1),
+        "市场大小球": market_ou_rec, "市场大小球概率": market_ou_pct, "市场大小球命中": market_ou_hit,
         "主力比分": score_main, "备选比分": score_alt,
         "实际比分": actual_score_str,
         "实际胜平负": actual_result, "实际大小球": actual_ou,
