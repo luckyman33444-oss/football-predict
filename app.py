@@ -446,29 +446,29 @@ with tab2:
                         if mp < 0.08 or ap <= 0: continue
                         ratio = mp / ap
                         if ratio >= 1.3 and ratio > best_ratio: best_ratio = ratio; best_idx = i
+                    matches3 = matches_data[:3]
+                    _sc = []
+                    for md in matches3:
+                        _m1 = md.get("adj_main_score") or "—"
+                        _m2 = md.get("adj_alt_score") or _m1
+                        _sc.append([_m1, _m2])
                     rows_for_table = []
-                    for i, md in enumerate(matches_data):
-                        mp = md["adj_main_prob"]; ap = md["adj_alt_prob"]
-                        main_str = "1-1"
-                        alt_str = "1-0"
+                    for i, md in enumerate(matches3):
                         role = "**主胆**" if (best_idx == i) else "拖"
                         rows_for_table.append({"场次": i + 1, "等级": md.get("等级", "B"), "时间": md["时间"], "比赛": md["比赛"],
                                                "大小球方向": md["大小球方向"], "来源": md["是否核心"],
-                                               "状态": md["状态"], "比分1": main_str,
-                                               "比分2": alt_str if best_idx != i else "—", "角色": role})
+                                               "状态": md["状态"], "比分1": _sc[i][0],
+                                               "比分2": _sc[i][1], "角色": role})
                     st.dataframe(pd.DataFrame(rows_for_table), use_container_width=True, hide_index=True)
                     bet_rows = []
                     if best_idx is not None:
                         st.markdown(f"**策略：第 {best_idx+1} 场做主胆（每场 2 个比分，共 8 注）**")
                     else:
                         st.markdown("**三场无明显主胆，每场选 2 个比分（共 8 注）**")
-                    s1_list = ["1-1", "1-0"]
-                    s2_list = ["1-1", "1-0"]
-                    s3_list = ["1-1", "1-0"]
                     n = 1
-                    for a in s1_list:
-                        for b in s2_list:
-                            for c in s3_list:
+                    for a in _sc[0]:
+                        for b in _sc[1]:
+                            for c in _sc[2]:
                                 bet_rows.append({"注单": f"注{n}", "第1场": a, "第2场": b, "第3场": c}); n += 1
                     st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     st.divider()
