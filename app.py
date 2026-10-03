@@ -306,6 +306,8 @@ with tab2:
                             "direction_agreement": direction_agreement, "bet_advice": bet_advice,
                             "model_compare": model_compare,
                             "_xg_h": xg_h, "_xg_a": xg_a,
+                            "市场判断": ("主胜" if (row["_prob_home"] or 0) >= (row["_prob_away"] or 0) else "客胜"),
+                            "市场差": abs((row["_prob_home"] or 0) - (row["_prob_away"] or 0)),
                         })
                     grade_counts = {}
                     for md in matches_data:
@@ -457,25 +459,18 @@ with tab2:
                     st.dataframe(pd.DataFrame(rows_for_table), use_container_width=True, hide_index=True)
                     bet_rows = []
                     if best_idx is not None:
-                        st.markdown(f"**策略：第 {best_idx+1} 场做主胆**")
-                        other_idx = [i for i in range(3) if i != best_idx]
-                        _SA = "1-1"; _SB = "1-0"
-                        for i1, s1 in enumerate([_SA, _SB], 1):
-                            for i2, s2 in enumerate([_SA, _SB], 1):
-                                bet_rows.append({"注单": f"注{(i1-1)*2+i2}", f"第{best_idx+1}场(主胆)": _SA,
-                                                 f"第{other_idx[0]+1}场": s1, f"第{other_idx[1]+1}场": s2})
-                        st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
+                        st.markdown(f"**策略：第 {best_idx+1} 场做主胆（每场 2 个比分，共 8 注）**")
                     else:
                         st.markdown("**三场无明显主胆，每场选 2 个比分（共 8 注）**")
-                        s1_list = ["1-1", "1-0"]
-                        s2_list = ["1-1", "1-0"]
-                        s3_list = ["1-1", "1-0"]
-                        n = 1
-                        for a in s1_list:
-                            for b in s2_list:
-                                for c in s3_list:
-                                    bet_rows.append({"注单": f"注{n}", "第1场": a, "第2场": b, "第3场": c}); n += 1
-                        st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
+                    s1_list = ["1-1", "1-0"]
+                    s2_list = ["1-1", "1-0"]
+                    s3_list = ["1-1", "1-0"]
+                    n = 1
+                    for a in s1_list:
+                        for b in s2_list:
+                            for c in s3_list:
+                                bet_rows.append({"注单": f"注{n}", "第1场": a, "第2场": b, "第3场": c}); n += 1
+                    st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     st.divider()
                     st.subheader("🛡️ 稳健串（只选方向一致的比赛）")
                     eligible = [md for md in matches_data if "同向" in md.get("direction_agreement", "")]
@@ -488,12 +483,15 @@ with tab2:
                     else:
                         combo = []
                         for md in eligible:
-                            adj_name, adj_prob = md["adj_best"]
-                            pick_odds = None; is_real = False
+                            mkt = md.get("市场判断", "—")
+                            pick_odds = None; is_real = False; pick_prob = 0
                             for opt in md["opts"]:
-                                if opt[0] == adj_name: pick_odds = opt[2]; is_real = opt[3]; break
-                            if pick_odds is None: pick_odds = implied_odds(adj_prob * 100)
-                            combo.append((md, (adj_name, adj_prob, pick_odds, is_real, "")))
+                                if opt[0] == mkt:
+                                    pick_odds = opt[2]; is_real = opt[3]; pick_prob = opt[1]; break
+                            if pick_odds is None:
+                                pick_prob = md["adj_best"][1]
+                                pick_odds = implied_odds(pick_prob * 100)
+                            combo.append((md, (mkt, pick_prob, pick_odds, is_real, "")))
                         prob = 1; total_odds = 1
                         for _, opt in combo:
                             prob *= opt[1]
