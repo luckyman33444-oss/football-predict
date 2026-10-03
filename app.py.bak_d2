@@ -12,7 +12,7 @@ if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
 st.title("⚽ 足球预测 v5.6（全中文 + 亞洲盤顯示 + 核心聯動）")
-tab1, tab2, tab3, tab4, tab5, tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测", "⭐ 高置信清单"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
 if not API_FOOTBALL_KEY: st.warning("⚠️ 未检测到 API_FOOTBALL_KEY")
@@ -50,13 +50,10 @@ with tab1:
         if not df.empty:
             df = df.copy()
             df["第三比分"] = df["_scores_list"].apply(lambda x: x[2][0] if isinstance(x, list) and len(x) > 2 else "—")
-            # D2: 平局概率 + 高置信
-            df["平局概率"] = df["市场和局_pct"].apply(lambda x: f"{x:.1f}%" if x is not None and x != "—" else "—")
-            df["高置信"] = df["高置信"].fillna("—") if "高置信" in df.columns else "—"
             display_df = df[[
                 "时间", "联赛", "联赛等级", "状态", "主队", "客队",
                 "主力比分", "备选比分", "第三比分", "预测结果",
-                "主胜", "和局", "客胜", "平局概率", "高置信", "大小球", "亚盘"
+                "主胜", "和局", "客胜", "大小球", "亚盘"
             ]].copy()
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
             edited = st.data_editor(display_df, use_container_width=True, hide_index=True,
@@ -78,8 +75,8 @@ with tab1:
                         st.dataframe(
                             core_df[[
                                 "时间", "联赛", "主队", "客队", "主力比分", "备选比分",
-                                "第三比分", "预测结果", "市场判断", "大小球", "亚盘", "主胜", "和局", "客胜"
-                            ]].rename(columns={"预测结果": "模型判断"}),
+                                "第三比分", "预测结果", "大小球", "亚盘", "主胜", "和局", "客胜"
+                            ]],
                             use_container_width=True, hide_index=True
                         )
 
@@ -1034,59 +1031,5 @@ with tab6:
                     st.download_button("📥 下载回测报告 Excel", data=buf.getvalue(),
                         file_name=f"回测_{from_str}_{to_str}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_backtest")
-
-# ========== Tab 7：高置信清单 ==========
-with tab7:
-    st.subheader("⭐ 高置信清单")
-    st.caption("基于市场平局概率筛选：稳健档 <22%（每天约 7-8 场，命中约 71%），扩量档 <25%（每天约 17 场，命中约 64%）。")
-
-    if df_all.empty:
-        st.warning("没有获取到预测数据。")
-    else:
-        _date_counts = df_all.groupby("event_date").size().to_dict()
-        _avail = sorted([d for d in _date_counts.keys() if d and d != "—"])
-        if not _avail:
-            st.warning("无可用日期。")
-        else:
-            _today = datetime.now(CST).strftime("%Y-%m-%d")
-            if _today in _avail:
-                _def_idx = _avail.index(_today)
-            else:
-                _future = [i for i, d in enumerate(_avail) if d >= _today]
-                _def_idx = _future[0] if _future else len(_avail) - 1
-
-            _sel_date = st.selectbox("选择日期", _avail, index=_def_idx, key="date7")
-            _tier = st.radio("档位", ["稳健 (<22%)", "扩量 (<25%)"], horizontal=True, key="tier7")
-            _thr = 22 if "稳健" in _tier else 25
-
-            _df = df_all[df_all["event_date"] == _sel_date].copy()
-
-            if "市场和局_pct" not in _df.columns:
-                st.error("缺少 市场和局_pct 字段，请确认 engine.py 已打 patch_d1。")
-            else:
-                _df["_pd"] = pd.to_numeric(_df["市场和局_pct"], errors="coerce")
-                _df["_mk"] = _df["市场判断"].astype(str).str.strip()
-                _df["_eligible"] = (_df["_pd"] < _thr) & _df["_mk"].isin(["主胜", "客胜"])
-                _high = _df[_df["_eligible"]].copy()
-
-                st.markdown(f"### {_sel_date}：共 **{len(_high)}** 场高置信")
-
-                if _high.empty:
-                    st.info("当天没有符合条件的高置信场次。")
-                else:
-                    _show = _high[["时间", "联赛", "联赛等级", "主队", "客队", "市场判断", "_pd",
-                                   "预测结果", "主力比分", "备选比分", "第三比分", "大小球", "亚盘"]].copy()
-                    _show.columns = ["时间", "联赛", "等级", "主队", "客队", "市场判断", "平局%",
-                                     "模型判断", "主力比分", "备选比分", "第三比分", "大小球", "亚盘"]
-                    _show["平局%"] = _show["平局%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
-                    st.dataframe(_show, use_container_width=True, hide_index=True)
-
-                    _buf = io.BytesIO()
-                    with pd.ExcelWriter(_buf, engine="openpyxl") as _w:
-                        _show.to_excel(_w, sheet_name="高置信清单", index=False)
-                    st.download_button("📥 下载高置信清单 Excel", data=_buf.getvalue(),
-                        file_name=f"高置信_{_sel_date}_{_thr}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="dl_tab7")
 
 st.caption("⚠️ v5.6：全中文 + 亞洲盤顯示 + 核心聯動。数据永远在你手中。")

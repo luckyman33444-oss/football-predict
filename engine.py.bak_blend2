@@ -555,10 +555,6 @@ def parse_prediction(p):
         "主力比分": main_score, "备选比分": alt_score,
         "_main_score_p": main_score_p, "_alt_score_p": alt_score_p, "_scores_list": scores_list,
         "预测结果": model_result,
-        "模型和局": fp(pred["d"]*100) if pred else "—",
-        "市场和局_pct": round(prob_draw, 1) if prob_draw else None,
-        "市场判断": ("主胜" if (prob_home or 0) >= (prob_away or 0) else "客胜"),
-        "高置信": ("⭐⭐⭐" if (prob_draw or 100) < 20 else ("⭐⭐" if (prob_draw or 100) < 22 else ("⭐" if (prob_draw or 100) < 25 else "—"))),
         "上半场": h1, "下半场": h2,
         "主胜": fp(prob_home), "和局": fp(prob_draw), "客胜": fp(prob_away),
         "大小球": pred["ou_text"] if pred else f"{over_label} {over_pct:.1f}%",
@@ -804,22 +800,15 @@ def backtest_one(p, actual_map):
     market_rec = "主胜" if _p_h >= _p_a else "客胜"
     market_hit = (market_rec == actual_result)
 
-    # 融合方向（模型三方向分布 + 市场三方向概率）
+    # 融合方向（用 trust 调市场权重）
     try:
         _trust = get_league_trust_level(league_name_cn)
         _w = BLEND_WEIGHT_MODEL.get(_trust, 0.7)
-        # 模型三方向（百分数 → 0-1 小数）
-        _mhw = hw / 100; _md = d / 100; _maw = aw / 100
-        # 市场三方向（百分数 → 0-1 小数）
-        _khw = _p_h / 100; _kd = _p_d / 100; _kaw = _p_a / 100
-        # 加权融合
-        _bhw = _w * _mhw + (1-_w) * _khw
-        _bd  = _w * _md  + (1-_w) * _kd
-        _baw = _w * _maw + (1-_w) * _kaw
-        # 归一化
-        _tot = _bhw + _bd + _baw
-        if _tot > 0: _bhw /= _tot; _bd /= _tot; _baw /= _tot
-        # 禁和局，主/客取大
+        _mh = (best_result[1] / 100) if best_result[0] == "主胜" else 0.0
+        _ma = (best_result[1] / 100) if best_result[0] == "客胜" else 0.0
+        _bhw = _w * _mh + (1-_w) * _p_h / 100
+        _bd  = (1-_w) * _p_d / 100
+        _baw = _w * _ma + (1-_w) * _p_a / 100
         blend_rec = "主胜" if _bhw >= _baw else "客胜"
     except:
         blend_rec = market_rec
@@ -845,7 +834,6 @@ def backtest_one(p, actual_map):
         "前3候选": score_top3,
         "前3命中": "✅" if actual_score_str in score_top3.split(",") else "❌",
         "置信度": round(confidence, 1),
-        "模型主胜": round(hw, 1), "模型和局": round(d, 1), "模型客胜": round(aw, 1),
         "市场主胜": round(_p_h, 1), "市场和局": round(_p_d, 1), "市场客胜": round(_p_a, 1),
         "市场推荐": market_rec, "市场命中": market_hit,
         "融合推荐": blend_rec, "融合命中": blend_hit,
