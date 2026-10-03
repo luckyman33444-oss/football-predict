@@ -281,7 +281,10 @@ with tab2:
                         if base_pred:
                             base_score_dir = compute_score_direction(base_xg_h, base_xg_a, base_pred["hw"], base_pred["d"], base_pred["aw"])
                         else: base_score_dir = "—"
+                        _mkt_h = row["_prob_home"] or 0
+                        _mkt_a = row["_prob_away"] or 0
                         model_compare = {
+                            "_mkt_h": _mkt_h, "_mkt_a": _mkt_a,
                             "base_xg_h": base_xg_h, "base_xg_a": base_xg_a, "base_pred": base_pred,
                             "base_ah_line": base_ah_line, "base_ah_note": base_ah_note, "base_score_dir": base_score_dir,
                             "final_xg_h": final_xg_h, "final_xg_a": final_xg_a, "adj_pred": adj_pred,
@@ -355,9 +358,14 @@ with tab2:
                     for i, md in enumerate(matches_data, 1):
                         mc = md.get("model_compare", {})
                         if not mc: continue
+                        _mkt_h = mc.get("_mkt_h", 0); _mkt_a = mc.get("_mkt_a", 0)
+                        _mkt_side = "主" if _mkt_h >= _mkt_a else "客"
+                        _gap = abs(_mkt_h - _mkt_a)
+                        _conf = "🔒 高" if _gap > 35 else ("✅ 中" if _gap >= 20 else "⚠️ 低")
                         ah_rows.append({
                             "场次": i, "比赛": md["比赛"],
                             "模型亚盘": mc["ah_line"], "模型判断": mc["ah_note"],
+                            "市场方向": _mkt_side, "市场差": round(_gap, 1), "亚盘置信": _conf,
                             "大小球方向": ("大球" if mc["adj_pred"] and mc["adj_pred"]["over25"] >= 0.5 else "小球") if mc["adj_pred"] else "—",
                             "比分倾向": mc["score_dir"],
                         })
