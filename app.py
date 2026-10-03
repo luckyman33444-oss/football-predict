@@ -909,17 +909,21 @@ with tab6:
                     r_hits = int(bt_df["胜平负命中"].sum())
                     o_hits = int(bt_df["大小球命中"].sum())
                     ah_hits = int(bt_ah["亚盘命中"].sum()) if total_ah > 0 else 0
+                    bt_mah = bt_df[bt_df["市场亚盘命中"].notna()].copy()
+                    total_mah = len(bt_mah)
+                    mah_hits = int(bt_mah["市场亚盘命中"].sum()) if total_mah > 0 else 0
                     m_full = int((bt_df["主力比分命中"] == "✅完全对").sum())
                     m_dir = int((bt_df["主力比分命中"] == "⚠️方向对").sum())
                     m_wrong = int((bt_df["主力比分命中"] == "❌方向错").sum())
                     a_full = int((bt_df["备选比分命中"] == "✅完全对").sum())
                     a_dir = int((bt_df["备选比分命中"] == "⚠️方向对").sum())
                     a_wrong = int((bt_df["备选比分命中"] == "❌方向错").sum())
-                    c1, c2, c3, c4 = st.columns(4)
+                    c1, c2, c3, c4, c5 = st.columns(5)
                     with c1: st.metric("回测场次", total_bt)
                     with c2: st.metric("胜平负命中", f"{r_hits/total_bt*100:.1f}%", f"{r_hits}/{total_bt}")
                     with c3: st.metric("大小球命中", f"{o_hits/total_bt*100:.1f}%", f"{o_hits}/{total_bt}")
-                    with c4: st.metric("亚盘方向命中", f"{ah_hits/total_ah*100:.1f}%" if total_ah > 0 else "—", f"{ah_hits}/{total_ah}（不含平手观望）")
+                    with c4: st.metric("模型亚盘命中", f"{ah_hits/total_ah*100:.1f}%" if total_ah > 0 else "—", f"{ah_hits}/{total_ah}")
+                    with c5: st.metric("市场亚盘命中", f"{mah_hits/total_mah*100:.1f}%" if total_mah > 0 else "—", f"{mah_hits}/{total_mah}")
                     st.markdown("### 🎯 比分命中率")
                     c1, c2 = st.columns(2)
                     with c1:
@@ -934,6 +938,24 @@ with tab6:
                         st.write(f"- ⚠️方向对：{a_dir} ({a_dir/total_bt*100:.1f}%)")
                         st.write(f"- ❌方向错：{a_wrong} ({a_wrong/total_bt*100:.1f}%)")
                         st.write(f"- **方向命中率：{(a_full+a_dir)/total_bt*100:.1f}%**")
+
+                    st.markdown("### 📊 亚盘：按市场差筛选（市场差 = |市场主胜 - 市场客胜|）")
+                    if "市场差" in bt_df.columns and "市场亚盘命中" in bt_df.columns:
+                        gap_rows = []
+                        for label, lo, hi in [(">35 (高置信)", 35, 999), ("20-35 (中)", 20, 35), ("<20 (低)", 0, 20)]:
+                            sub = bt_df[(bt_df["市场差"] >= lo) & (bt_df["市场差"] < hi)]
+                            s = sub["市场亚盘命中"].dropna()
+                            gap_rows.append({"市场差": label, "场次": len(s),
+                                             "命中": int(s.sum()) if len(s) else 0,
+                                             "命中率": f"{s.mean()*100:.1f}%" if len(s) else "—"})
+                        st.dataframe(pd.DataFrame(gap_rows), use_container_width=True, hide_index=True)
+                        if "分歧" in bt_df.columns:
+                            div = bt_df[bt_df["分歧"] == True]
+                            s_div = div["市场亚盘命中"].dropna()
+                            if len(s_div):
+                                st.caption(f"分歧（模型方向≠市场方向）：{int(s_div.sum())}/{len(s_div)} = {s_div.mean()*100:.1f}%")
+                    else:
+                        st.caption("（本回测未含市场差字段，请重跑回测）")
 
                     st.markdown("### 📊 按亚盘让球方向统计（平手观望已排除）")
                     ah_stats = {}
@@ -1020,7 +1042,7 @@ with tab6:
                                        "亚盘命中率": ah_rate})
                     st.dataframe(pd.DataFrame(b_rows), use_container_width=True, hide_index=True)
                     st.markdown("### 📋 全部明细")
-                    show_cols = ["联赛", "等级", "主队", "客队", "模型xG", "亚盘方向", "亚盘判断", "亚盘命中",
+                    show_cols = ["联赛", "等级", "主队", "客队", "模型xG", "亚盘方向", "亚盘判断", "亚盘命中", "市场亚盘方向", "市场亚盘命中", "市场差", "亚盘置信",
                                  "比分方向", "胜平负推荐", "胜平负概率", "大小球推荐", "大小球概率",
                                  "主力比分", "备选比分", "实际比分", "胜平负命中", "大小球命中",
                                  "主力比分命中", "备选比分命中", "置信度"]
