@@ -1,0 +1,46 @@
+# Football Predict 交接（V5.8）
+
+## 仓库 / 环境
+- 仓库：https://github.com/luckyman33444-oss/football-predict
+- Codespaces 路径：/workspaces/football-predict (main)，Python 3.11.13
+- 线上：Streamlit Cloud（app.py），push 后 1-2 分钟自动部署
+- 推送：git add -A && git commit -m "..." && git push
+- detail.csv 留在本地，不要贴对话
+
+## 核心文件
+- app.py：Streamlit UI（7个Tab）
+- engine.py：模型 + 回测 + Excel
+- data.py：常量（DIXON_COLES_RHO、MATCH_TIER_MULTIPLIER、BLEND_WEIGHT_MODEL、TEAM_CN 1520）
+- run_bt.py：回测（python run_bt.py 2026-07-03 2026-10-02）
+- check_health.py：静态健康检查
+- make_report.py / summary_all.py：汇总报告
+- diag_*.py：诊断脚本（可留可删）
+
+## V5.8 已完成
+1. 亚盘接市场方向：市场57.5% > 模型50.6%
+2. 强信号筛选器（CV验证稳定）：
+   - 主客和 市场差≥35 → 67.4%
+   - 大小球 市场≥60 → 63.1%；≥65 → 72.4%
+   - 亚盘 市场差≥35 → 66.8%
+   - 高置信 和局<22 → 71.1%
+3. Tab1 加市场差/大小球强度/强信号列
+4. Tab2 强信号加分选场；比分串8注；稳健串用市场判断；比分选边法
+5. Tab6 市场亚盘指标 + 市场差筛选表
+6. Tab7 六档筛选
+7. Excel 同步新列；版本号统一 v5.8
+
+## 关键结论（勿重复踩坑）
+- **比分选边法保留**（全局top会80%变1-1，失多样性）
+- **rho 对大小球无效**（DC rho只影响低比分，不影响≥3球判断）
+- **盘口融合有效**（+2.2pp，与旧文档"无增益"矛盾）
+- **主胜封顶、赛事分层无效**（实测零贡献，可关）
+- **市场判断51.7% 仍是最优选边**（模型48.3%、融合50.5%）
+- **回测≠实时**：回测是纯DC，实时带阵容/战意/融合/封顶
+
+## 待办
+- 可选：把「主胜封顶」「分层」开关默认改关（保留可手动开）
+- 未验证：阵容权重、战意（无历史数据，属经验默认）
+
+## 工作方式
+- 先诊断后改码；每步一个动作；命令要完整可复制
+- 改完 python -c "import ast; ast.parse(...)" 验语法 → 推送
