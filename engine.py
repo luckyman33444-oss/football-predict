@@ -522,7 +522,7 @@ def parse_prediction(p):
             else: over_label, over_pct = "小球", 100 - p_over
         else: over_label, over_pct = "—", 0
     if pred:
-        # V5.6 A+: 模型前3 ∪ 全局8池（与 backtest_one 同步）
+        # V5.6 A+: 模型前3 ∪ 全局8池（选边法）
         if over_label == "大球": _base = pred["over_scores"]
         elif over_label == "小球": _base = pred["under_scores"]
         else: _base = pred["top_scores"]
@@ -759,6 +759,7 @@ def backtest_one(p, actual_map):
     confidence = max(best_result[1], best_ou[1])
     score_main = "—"; score_alt = "—"; score_top3 = ""
     if pred:
+        # V5.6: 选边法（大小球方向决定比分榜单）
         if best_ou[0] == "大球": scores = pred["over_scores"]
         else: scores = pred["under_scores"]
         if scores: score_main = f"{scores[0][0]}-{scores[0][1]}"
