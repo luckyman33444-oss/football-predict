@@ -555,7 +555,9 @@ def parse_prediction(p):
         "主力比分": main_score, "备选比分": alt_score,
         "_main_score_p": main_score_p, "_alt_score_p": alt_score_p, "_scores_list": scores_list,
         "预测结果": model_result,
+        "模型主胜": fp(pred["hw"]*100) if pred else "—",
         "模型和局": fp(pred["d"]*100) if pred else "—",
+        "模型客胜": fp(pred["aw"]*100) if pred else "—",
         "市场和局_pct": round(prob_draw, 1) if prob_draw else None,
         "市场判断": ("主胜" if (prob_home or 0) >= (prob_away or 0) else "客胜"),
         "高置信": ("⭐⭐⭐" if (prob_draw or 100) < 20 else ("⭐⭐" if (prob_draw or 100) < 22 else ("⭐" if (prob_draw or 100) < 25 else "—"))),
@@ -760,8 +762,9 @@ def backtest_one(p, actual_map):
     confidence = max(best_result[1], best_ou[1])
     score_main = "—"; score_alt = "—"; score_top3 = ""
     if pred:
-        # V5.6: 选边法（大小球方向决定比分榜单）
-        if best_ou[0] == "大球": scores = pred["over_scores"]
+        # V5.8: 比分选边用市场方向（对齐 Tab1），市场无数据才回退模型
+        _pick = market_ou_rec if market_ou_rec else best_ou[0]
+        if _pick == "大球": scores = pred["over_scores"]
         else: scores = pred["under_scores"]
         if scores: score_main = f"{scores[0][0]}-{scores[0][1]}"
         if len(scores) > 1: score_alt = f"{scores[1][0]}-{scores[1][1]}"
