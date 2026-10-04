@@ -225,7 +225,10 @@ with tab2:
                         tier_mult = MATCH_TIER_MULTIPLIER.get(tier, 1.0) if enable_tier else 1.0
                         tier_reason = f"赛事层级={tier}→×{tier_mult:.2f}" if enable_tier and tier_mult != 1.0 else ""
                         xg_h *= tier_mult; xg_a *= tier_mult
-                        adj_xg_h, adj_xg_a, hw_w, aw_w, inj_reason = adjust_with_lineup(xg_h, xg_a, lu)
+                        if enable_weight_adjust:
+                            adj_xg_h, adj_xg_a, hw_w, aw_w, inj_reason = adjust_with_lineup(xg_h, xg_a, lu)
+                        else:
+                            adj_xg_h, adj_xg_a, hw_w, aw_w, inj_reason = xg_h, xg_a, 1.0, 1.0, ""
                         h2h_xg_h, h2h_xg_a, h2h_hw, h2h_aw, h2h_reason = adjust_with_h2h(adj_xg_h, adj_xg_a, h2h)
                         final_xg_h = h2h_xg_h; final_xg_a = h2h_xg_a
                         motivation_reason = ""
