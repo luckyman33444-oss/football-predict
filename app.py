@@ -112,7 +112,6 @@ with tab2:
         enable_weight_adjust = st.checkbox("🎛️ 启用阵容/伤病权重调整", value=True, key="weight_switch")
         enable_motivation = st.checkbox("🏆 启用联赛战意修正", value=True, key="motivation_switch")
         enable_dc = st.checkbox("🔬 启用 Dixon-Coles 低比分修正", value=True, key="dc_switch")
-        enable_tier = st.checkbox("📊 启用赛事分层校准", value=False, key="tier_switch")
         enable_blend = st.checkbox("🤝 启用盘口融合", value=True, key="blend_switch")
         enable_cap_home = st.checkbox("🔒 启用主胜概率封顶", value=False, key="cap_home_switch")
     with col2:
@@ -222,9 +221,6 @@ with tab2:
                         alt_s = scores[1] if len(scores) > 1 else ("—", 0)
                         xg_h = row["_xg_h"] or 1.5; xg_a = row["_xg_a"] or 1.2
                         tier = get_match_tier(row.get("联赛", ""))
-                        tier_mult = MATCH_TIER_MULTIPLIER.get(tier, 1.0) if enable_tier else 1.0
-                        tier_reason = f"赛事层级={tier}→×{tier_mult:.2f}" if enable_tier and tier_mult != 1.0 else ""
-                        xg_h *= tier_mult; xg_a *= tier_mult
                         if enable_weight_adjust:
                             adj_xg_h, adj_xg_a, hw_w, aw_w, inj_reason = adjust_with_lineup(xg_h, xg_a, lu)
                         else:
@@ -289,7 +285,6 @@ with tab2:
                         else:
                             adj_best = ("—", 0); adj_main_score = "—"; adj_alt_score = "—"; adj_main_prob = 0; adj_alt_prob = 0
                         full_reason = inj_reason
-                        if tier_reason: full_reason += " ｜ " + tier_reason
                         if h2h_reason: full_reason += " ｜ " + h2h_reason
                         if motivation_reason: full_reason += " ｜ 战意: " + motivation_reason
                         if blend_info: full_reason += " ｜ 盘口融合: " + blend_info

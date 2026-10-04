@@ -26,11 +26,6 @@ ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 # ============ V5.0 模型参数 ============
 DIXON_COLES_RHO = {"top": -0.10, "mid": -0.13, "low": -0.15, "friendly": -0.13}
 
-MATCH_TIER_MULTIPLIER = {
-    "friendly": 0.88, "nations_league": 0.95, "qualifier": 0.98,
-    "tournament": 1.00, "cup": 0.96, "league": 1.00,
-}
-
 BLEND_WEIGHT_MODEL = {"top": 0.40, "mid": 0.55, "low": 0.70}
 
 FOOTBALL_API_LEAGUE_IDS = {
