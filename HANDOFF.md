@@ -1,56 +1,225 @@
-# Football Predict 交接（V5.9）
+# Football Predict 交接（V5.8）
 
-> 本文件是唯一交接入口。接手时先读本文件。
-> 每个文件、每个改动、每个坑，都必须记在这里。
+> 本文件是唯一交接入口。接手时先读本文件，再按「文档地图」定位需要的文件。
 
-## 一、快速上手
+## 一、快速上手（AI / 人类通用）
 
-1. 读「文档地图」→ 知道每个文件干什么
-2. 读「当前能力」→ 知道系统能做什么
-3. 读「关键结论」+「避雷」→ 知道哪些坑踩过
-4. 改代码前：先诊断（读代码 / grep / 拉数据），再动手
-5. 每步只改一处 → git --no-pager diff 确认 → python -c "import ast; ast.parse(...)" 验语法 → push
+1. 读本文件的「文档地图」→ 知道每个文件干什么
+2. 读「当前能力」→ 知道系统现在能做什么
+3. 读「关键结论」→ 知道哪些坑踩过
+4. 改代码前：先诊断（读代码/跑命令），再改，改完 python -c "import ast; ast.parse(open('X.py').read())" 验语法
+5. 每步只改一个地方，git --no-pager diff 确认，再 push
 6. push 后 1-2 分钟 Streamlit Cloud 自动部署
 
 ## 二、文档地图
 
-### 核心代码
+### 核心代码（改动风险高，改前必读）
 
-| 文件 | 作用 |
-|---|---|
-| app.py | Streamlit UI，7 Tab（Tab1 显示、Tab2 选场/比分串/稳健串、Tab6 回测、Tab7 筛选）|
-| engine.py | 模型核心（predict_full_dc、parse_prediction、backtest_one、fetch_all_predictions、compute_model_asian_handicap）|
-| data.py | 常量（DIXON_COLES_RHO、MATCH_TIER_MULTIPLIER、BLEND_WEIGHT_MODEL、TEAM_CN 1520队、LEAGUE_CN、LEAGUE_GRADE）|
+| 文件 | 作用 | 何时改 |
+|---|---|---|
+| app.py | Streamlit UI，7 个 Tab | 改界面/交互/筛选器 |
+| engine.py | 模型 + 回测 + Excel 导出 | 改算法/回测逻辑 |
+| data.py | 常量：DIXON_COLES_RHO、MATCH_TIER_MULTIPLIER、BLEND_WEIGHT_MODEL、TEAM_CN(1520队)、LEAGUE_CN、LEAGUE_GRADE | 加联赛/队名/调参数 |
 
-### 运行脚本
+### 运行脚本（工具，按需跑）
 
 | 文件 | 作用 | 命令 |
 |---|---|---|
-| run_bt.py | 回测 → detail.csv | python run_bt.py 2026-07-01 2026-10-03 |
-| make_report.py | detail.csv → report_v58.csv | python make_report.py |
-| summary_all.py | 详细统计（打印）| python summary_all.py |
-| run_all.sh | 一键回测+报告+归档 | bash run_all.sh [起] [止] |
-| check_health.py | 静态检查 | python check_health.py |
+| run_bt.py | 回测 → 生成 detail.csv | python run_bt.py 2026-07-01 2026-10-03 |
+| make_report.py | detail.csv → report_v58.csv 汇总 | python make_report.py |
+| summary_all.py | 详细统计（打印屏幕，不写文件）| python summary_all.py |
+| run_all.sh | 一键：回测 + 报告 + 归档到 _history/ | bash run_all.sh [起] [止] |
+| check_health.py | 语法 + 导入 + 关键函数 + detail.csv 字段检查 | python check_health.py |
 
-### 产物
+### 产物（自动生成，勿手改）
 
-| 文件 | 内容 | 备注 |
-|---|---|---|
-| detail.csv | 回测明细 | gitignore，不提交，不贴对话 |
-| report_v58.csv | 汇总报告 | 追踪，每次重跑更新 |
+| 文件 | 内容 |
+|---|---|
+| detail.csv | 回测明细（每场一行，40+ 列），gitignore |
+| report_v58.csv | 汇总报告（各板块命中率 + 筛选器分桶）|
 
 ### 文档
 
 | 文件 | 作用 |
 |---|---|
-| HANDOFF.md | 本文件，唯一交接入口 |
-| README.md | GitHub 首页简介 |
+| HANDOFF.md | 本文件，交接入口 |
+| README.md | GitHub 首页简介（文件清单 + 部署说明）|
 
-### 归档
+### 归档（保留历史，不参与运行）
 
 | 目录 | 内容 |
 |---|---|
-| _diag/ | 49 个诊断脚本（一次性）|
+| _diag/ | 49 个诊断脚本（一次性分析用）|
 | _history/ | 17 个历史 summary 快照 |
 
-## 三、系统架构
+## 三、系统架构（三条数据流）
+
+Bzzoiro API → fetch_all_predictions → parse_prediction（engine.py）→ df_all
+
+- df_all → Tab1（显示 + 筛选）
+- df_all → Tab3（全部赛事）
+- df_all → Tab4（搜索）
+- df_all → Tab7（高置信清单）
+- Tab2（核心比赛）→ 单独重算：df_all + 阵容/战意/融合/封顶 → 调整后预测 → 写 Excel → Tab5（复盘上传）
+- run_bt.py → backtest_one（纯 DC + tier）→ detail.csv → Tab6（历史回测）
+
+关键区分：
+- Tab1/3/4/7 = 读 df_all（原始模型 + 市场）
+- Tab2 = 在 Tab1 基础上叠加参数（调整前后对比）
+- Tab6 = 独立回测（纯 DC，不实时）
+
+## 四、当前能力（V5.8）
+
+### 7 个 Tab
+
+| Tab | 功能 |
+|---|---|
+| Tab1 今日预测 | 全市场概览 + 模型/市场双列概率 + 强信号标签 |
+| Tab2 3串1核心 | 对核心比赛做调整后预测 + 比分串 + 稳健串 + Excel 导出 |
+| Tab3 全部赛事 | Bzzoiro + ESPN 合并视图 |
+| Tab4 搜索队名 | 队名搜索 + 加入核心 |
+| Tab5 赛后复盘 | 上传早上下载的 Excel，拉实际比分算命中 |
+| Tab6 历史回测 | 区间命中率统计 + 分桶分析 |
+| Tab7 高置信清单 | 六档筛选（和局<22/<25、大小球≥60/≥65、市场差≥35、全部）|
+
+### 方向依据（全系统一致）
+
+| 项目 | 依据 |
+|---|---|
+| 主客和 | 模型 DC（pick_best_result）|
+| 大小球 | 市场 prob_over_25 |
+| 比分选边 | 跟大小球走（市场）|
+| 亚盘 | 模型 DC（原始 xG）|
+
+### 筛选器（V5.8 核心，CV 验证稳定）
+
+| 筛选条件 | 命中率 |
+|---|---|
+| 主客和 市场差≥35 | 67.4% |
+| 大小球 市场≥60 | 63.0% |
+| 大小球 市场≥65 | 72.9% |
+| 亚盘 市场差≥35 | 66.7% |
+| 高置信 和局<22 | 71.3% |
+
+### 9 个 checkbox（Tab2）
+
+| 开关 | 作用 | 默认 |
+|---|---|---|
+| 显示首发阵容 + 伤停 | 显示层 | 开 |
+| 显示盘口走势 | 显示层 | 开 |
+| 显示三档盘口线 | 显示层 | 开 |
+| 启用阵容/伤病权重调整 | 调整层（改 xG）| 开 |
+| 启用联赛战意修正 | 调整层（改 xG）| 开 |
+| 启用 Dixon-Coles 低比分修正 | 调整层（改 rho）| 开 |
+| 启用赛事分层校准 | 调整层（改 xG）| 关（无效）|
+| 启用盘口融合 | 调整层（融市场）| 开 |
+| 启用主胜概率封顶 | 调整层（压主胜）| 关（无效）|
+
+## 五、系统方向
+
+### 本质
+
+这不是「AI 预测系统」，是「市场数据 + DC 模型 + 筛选器」系统。
+
+### 核心洞察
+
+1. 模型方向判断 ≈ 抛硬币（49.2%），独立价值低
+2. 市场方向判断 ≈ 51.4%，仅略胜模型
+3. 筛选器才是护城河（+14~24pp）—— 用「市场差/大小球强度」筛出高确定性场次
+4. 比分前3候选 60.9% —— 靠「8 池覆盖」而非方向预测
+
+### 强项 vs 弱项
+
+| 强项 | 弱项 |
+|---|---|
+| 筛选器（市场差≥35 → 67%）| 主客和方向（49%，弱项）|
+| 比分池（前3 → 61%）| 亚盘模型（50%）|
+| 大小球方向（57.8%）| 无真实赔率验证 |
+
+### 下一步可能方向
+
+1. 接入真实赔率（现在用隐含赔率）→ 才能算价值投注
+2. 接入更多数据源（伤停、Elo、xG 增强）→ 提升模型本身
+3. 观察一致性（模型/市场分歧场次）→ 新增筛选维度
+4. 回测实时化（把 Tab2 参数也纳入回测）→ 让报告反映真实能力
+5. 删 MATCH_TIER_MULTIPLIER（基本 =1.0，死机制）→ 简化
+
+## 六、关键结论（勿重复踩坑）
+
+- 比分选边法保留（全局 top 会 80% 变 1-1，失多样性）
+- rho 对大小球无效（DC rho 只影响低比分，不影响≥3 球）
+- 盘口融合比模型好（+2.2pp），但不如市场（−1.2pp）→ 市场始终最优
+- 主胜封顶、赛事分层无效（实测零贡献，已默认关）
+- 回测≠实时（回测纯 DC，实时带阵容/战意/融合）
+- 最新回测（2026-07-01~10-03，3985 场）：模型 49.2% / 市场 51.4% / 融合 50.7%
+
+## 七、待办
+
+- 未验证：阵容权重、战意（无历史数据，属经验默认）
+- 可选：删 MATCH_TIER_MULTIPLIER（死机制）
+- 可选：接入真实赔率做价值投注验证
+
+## 八、工作方式
+
+- 先诊断后改码：先读代码/跑 grep，再动手
+- 每步一个动作：一次只改一处，改完验证
+- 命令要完整可复制：不留「你自己补一下」的半成品
+- 改完必验：python -c "import ast; ast.parse(...)" + git --no-pager diff
+- 推送：git add -A && git commit -m "..." && git push
+- detail.csv 留在本地，不要贴对话
+
+## 九、历史演进（比分前3候选命中）
+
+| 版本 | 方案 | 候选数 | 命中率 |
+|---|---|---|---|
+| V5.4 | scores[:5] 单池 | 5 | 34.5% |
+| V5.5 | A 方案: 前3 ∪ {1-1,1-0,0-1,0-0} | 5.9 | 49.8% |
+| V5.6 | A+ 方案: 前3 ∪ 全局8池 | ~8 | 66.1%（当时回测）|
+| V5.8 | 同上（2026-07-01~10-03）| ~8 | 60.9% |
+
+全局8池 = [1-1, 1-0, 2-1, 0-1, 0-0, 2-0, 1-2, 2-2]（engine.py _fix 列表）
+
+## 十二、V5.9 改动日志（2026-10-05）
+
+### Tab2 选场改动
+- base: max(主胜,和,客胜,大球,小球) → max(主胜,和,客胜) + max(大球,小球)
+- 硬门槛: 市场差 <15 排除
+- bonus: 0.10/0.05/0.05 → 10/5/5
+- 回测 top300: 胜平负 70→75.7%, 大小球 68→70.3%
+
+### 已否决
+- 比分池按主客和方向筛: 8.8% < 11.2% (用差信号污染好信号)
+- 用 API-Football 估算 xG: 偏差 ±0.33, 会污染系统
+
+### 已修 bug
+- 阵容/伤病权重开关 (死开关)
+- Tab2 base_rho 缺 friendly 分支
+- 回测亚盘口径对齐 Tab1
+- Tab1 大小球显示栏改市场口径
+
+## 十三、避雷：终端改代码（重要）
+
+### 不要做
+- 长 heredoc (>20 行): 终端拆行, 特殊字符触发命令替换 → 失败
+- 直接粘贴多行 Python 到终端: bash 当命令跑
+- 把 markdown 长文本粘到终端
+
+### 应该做
+- 短脚本 (<20 行): python3 - <<'PYEOF' ... PYEOF, 一次粘贴
+- 长文档: 用 VS Code 编辑器 (上方编辑区), 不碰终端 (下方 bash)
+- 恢复文件: git checkout <commit> -- <file>
+- 定位: 行号 或 字符串匹配 + assert 双保险
+
+### 改完必跑
+python -c "import ast; ast.parse(open('app.py').read())" && echo SYNTAX_OK
+git --no-pager diff app.py
+
+### 卡在 > 提示符
+按 Ctrl+C 退出, 重来
+
+## 十四、数据源调研（2026-10-05）
+- Bzzoiro /predictions/: 374 场, 有 xG, 免费, 主数据源
+- Bzzoiro /events/: 41 万场, 无 xG
+- Bzzoiro 付费档: 没有扩足球联赛档
+- API-Football /fixtures: 206 场/天, 无 xG
+- API-Football /predictions: 单场拉, 无 xG
