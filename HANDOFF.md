@@ -243,3 +243,24 @@ git --no-pager diff app.py
 ### 遗留
 - `MATCH_TIER_MULTIPLIER` 现在只用在 Tab2 调整层（app.py:225 `tier_mult`），Tab1/回测都不用了。
 - 可考虑彻底删除该机制（Tab2 那个开关默认关，等于闲置）。
+
+
+## 十六、MATCH_TIER_MULTIPLIER 已彻底删除（2026-10-05）
+
+### 删除范围
+- data.py: 删常量定义
+- engine.py: 删 import 引用
+- app.py: 删 checkbox（enable_tier）、tier_mult、tier_reason、xg_h *= tier_mult、full_reason += tier_reason
+- **保留**: tier = get_match_tier(...)（其他代码还要用，如 if tier == "friendly"）
+
+### 注意
+- 回测早已去 tier（V5.9 第2批）
+- Tab2 调整层也不再乘 tier
+- 整个机制现在是死的，无残留
+
+### 避雷：新对话犯过的错
+有脚本试图删 tier 时，一并删掉了 `tier = get_match_tier(...)` 那行，导致：
+- 第 256 行 `if tier == "friendly"` 报 NameError
+- 第 298 行 `if tier == "friendly"` 报 NameError
+
+**教训**：删变量前必须 grep 它的所有用法，不能只看定义处。
