@@ -1123,7 +1123,7 @@ with tab7:
 
             _sel_date = st.selectbox("选择日期", _avail, index=_def_idx, key="date7")
             _mode = st.radio("筛选类型",
-                ["高置信 和局<22%", "高置信扩量 和局<25%", "大小球强 市场≥60%", "大小球很强 市场≥65%", "主客和强 市场差≥35", "全部强信号"],
+                ["高置信 和局<22%", "高置信扩量 和局<25%", "大小球强 市场≥60%", "大小球很强 市场≥65%", "主客和强 市场差≥35", "主客和很强 市场差≥45", "主客和超强 市场差≥55", "主客和极致 市场差≥65", "全部强信号"],
                 horizontal=True, key="mode7")
 
             _df = df_all[df_all["event_date"] == _sel_date].copy()
@@ -1141,11 +1141,17 @@ with tab7:
             _m_ou60 = _df["_ou_str"] >= 60
             _m_ou65 = _df["_ou_str"] >= 65
             _m_gap35 = _df["_gap"] >= 35
+            _m_gap45 = _df["_gap"] >= 45
+            _m_gap55 = _df["_gap"] >= 55
+            _m_gap65 = _df["_gap"] >= 65
 
             if "和局<22" in _mode: _elig = _m_high22; _name = "高置信(和局<22%)"
             elif "和局<25" in _mode: _elig = _m_high25; _name = "高置信扩量(和局<25%)"
             elif "≥60" in _mode: _elig = _m_ou60; _name = "大小球强(市场≥60%)"
             elif "≥65" in _mode: _elig = _m_ou65; _name = "大小球很强(市场≥65%)"
+            elif "差≥65" in _mode: _elig = _m_gap65; _name = "主客和极致(市场差≥65)"
+            elif "差≥55" in _mode: _elig = _m_gap55; _name = "主客和超强(市场差≥55)"
+            elif "差≥45" in _mode: _elig = _m_gap45; _name = "主客和很强(市场差≥45)"
             elif "差≥35" in _mode: _elig = _m_gap35; _name = "主客和强(市场差≥35)"
             else: _elig = _m_high22 | _m_ou60 | _m_gap35; _name = "全部强信号"
 
