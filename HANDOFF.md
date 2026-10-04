@@ -223,3 +223,23 @@ git --no-pager diff app.py
 - Bzzoiro 付费档: 没有扩足球联赛档
 - API-Football /fixtures: 206 场/天, 无 xG
 - API-Football /predictions: 单场拉, 无 xG
+
+
+## 十五、V5.9 后续修复（2026-10-05 第2批）
+
+### Bug 修复
+- DC 开关被 friendly 覆盖（app.py）：`rho = ...if enable_dc else 0` 后面无条件加 friendly 分支，导致关闭 DC 时友谊赛仍用 friendly rho。改为嵌套 if。
+- Tab2 核心比赛显示列不全（app.py）：补上模型主胜/和局/客胜 + 市场判断 + 市场大小球。
+
+### 口径对齐
+- 回测主预测去 tier 乘数（engine.py `backtest_one`）：原 `predict_full_dc(xg * xg_mult)` 改为 `predict_full_dc(xg)`，对齐 Tab1。
+- 回测 score_dir 去 tier 乘数。
+- 删 `xg_mult` 变量（去 tier 后无人用）。
+
+### 影响
+- report_v58.csv 全部指标变化 ±0.3pp 内（噪声级）→ 再次印证 tier 无效。
+- 好处：回测口径 = Tab1 口径，报告数字不再有「历史近似」模糊地带。
+
+### 遗留
+- `MATCH_TIER_MULTIPLIER` 现在只用在 Tab2 调整层（app.py:225 `tier_mult`），Tab1/回测都不用了。
+- 可考虑彻底删除该机制（Tab2 那个开关默认关，等于闲置）。
