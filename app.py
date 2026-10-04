@@ -60,7 +60,8 @@ with tab1:
             df["大小球强度"] = _po.apply(lambda x: max(x, 100 - x))
             def _tag(r):
                 t = []
-                if r["市场差"] >= 35: t.append("主客强")
+                if r["市场差"] >= 55: t.append("主客超强")
+                elif r["市场差"] >= 35: t.append("主客强")
                 if r["大小球强度"] >= 60: t.append("大小强")
                 if isinstance(r.get("市场和局_pct"), (int, float)) and r["市场和局_pct"] < 22: t.append("和局低")
                 return "＋".join(t) if t else "—"
