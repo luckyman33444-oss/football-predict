@@ -786,7 +786,10 @@ def backtest_one(p, actual_map):
         return "❌方向错"
     pred_xg_h = float(xg_h_raw) * xg_mult if xg_h_raw is not None else 1.5
     pred_xg_a = float(xg_a_raw) * xg_mult if xg_a_raw is not None else 1.2
-    ah_line, ah_note = compute_model_asian_handicap(pred_xg_h, pred_xg_a)
+    # B-1: 亚盘对齐 Tab1，用原始 xG（不带 tier 乘数）
+    _ah_xg_h = float(xg_h_raw) if xg_h_raw is not None else 1.5
+    _ah_xg_a = float(xg_a_raw) if xg_a_raw is not None else 1.2
+    ah_line, ah_note = compute_model_asian_handicap(_ah_xg_h, _ah_xg_a)
     score_dir = compute_score_direction(pred_xg_h, pred_xg_a, hw / 100, d / 100, aw / 100)
 
     if "平手" in ah_line or "觀望" in ah_note or "观望" in ah_note:
