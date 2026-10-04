@@ -154,7 +154,10 @@ with tab2:
                     x2 = max(_ph, _pa, _pd)
                     ou = max(_po, 100 - _po)
                     conf = x2 + ou
-                    if abs(_ph - _pa) >= 35: conf += 10
+                    _gap = abs(_ph - _pa)
+                    if _gap >= 65: conf += 30
+                    elif _gap >= 55: conf += 20
+                    elif _gap >= 35: conf += 10
                     if _pd < 22: conf += 5
                     if ou >= 60: conf += 5
                     return conf
