@@ -308,6 +308,9 @@ with tab2:
                         _mkt_a = row["_prob_away"] or 0
                         model_compare = {
                             "_mkt_h": _mkt_h, "_mkt_a": _mkt_a,
+                            "_mkt_over_pct": row.get("_prob_over_pct") or 0,
+                            "_tab1_main_score": row.get("主力比分", "—"),
+                            "_tab1_alt_score": row.get("备选比分", "—"),
                             "base_xg_h": base_xg_h, "base_xg_a": base_xg_a, "base_pred": base_pred,
                             "base_ah_line": base_ah_line, "base_ah_note": base_ah_note, "base_score_dir": base_score_dir,
                             "final_xg_h": final_xg_h, "final_xg_a": final_xg_a, "adj_pred": adj_pred,
@@ -354,10 +357,14 @@ with tab2:
                         if base_pred:
                             base_best_name, base_best_prob = pick_best_result(base_pred["hw"], base_pred["d"], base_pred["aw"])
                             base_best = (base_best_name, base_best_prob)
-                            base_ou = "大球" if base_pred["over25"] >= 0.5 else "小球"
-                            base_ou_pct = max(base_pred["over25"], base_pred["under25"])
                         else:
-                            base_best = ("—", 0); base_ou = "—"; base_ou_pct = 0
+                            base_best = ("—", 0)
+                        _mkt_over_v = mc.get("_mkt_over_pct", 0) or 0
+                        if _mkt_over_v > 0:
+                            base_ou = "大球" if _mkt_over_v >= 50 else "小球"
+                            base_ou_pct = max(_mkt_over_v, 100 - _mkt_over_v) / 100
+                        else:
+                            base_ou = "—"; base_ou_pct = 0
                         if adj_pred:
                             adj_ou = "大球" if adj_pred["over25"] >= 0.5 else "小球"
                             adj_ou_pct = max(adj_pred["over25"], adj_pred["under25"])
@@ -374,7 +381,10 @@ with tab2:
                             "原亚盘": mc["base_ah_line"], "调整后亚盘": mc["ah_line"],
                             "原大小球": f"{base_ou} {base_ou_pct*100:.1f}%",
                             "调整后大小球": f"{adj_ou} {adj_ou_pct*100:.1f}%",
-                            "原比分方向": mc["base_score_dir"], "调整后比分方向": mc["score_dir"],
+                            "原比分1": mc.get("_tab1_main_score", "—"),
+                            "原比分2": mc.get("_tab1_alt_score", "—"),
+                            "调整后比分1": md.get("adj_main_score", "—"),
+                            "调整后比分2": md.get("adj_alt_score", "—"),
                             "变化": diff_marker,
                         })
                     if compare_rows: st.dataframe(pd.DataFrame(compare_rows), use_container_width=True, hide_index=True)
