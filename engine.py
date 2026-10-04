@@ -719,9 +719,8 @@ def backtest_one(p, actual_map):
     grade = get_league_grade(league_name_cn)
     if tier == "friendly": rho = DIXON_COLES_RHO.get("friendly", -0.13)
     else: rho = DIXON_COLES_RHO.get(trust, -0.13)
-    xg_mult = MATCH_TIER_MULTIPLIER.get(tier, 1.0)
     if xg_h_raw is not None and xg_a_raw is not None:
-        pred = predict_full_dc(float(xg_h_raw) * xg_mult, float(xg_a_raw) * xg_mult, rho=rho)
+        pred = predict_full_dc(float(xg_h_raw), float(xg_a_raw), rho=rho)
     else: pred = None
     prob_home_bz = mr.get("prob_home") or 0
     prob_draw_bz = mr.get("prob_draw") or 0
@@ -784,8 +783,8 @@ def backtest_one(p, actual_map):
         ar = "主胜" if ah > aa else ("和局" if ah == aa else "客胜")
         if pr == ar: return "⚠️方向对"
         return "❌方向错"
-    pred_xg_h = float(xg_h_raw) * xg_mult if xg_h_raw is not None else 1.5
-    pred_xg_a = float(xg_a_raw) * xg_mult if xg_a_raw is not None else 1.2
+    pred_xg_h = float(xg_h_raw) if xg_h_raw is not None else 1.5
+    pred_xg_a = float(xg_a_raw) if xg_a_raw is not None else 1.2
     # B-1: 亚盘对齐 Tab1，用原始 xG（不带 tier 乘数）
     _ah_xg_h = float(xg_h_raw) if xg_h_raw is not None else 1.5
     _ah_xg_a = float(xg_a_raw) if xg_a_raw is not None else 1.2
