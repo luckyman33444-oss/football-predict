@@ -297,16 +297,14 @@ with tab2:
                         base_xg_h = row["_xg_h"] or 1.5
                         base_xg_a = row["_xg_a"] or 1.2
                         base_trust = get_league_trust_level(row.get("联赛", ""))
-                        base_rho = DIXON_COLES_RHO.get(base_trust, -0.13)
+                        if tier == "friendly": base_rho = DIXON_COLES_RHO.get("friendly", -0.13)
+                        else: base_rho = DIXON_COLES_RHO.get(base_trust, -0.13)
                         base_pred = predict_full_dc(base_xg_h, base_xg_a, rho=base_rho)
                         ah_line, ah_note = compute_model_asian_handicap(final_xg_h, final_xg_a)
                         base_ah_line, base_ah_note = compute_model_asian_handicap(base_xg_h, base_xg_a)
                         if adj_pred:
                             score_dir = compute_score_direction(final_xg_h, final_xg_a, adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
                         else: score_dir = "—"
-                        if base_pred:
-                            base_score_dir = compute_score_direction(base_xg_h, base_xg_a, base_pred["hw"], base_pred["d"], base_pred["aw"])
-                        else: base_score_dir = "—"
                         _mkt_h = row["_prob_home"] or 0
                         _mkt_a = row["_prob_away"] or 0
                         model_compare = {
@@ -315,7 +313,7 @@ with tab2:
                             "_tab1_main_score": row.get("主力比分", "—"),
                             "_tab1_alt_score": row.get("备选比分", "—"),
                             "base_xg_h": base_xg_h, "base_xg_a": base_xg_a, "base_pred": base_pred,
-                            "base_ah_line": base_ah_line, "base_ah_note": base_ah_note, "base_score_dir": base_score_dir,
+                            "base_ah_line": base_ah_line, "base_ah_note": base_ah_note, 
                             "final_xg_h": final_xg_h, "final_xg_a": final_xg_a, "adj_pred": adj_pred,
                             "ah_line": ah_line, "ah_note": ah_note, "score_dir": score_dir,
                         }
