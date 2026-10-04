@@ -112,9 +112,9 @@ with tab2:
         enable_weight_adjust = st.checkbox("🎛️ 启用阵容/伤病权重调整", value=True, key="weight_switch")
         enable_motivation = st.checkbox("🏆 启用联赛战意修正", value=True, key="motivation_switch")
         enable_dc = st.checkbox("🔬 启用 Dixon-Coles 低比分修正", value=True, key="dc_switch")
-        enable_tier = st.checkbox("📊 启用赛事分层校准", value=True, key="tier_switch")
+        enable_tier = st.checkbox("📊 启用赛事分层校准", value=False, key="tier_switch")
         enable_blend = st.checkbox("🤝 启用盘口融合", value=True, key="blend_switch")
-        enable_cap_home = st.checkbox("🔒 启用主胜概率封顶", value=True, key="cap_home_switch")
+        enable_cap_home = st.checkbox("🔒 启用主胜概率封顶", value=False, key="cap_home_switch")
     with col2:
         if st.button("🗑️ 清空核心", key="clear_core"):
             st.session_state.core_matches = []; st.success("已清空。"); st.rerun()
