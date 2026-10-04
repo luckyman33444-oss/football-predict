@@ -11,7 +11,7 @@ st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v5.8（全中文 + 亚洲盘 + 市场强度筛选）")
+st.title("⚽ 足球预测 v5.9（全中文 + 亚洲盘 + 市场强度筛选）")
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测", "⭐ 高置信清单"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
@@ -46,7 +46,7 @@ with tab1:
         sel_leagues = st.multiselect("筛选联赛（不选则显示全部）", all_leagues, default=[], key="lg1")
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
-        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.8：市场亚盘 + 市场差/大小球强度筛选")
+        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.9：市场亚盘 + 市场差/大小球强度筛选")
         if not df.empty:
             df = df.copy()
             df["第三比分"] = df["_scores_list"].apply(lambda x: x[2][0] if isinstance(x, list) and len(x) > 2 else "—")
@@ -345,7 +345,7 @@ with tab2:
                         st.error(f"🔴 **警示：以下 {len(f_matches)} 场为 F 级联赛**（回测命中率 <50%），下注请谨慎：")
                         for fm in f_matches: st.write(f"- {fm['比赛']}（{fm['联赛']}）")
                     st.subheader("🎯 模型对比 & 亚盘方向")
-                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/分层/DC/融合/封顶 ｜ v5.8")
+                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/DC/融合/封顶 ｜ v5.9")
                     compare_rows = []
                     for i, md in enumerate(matches_data, 1):
                         mc = md.get("model_compare", {})
@@ -908,7 +908,7 @@ with tab5:
 
 # ========== Tab 6：历史回测 ==========
 with tab6:
-    st.subheader("📈 历史批量回测（v5.8：全中文 + 亚洲盘 + 市场亚盘）")
+    st.subheader("📈 历史批量回测（v5.9：全中文 + 亚洲盘 + 市场亚盘）")
     st.caption("拉历史预测 + 历史比分，批量计算命中率。平手盤不計入亞盤統計。")
     col_a, col_b = st.columns(2)
     with col_a: bt_from = st.date_input("起始日期", value=date.today() - timedelta(days=7), key="bt_from")
@@ -1173,4 +1173,4 @@ with tab7:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     key="dl_tab7")
 
-st.caption("⚠️ v5.8：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
+st.caption("⚠️ v5.9：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")

@@ -58,7 +58,7 @@ checks = [
     ('全部强信号', 'Tab7筛选'),
     ('def calc_conf', 'Tab2选场'),
     ('市场判断', 'Tab1/Tab2市场字段'),
-    ('v5.8', '版本号'),
+    ('v5.9', '版本号'),
 ]
 for kw, name in checks:
     print(f"  {'✅' if kw in app else '❌'} {name} ({kw})")
