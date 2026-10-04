@@ -126,7 +126,7 @@ with tab2:
         core_only_df = df_all[df_all["event_id"].isin(st.session_state.core_matches)].copy()
         if not core_only_df.empty:
             st.markdown("### 🎯 当前核心比赛（来自 Tab1）")
-            show_cols = ["时间", "联赛", "主队", "客队", "主力比分", "备选比分", "预测结果", "大小球", "亚盘", "主胜", "和局", "客胜"]
+            show_cols = ["时间", "联赛", "主队", "客队", "主力比分", "备选比分", "预测结果", "模型主胜", "模型和局", "模型客胜", "市场判断", "大小球", "市场大小球", "亚盘", "主胜", "和局", "客胜"]
             show_cols = [c for c in show_cols if c in core_only_df.columns]
             st.dataframe(core_only_df[show_cols], use_container_width=True, hide_index=True)
 
@@ -256,8 +256,11 @@ with tab2:
                                         motivation_reason = (f"主队{tier_cn.get(home_tier, home_tier)}(第{home_rank}名)×{m_hw:.2f} ｜ "
                                                              f"客队{tier_cn.get(away_tier, away_tier)}(第{away_rank}名)×{m_aw:.2f}")
                         trust = get_league_trust_level(row.get("联赛", ""))
-                        rho = DIXON_COLES_RHO.get(trust, -0.13) if enable_dc else 0
-                        if tier == "friendly": rho = DIXON_COLES_RHO.get("friendly", -0.13)
+                        if enable_dc:
+                            if tier == "friendly": rho = DIXON_COLES_RHO.get("friendly", -0.13)
+                            else: rho = DIXON_COLES_RHO.get(trust, -0.13)
+                        else:
+                            rho = 0
                         adj_pred = predict_full_dc(final_xg_h, final_xg_a, rho=rho)
                         blend_info = ""; cap_info = ""
                         if adj_pred:
