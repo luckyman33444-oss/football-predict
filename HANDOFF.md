@@ -1,56 +1,53 @@
+cd /workspaces/football-predict
+
+cat > HANDOFF.md << 'HEOF'
 # Football Predict 交接（V5.8）
 
-## 仓库 / 环境
-- 仓库：https://github.com/luckyman33444-oss/football-predict
-- Codespaces 路径：/workspaces/football-predict (main)，Python 3.11.13
-- 线上：Streamlit Cloud（app.py），push 后 1-2 分钟自动部署
-- 推送：git add -A && git commit -m "..." && git push
-- detail.csv 留在本地，不要贴对话
+> 本文件是**唯一交接入口**。接手时先读本文件，再按「文档地图」定位需要的文件。
 
-## 核心文件
-- app.py：Streamlit UI（7个Tab）
-- engine.py：模型 + 回测 + Excel
-- data.py：常量（DIXON_COLES_RHO、MATCH_TIER_MULTIPLIER、BLEND_WEIGHT_MODEL、TEAM_CN 1520）
-- run_bt.py：回测（python run_bt.py 2026-07-03 2026-10-02）
-- check_health.py：静态健康检查
-- make_report.py / summary_all.py：汇总报告
-- diag_*.py：诊断脚本（可留可删）
+## 一、快速上手（AI / 人类通用）
 
-## V5.8 已完成
-1. 亚盘接市场方向：市场57.5% > 模型50.6%
-2. 强信号筛选器（CV验证稳定）：
-   - 主客和 市场差≥35 → 67.4%
-   - 大小球 市场≥60 → 63.1%；≥65 → 72.4%
-   - 亚盘 市场差≥35 → 66.8%
-   - 高置信 和局<22 → 71.1%
-3. Tab1 加市场差/大小球强度/强信号列
-4. Tab2 强信号加分选场；比分串8注；稳健串用市场判断；比分选边法
-5. Tab6 市场亚盘指标 + 市场差筛选表
-6. Tab7 六档筛选
-7. Excel 同步新列；版本号统一 v5.8
+1. 读本文件的「文档地图」→ 知道每个文件干什么
+2. 读「当前能力」→ 知道系统现在能做什么
+3. 读「关键结论」→ 知道哪些坑踩过
+4. 改代码前：先诊断（读代码/跑命令），再改，改完 `python -c "import ast; ast.parse(open('X.py').read())"` 验语法
+5. 每步只改一个地方，`git --no-pager diff` 确认，再 push
+6. push 后 1-2 分钟 Streamlit Cloud 自动部署
 
-## 关键结论（勿重复踩坑）
-- **比分选边法保留**（全局top会80%变1-1，失多样性）
-- **rho 对大小球无效**（DC rho只影响低比分，不影响≥3球判断）
-- **盘口融合比模型好（+2.2pp），但仍不如市场（−1.2pp）**
-  → 市场判断始终最优；融合是"不想全信市场"时的折中，非最佳
-- **主胜封顶、赛事分层无效**（实测零贡献，可关）
-- **最新回测（2026-07-01~10-03，3985场）：模型49.2% / 市场51.4% / 融合50.7%**
-- **回测≠实时**：回测是纯DC，实时带阵容/战意/融合/封顶
+## 二、文档地图
 
-## 待办
-- 未验证：阵容权重、战意（无历史数据，属经验默认）
+### 核心代码（改动风险高，改前必读）
+| 文件 | 作用 | 何时改 |
+|---|---|---|
+| `app.py` | Streamlit UI，7 个 Tab | 改界面/交互/筛选器 |
+| `engine.py` | 模型 + 回测 + Excel 导出 | 改算法/回测逻辑 |
+| `data.py` | 常量：DIXON_COLES_RHO、MATCH_TIER_MULTIPLIER、BLEND_WEIGHT_MODEL、TEAM_CN(1520队)、LEAGUE_CN、LEAGUE_GRADE | 加联赛/队名/调参数 |
 
-## 工作方式
-- 先诊断后改码；每步一个动作；命令要完整可复制
-- 改完 python -c "import ast; ast.parse(...)" 验语法 → 推送
+### 运行脚本（工具，按需跑）
+| 文件 | 作用 | 命令 |
+|---|---|---|
+| `run_bt.py` | 回测 → 生成 `detail.csv` | `python run_bt.py 2026-07-01 2026-10-03` |
+| `make_report.py` | `detail.csv` → `report_v58.csv` 汇总 | `python make_report.py` |
+| `summary_all.py` | 详细统计（打印屏幕，不写文件）| `python summary_all.py` |
+| `run_all.sh` | 一键：回测 + 报告 + 归档到 `_history/` | `bash run_all.sh [起] [止]` |
+| `check_health.py` | 语法 + 导入 + 关键函数 + detail.csv 字段检查 | `python check_health.py` |
 
-## 历史演进（比分前3候选命中）
-| 版本 | 方案 | 候选数 | 命中率 |
-|---|---|---|---|
-| V5.4 | scores[:5] 单池 | 5 | 34.5% |
-| V5.5 | A方案: 前3 ∪ {1-1,1-0,0-1,0-0} | 5.9 | 49.8% |
-| V5.6 | A+方案: 前3 ∪ 全局8池 | ~8 | 66.1%（当时回测）|
-| V5.8 | 同上（最新回测 2026-07-01~10-03）| ~8 | 60.9% |
+### 产物（自动生成，勿手改）
+| 文件 | 内容 |
+|---|---|
+| `detail.csv` | 回测明细（每场一行，40+ 列），gitignore |
+| `report_v58.csv` | 汇总报告（各板块命中率 + 筛选器分桶）|
 
-全局8池 = `[1-1, 1-0, 2-1, 0-1, 0-0, 2-0, 1-2, 2-2]`（engine.py `_fix` 列表）
+### 文档
+| 文件 | 作用 |
+|---|---|
+| `HANDOFF.md` | **本文件**，交接入口 |
+| `README.md` | GitHub 首页简介（文件清单 + 部署说明）|
+
+### 归档（保留历史，不参与运行）
+| 目录 | 内容 |
+|---|---|
+| `_diag/` | 49 个诊断脚本（一次性分析用）|
+| `_history/` | 17 个历史 summary 快照 |
+
+## 三、系统架构（三条数据流）
