@@ -68,7 +68,7 @@ Bzzoiro API → fetch_all_predictions → parse_prediction（engine.py）→ df_
 - Tab2 = 在 Tab1 基础上叠加参数（调整前后对比）
 - Tab6 = 独立回测（纯 DC，不实时）
 
-## 四、当前能力（V5.8）
+## 四、当前能力（V5.9）
 
 ### 7 个 Tab
 

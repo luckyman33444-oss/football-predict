@@ -36,7 +36,7 @@ _ok = s.isin(['✅','是','True',True]).sum()
 print(f"  前3候选命中: {_ok}/{len(s)} = {_ok/len(s)*100:.1f}%")
 
 print("\n" + "=" * 60)
-print("【V5.8 强信号筛选器验证】")
+print("【V5.9 强信号筛选器验证】")
 print("=" * 60)
 
 df['市场差'] = (df['市场主胜'] - df['市场客胜']).abs()
