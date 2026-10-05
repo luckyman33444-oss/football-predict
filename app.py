@@ -657,6 +657,9 @@ with tab2:
                         best_opt = md["opts"][0]
                         adj_name, adj_prob = md["adj_best"]
                         mc = md.get("model_compare", {})
+                        _tsa = tsa_odds_map.get(md["event_id"]) or {}
+                        _tsa_ah = _tsa.get("real_ah_line")
+                        _tsa_ah_str = f"{_tsa_ah} ({_tsa.get('real_ah_home','')}/{_tsa.get('real_ah_away','')})" if _tsa_ah else "—"
                         rec_rows.append({"场次": i, "比赛": md["比赛"], "联赛": md["联赛"], "等级": md.get("等级", "B"), "时间": md["时间"],
                                          "event_id": md["event_id"], "推荐方向": best_opt[0], "推荐概率": f"{best_opt[1]*100:.1f}%",
                                          "下注建议": md.get("bet_advice", "—"),
@@ -669,7 +672,10 @@ with tab2:
                                          "赔率": fmt_odds(best_opt[2]), "大小球方向": md["大小球方向"],
                                          "比分1": md["main_score"][0], "比分2": md["alt_score"][0],
                                          "盘口走势": best_opt[4] if best_opt[4] else "—",
-                                         "方向一致": md["direction_agreement"], "角色": "主胆" if best_idx == (i-1) else "拖"})
+                                         "方向一致": md["direction_agreement"], "角色": "主胆" if best_idx == (i-1) else "拖",
+"真实亚盘": _tsa_ah_str,
+"真实大小球": (f"大2.5 {_tsa.get('real_over25','')}" if _tsa.get("real_over25") else "—"),
+"真实1X2": (f"{_tsa.get('real_h','')}/{_tsa.get('real_d','')}/{_tsa.get('real_a','')}" if _tsa.get("real_h") else "—")})
                     all_today_rows = []
                     if not df_all.empty:
                         today_df = df_all[df_all["event_date"] == today_str_save]
