@@ -7,28 +7,7 @@ from data import CST, LEAGUE_GRADE, TEAM_CN, LEAGUE_CN
 from engine import *
 
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
-
-if "core_matches" not in st.session_state:
-    st.session_state.core_matches = []
-
-st.title("⚽ 足球预测 v5.9（全中文 + 亚洲盘 + 市场强度筛选）")
-tab1, tab2, tab4, tab5, tab6, tab7 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测", "⭐ 高置信清单"])
-
-if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
-if not API_FOOTBALL_KEY: st.warning("⚠️ 未检测到 API_FOOTBALL_KEY")
-
-with st.spinner("正在获取 Bzzoiro 预测数据..."):
-    all_preds, err = fetch_all_predictions()
-if err: st.error(f"Bzzoiro 错误：{err}")
-
-parsed = []
-if all_preds:
-    parsed = [parse_prediction(p) for p in all_preds]
-    df_all = pd.DataFrame(parsed)
-else: df_all = pd.DataFrame()
-
-# ========== Tab 1 ==========
-with tab1:
+def render_all_matches(df_all):
     if df_all.empty: st.warning("没有获取到预测数据。")
     else:
         date_counts = df_all.groupby("event_date").size().to_dict()
@@ -99,6 +78,112 @@ with tab1:
                             ]].rename(columns={"预测结果": "模型判断"}),
                             use_container_width=True, hide_index=True
                         )
+
+def render_high_confidence(df_all):
+    st.subheader("⭐ 高置信清单")
+    st.caption("基于市场平局概率筛选：稳健档 <22%（每天约 7-8 场，命中约 71%），扩量档 <25%（每天约 17 场，命中约 64%）。")
+
+    if df_all.empty:
+        st.warning("没有获取到预测数据。")
+    else:
+        _date_counts = df_all.groupby("event_date").size().to_dict()
+        _avail = sorted([d for d in _date_counts.keys() if d and d != "—"])
+        if not _avail:
+            st.warning("无可用日期。")
+        else:
+            _today = datetime.now(CST).strftime("%Y-%m-%d")
+            if _today in _avail:
+                _def_idx = _avail.index(_today)
+            else:
+                _future = [i for i, d in enumerate(_avail) if d >= _today]
+                _def_idx = _future[0] if _future else len(_avail) - 1
+
+            _sel_date = st.selectbox("选择日期", _avail, index=_def_idx, key="date7")
+            _mode = st.radio("筛选类型",
+                ["高置信 和局<22%", "高置信扩量 和局<25%", "大小球强 市场≥60%", "大小球很强 市场≥65%", "主客和强 市场差≥35", "主客和很强 市场差≥45", "主客和超强 市场差≥55", "主客和极致 市场差≥65", "全部强信号"],
+                horizontal=True, key="mode7")
+
+            _df = df_all[df_all["event_date"] == _sel_date].copy()
+
+            _df["_pd"] = pd.to_numeric(_df.get("市场和局_pct"), errors="coerce")
+            _df["_ph"] = pd.to_numeric(_df.get("_prob_home"), errors="coerce").fillna(0)
+            _df["_pa"] = pd.to_numeric(_df.get("_prob_away"), errors="coerce").fillna(0)
+            _df["_po"] = pd.to_numeric(_df.get("_prob_over_pct"), errors="coerce").fillna(0)
+            _df["_mk"] = _df["市场判断"].astype(str).str.strip()
+            _df["_gap"] = (_df["_ph"] - _df["_pa"]).abs()
+            _df["_ou_str"] = _df["_po"].apply(lambda x: max(x, 100 - x))
+
+            _m_high22 = (_df["_pd"] < 22) & _df["_mk"].isin(["主胜", "客胜"])
+            _m_high25 = (_df["_pd"] < 25) & _df["_mk"].isin(["主胜", "客胜"])
+            _m_ou60 = _df["_ou_str"] >= 60
+            _m_ou65 = _df["_ou_str"] >= 65
+            _m_gap35 = _df["_gap"] >= 35
+            _m_gap45 = _df["_gap"] >= 45
+            _m_gap55 = _df["_gap"] >= 55
+            _m_gap65 = _df["_gap"] >= 65
+
+            if "和局<22" in _mode: _elig = _m_high22; _name = "高置信(和局<22%)"
+            elif "和局<25" in _mode: _elig = _m_high25; _name = "高置信扩量(和局<25%)"
+            elif "≥60" in _mode: _elig = _m_ou60; _name = "大小球强(市场≥60%)"
+            elif "≥65" in _mode: _elig = _m_ou65; _name = "大小球很强(市场≥65%)"
+            elif "差≥65" in _mode: _elig = _m_gap65; _name = "主客和极致(市场差≥65)"
+            elif "差≥55" in _mode: _elig = _m_gap55; _name = "主客和超强(市场差≥55)"
+            elif "差≥45" in _mode: _elig = _m_gap45; _name = "主客和很强(市场差≥45)"
+            elif "差≥35" in _mode: _elig = _m_gap35; _name = "主客和强(市场差≥35)"
+            else: _elig = _m_high22 | _m_ou60 | _m_gap35; _name = "全部强信号"
+
+            _high = _df[_elig].copy()
+            st.markdown(f"### {_sel_date}：**{_name}** 共 **{len(_high)}** 场")
+
+            if _high.empty:
+                st.info("当天没有符合条件的场次。")
+            else:
+                _want = ["时间", "联赛", "联赛等级", "主队", "客队", "市场判断", "_pd", "_gap", "_ou_str",
+                         "预测结果", "主力比分", "备选比分", "第三比分", "大小球", "亚盘"]
+                _avail = [c for c in _want if c in _high.columns]
+                _show = _high[_avail].copy()
+                _show = _show.rename(columns={"联赛等级": "等级", "_pd": "平局%", "_gap": "市场差", "_ou_str": "大小球强度%", "预测结果": "模型判断"})
+                if "平局%" in _show.columns: _show["平局%"] = _show["平局%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+                if "市场差" in _show.columns: _show["市场差"] = _show["市场差"].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
+                if "大小球强度%" in _show.columns: _show["大小球强度%"] = _show["大小球强度%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+                st.dataframe(_show, use_container_width=True, hide_index=True)
+
+                _buf = io.BytesIO()
+                with pd.ExcelWriter(_buf, engine="openpyxl") as _w:
+                    _show.to_excel(_w, sheet_name="高置信清单", index=False)
+                st.download_button("📥 下载高置信清单 Excel", data=_buf.getvalue(),
+                    file_name=f"筛选_{_sel_date}_{_name}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key="dl_tab7")
+
+
+
+if "core_matches" not in st.session_state:
+    st.session_state.core_matches = []
+
+st.title("⚽ 足球预测 v5.9（全中文 + 亚洲盘 + 市场强度筛选）")
+tab1, tab2, tab4, tab5, tab6 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测"])
+
+if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
+if not API_FOOTBALL_KEY: st.warning("⚠️ 未检测到 API_FOOTBALL_KEY")
+
+with st.spinner("正在获取 Bzzoiro 预测数据..."):
+    all_preds, err = fetch_all_predictions()
+if err: st.error(f"Bzzoiro 错误：{err}")
+
+parsed = []
+if all_preds:
+    parsed = [parse_prediction(p) for p in all_preds]
+    df_all = pd.DataFrame(parsed)
+else: df_all = pd.DataFrame()
+
+# ========== Tab 1 ==========
+with tab1:
+    mode = st.radio("显示模式", ["全部场次", "高置信清单"], horizontal=True, key="tab1_mode")
+    if mode == "高置信清单":
+        render_high_confidence(df_all)
+    else:
+        render_all_matches(df_all)
 
 # ========== Tab 2 ==========
 with tab2:
@@ -1080,81 +1165,4 @@ with tab6:
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_backtest")
 
 # ========== Tab 7：高置信清单 ==========
-with tab7:
-    st.subheader("⭐ 高置信清单")
-    st.caption("基于市场平局概率筛选：稳健档 <22%（每天约 7-8 场，命中约 71%），扩量档 <25%（每天约 17 场，命中约 64%）。")
-
-    if df_all.empty:
-        st.warning("没有获取到预测数据。")
-    else:
-        _date_counts = df_all.groupby("event_date").size().to_dict()
-        _avail = sorted([d for d in _date_counts.keys() if d and d != "—"])
-        if not _avail:
-            st.warning("无可用日期。")
-        else:
-            _today = datetime.now(CST).strftime("%Y-%m-%d")
-            if _today in _avail:
-                _def_idx = _avail.index(_today)
-            else:
-                _future = [i for i, d in enumerate(_avail) if d >= _today]
-                _def_idx = _future[0] if _future else len(_avail) - 1
-
-            _sel_date = st.selectbox("选择日期", _avail, index=_def_idx, key="date7")
-            _mode = st.radio("筛选类型",
-                ["高置信 和局<22%", "高置信扩量 和局<25%", "大小球强 市场≥60%", "大小球很强 市场≥65%", "主客和强 市场差≥35", "主客和很强 市场差≥45", "主客和超强 市场差≥55", "主客和极致 市场差≥65", "全部强信号"],
-                horizontal=True, key="mode7")
-
-            _df = df_all[df_all["event_date"] == _sel_date].copy()
-
-            _df["_pd"] = pd.to_numeric(_df.get("市场和局_pct"), errors="coerce")
-            _df["_ph"] = pd.to_numeric(_df.get("_prob_home"), errors="coerce").fillna(0)
-            _df["_pa"] = pd.to_numeric(_df.get("_prob_away"), errors="coerce").fillna(0)
-            _df["_po"] = pd.to_numeric(_df.get("_prob_over_pct"), errors="coerce").fillna(0)
-            _df["_mk"] = _df["市场判断"].astype(str).str.strip()
-            _df["_gap"] = (_df["_ph"] - _df["_pa"]).abs()
-            _df["_ou_str"] = _df["_po"].apply(lambda x: max(x, 100 - x))
-
-            _m_high22 = (_df["_pd"] < 22) & _df["_mk"].isin(["主胜", "客胜"])
-            _m_high25 = (_df["_pd"] < 25) & _df["_mk"].isin(["主胜", "客胜"])
-            _m_ou60 = _df["_ou_str"] >= 60
-            _m_ou65 = _df["_ou_str"] >= 65
-            _m_gap35 = _df["_gap"] >= 35
-            _m_gap45 = _df["_gap"] >= 45
-            _m_gap55 = _df["_gap"] >= 55
-            _m_gap65 = _df["_gap"] >= 65
-
-            if "和局<22" in _mode: _elig = _m_high22; _name = "高置信(和局<22%)"
-            elif "和局<25" in _mode: _elig = _m_high25; _name = "高置信扩量(和局<25%)"
-            elif "≥60" in _mode: _elig = _m_ou60; _name = "大小球强(市场≥60%)"
-            elif "≥65" in _mode: _elig = _m_ou65; _name = "大小球很强(市场≥65%)"
-            elif "差≥65" in _mode: _elig = _m_gap65; _name = "主客和极致(市场差≥65)"
-            elif "差≥55" in _mode: _elig = _m_gap55; _name = "主客和超强(市场差≥55)"
-            elif "差≥45" in _mode: _elig = _m_gap45; _name = "主客和很强(市场差≥45)"
-            elif "差≥35" in _mode: _elig = _m_gap35; _name = "主客和强(市场差≥35)"
-            else: _elig = _m_high22 | _m_ou60 | _m_gap35; _name = "全部强信号"
-
-            _high = _df[_elig].copy()
-            st.markdown(f"### {_sel_date}：**{_name}** 共 **{len(_high)}** 场")
-
-            if _high.empty:
-                st.info("当天没有符合条件的场次。")
-            else:
-                _want = ["时间", "联赛", "联赛等级", "主队", "客队", "市场判断", "_pd", "_gap", "_ou_str",
-                         "预测结果", "主力比分", "备选比分", "第三比分", "大小球", "亚盘"]
-                _avail = [c for c in _want if c in _high.columns]
-                _show = _high[_avail].copy()
-                _show = _show.rename(columns={"联赛等级": "等级", "_pd": "平局%", "_gap": "市场差", "_ou_str": "大小球强度%", "预测结果": "模型判断"})
-                if "平局%" in _show.columns: _show["平局%"] = _show["平局%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
-                if "市场差" in _show.columns: _show["市场差"] = _show["市场差"].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
-                if "大小球强度%" in _show.columns: _show["大小球强度%"] = _show["大小球强度%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
-                st.dataframe(_show, use_container_width=True, hide_index=True)
-
-                _buf = io.BytesIO()
-                with pd.ExcelWriter(_buf, engine="openpyxl") as _w:
-                    _show.to_excel(_w, sheet_name="高置信清单", index=False)
-                st.download_button("📥 下载高置信清单 Excel", data=_buf.getvalue(),
-                    file_name=f"筛选_{_sel_date}_{_name}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    key="dl_tab7")
-
 st.caption("⚠️ v5.9：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
