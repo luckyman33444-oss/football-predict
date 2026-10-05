@@ -473,7 +473,13 @@ def parse_tsa_odds_summary(odds_data, prefer="Bet365"):
         line = list(ah_home.keys())[0]
         out["real_ah_line"] = line
         out["real_ah_home"] = _f(ah_home[line].get("last_seen"))
-        if line in ah_away:
+        # 客队 key 符号相反：+3.5 → -3.5
+        opp = line
+        if line.startswith("+"): opp = "-" + line[1:]
+        elif line.startswith("-"): opp = "+" + line[1:]
+        if opp in ah_away:
+            out["real_ah_away"] = _f(ah_away[opp].get("last_seen"))
+        elif line in ah_away:
             out["real_ah_away"] = _f(ah_away[line].get("last_seen"))
     return out
 
