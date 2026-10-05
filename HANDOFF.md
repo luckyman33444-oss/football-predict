@@ -647,3 +647,58 @@ python fix_xxx.py   # 终端跑
 
 ---
 
+---
+
+## 三十、双源匹配调研结论（2026-10-06）
+
+### 匹配率验证
+
+用「队名关键词重叠 ≥2 词」匹配 6 天数据（2026-10-03 ~ 10-08）：
+
+| 指标 | 数值 |
+|---|---|
+| Bzzoiro 总场次 | 273 |
+| TheStatsAPI 总场次 | 837 |
+| **匹配上** | **250 / 273 = 91.6%** |
+| 真正无匹配 | 23 场（8.4%）|
+
+### 真正无匹配的 23 场（Bzzoiro 独家覆盖）
+
+| 联赛 | 场次 |
+|---|---|
+| Nigeria Premier Football League | 9 |
+| Liga F（西班牙女足）| 3 |
+| Campeonato de Portugal（葡低级别）| 3 |
+| USL Championship | 2 |
+| International Friendly Games | 2 |
+| Copa Colombia | 1 |
+| Girabola（安哥拉）| 1 |
+
+**这些是 Bzzoiro 独家覆盖的小联赛/低级别**，TheStatsAPI 确实没有。
+
+### ⚠️ 时区陷阱（重要教训）
+
+**之前误判「两边几乎不重叠」，是因为时区没对齐**：
+
+- Bzzoiro `event_date` = UTC，需转北京时间
+- TheStatsAPI `utc_date` = UTC，需转北京时间
+- 比赛在 `23:30 UTC` = 北京次日 `07:30` → 按 UTC 归组会分到不同天
+
+**修法**：匹配时**不按日期归组**，而是**跨 ±1 天拉数据，全量做队名匹配**。
+
+### 架构确认
+
+| 场景 | 占比 | 处理 |
+|---|---|---|
+| **交集**（Bz + TSA 都有）| **91.6%** | 加真实盘口 |
+| **无交集**（Bz 独家小联赛）| **8.4%** | 用模型 xG 映射 |
+
+**「Bzzoiro 为主 + TheStatsAPI 补盘口」架构成立，覆盖 91.6% 场次。**
+
+### 匹配方法
+
+```python
+def words(s):
+    s = unicodedata.normalize('NFKD', str(s)).encode('ascii','ignore').decode()
+    return set(w for w in re.sub(r'[^a-z0-9 ]', ' ', s.lower()).split() if len(w) > 2)
+# 主队词 ∪ 客队词，重叠 ≥2 词即认为同一场
