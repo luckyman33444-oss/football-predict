@@ -826,6 +826,7 @@ with tab5:
                                                     "赔率": odds_str, "实际比分": "未结束/无数据",
                                                     "原推荐命中": "—", "调整后命中": "—",
                                                     "比分1命中": "—", "比分2命中": "—", "方向对但比分错": "—",
+                                                    "真实亚盘命中": "—", "真实大小球命中": "—",
                                                     "_odds_val": odds_val})
                                 continue
                             actual_str = f"{actual['home']}-{actual['away']}"
@@ -837,6 +838,8 @@ with tab5:
                             win_str = "✅" if win_hit else "❌"
                             score1_hit = judge_score_hit(m.get("比分1", "—"), actual)
                             score2_hit = judge_score_hit(m.get("比分2", "—"), actual)
+                            _real_ah_hit = judge_real_ah_hit(m.get("真实亚盘", "—"), actual["home"], actual["away"])
+                            _real_ou_hit = judge_real_ou_hit(m.get("真实大小球", "—"), actual["home"], actual["away"])
                             direction_but_wrong = "—"
                             if score1_hit == "⚠️" or score2_hit == "⚠️": direction_but_wrong = "⚠️"
                             review_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "模型判断": rec_dir,
@@ -847,7 +850,9 @@ with tab5:
                                                 "赔率": odds_str, "实际比分": actual_str,
                                                 "原推荐命中": win_str, "调整后命中": adj_win_str,
                                                 "比分1命中": score1_hit, "比分2命中": score2_hit,
-                                                "方向对但比分错": direction_but_wrong, "_odds_val": odds_val})
+                                                "方向对但比分错": direction_but_wrong,
+                                                "真实亚盘命中": _real_ah_hit, "真实大小球命中": _real_ou_hit,
+                                                "_odds_val": odds_val})
                         if review_rows:
                             rec_review_df = pd.DataFrame(review_rows)
                             display_rec = rec_review_df.drop(columns=["_odds_val"], errors="ignore")
