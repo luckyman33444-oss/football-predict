@@ -276,6 +276,11 @@ with tab2:
                 else:
                     st.success(note)
                     with st.spinner("正在获取赔率、盘口走势、首发阵容和伤停..."):
+                        try:
+                            _d = datetime.now(CST).strftime("%Y-%m-%d")
+                            build_mapping_for_dates(_d, _d, save=True)
+                        except Exception:
+                            pass
                         odds_map = {}; lineup_map = {}; movement_map = {}; h2h_map = {}; handicap_map = {}; standings_cache = {}; tsa_odds_map = {}
                         for _, row in selected.iterrows():
                             eid = row.get("event_id")
