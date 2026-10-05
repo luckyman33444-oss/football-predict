@@ -428,6 +428,44 @@ def fetch_or_load_tsa_odds(match_id):
         save_tsa_odds(match_id, d)
     return d
 
+@st.cache_data(ttl=86400, show_spinner=False)
+def fetch_tsa_stats(match_id):
+    """TheStatsAPI 单场赛后统计（含 xG）。失败返回 None。"""
+    if not TSA_TOKEN:
+        return None
+    try:
+        r = requests.get(f"{TSA_BASE}/football/matches/{match_id}/stats",
+                         headers=TSA_HEADERS, timeout=15)
+        if r.status_code != 200:
+            return None
+        return r.json().get("data")
+    except Exception:
+        return None
+
+def load_tsa_stats(match_id):
+    f = _DATA_DIR / "tsa_stats" / f"{match_id}.json"
+    if f.exists():
+        try:
+            return _json.loads(f.read_text(encoding='utf-8'))
+        except Exception:
+            return None
+    return None
+
+def save_tsa_stats(match_id, data):
+    f = _DATA_DIR / "tsa_stats" / f"{match_id}.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(_json.dumps(data, ensure_ascii=False), encoding='utf-8')
+
+def fetch_or_load_tsa_stats(match_id):
+    """有盘读盘，没盘拉 API 并存（赛后 xG 永久缓存）。"""
+    d = load_tsa_stats(match_id)
+    if d is not None:
+        return d
+    d = fetch_tsa_stats(match_id)
+    if d is not None:
+        save_tsa_stats(match_id, d)
+    return d
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_tsa_odds(match_id):
     """TheStatsAPI 单场赔率（含亚盘/大小球/1X2）。失败返回 None。"""
