@@ -766,7 +766,8 @@ with tab5:
                         show_cols = [c for c in ["场次", "比赛", "联赛", "等级", "时间", "推荐方向", "推荐概率", "下注建议",
                                                  "调整后方向", "调整后概率", "亚盘", "调整后比分1", "调整后比分2", "赔率",
                                                  "比分1", "比分2", "角色", "方向一致"] if c in rec_df.columns]
-                        st.dataframe(rec_df[show_cols], use_container_width=True, hide_index=True)
+                        _rec_show = rec_df[show_cols].rename(columns={"推荐方向": "模型判断", "推荐概率": "模型概率"})
+                        st.dataframe(_rec_show, use_container_width=True, hide_index=True)
                 if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
                     all_mask = (full_meta["预测结果"].notna() &
                                 (full_meta["预测结果"].astype(str).str.strip() != "—") &
