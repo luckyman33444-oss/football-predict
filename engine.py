@@ -428,6 +428,55 @@ def fetch_or_load_tsa_odds(match_id):
         save_tsa_odds(match_id, d)
     return d
 
+def _f(v):
+    try:
+        return float(v) if v is not None else None
+    except Exception:
+        return None
+
+def parse_tsa_odds_summary(odds_data, prefer="Bet365"):
+    """从 TSA 赔率原始 JSON 提取系统字段。返回 dict（可能为空）。"""
+    if not odds_data: return {}
+    bms = odds_data.get("bookmakers", [])
+    if not bms: return {}
+    # 优先指定庄家，其次任意有亚盘的
+    target = None
+    for b in bms:
+        if b.get("bookmaker") == prefer:
+            target = b; break
+    if not target:
+        for b in bms:
+            if "asian_handicap" in b.get("markets", {}):
+                target = b; break
+    if not target:
+        target = bms[0]
+    m = target.get("markets", {})
+    out = {"_bk": target.get("bookmaker", "")}
+
+    # 1X2
+    mo = m.get("match_odds", {})
+    if mo:
+        out["real_h"] = _f(mo.get("home", {}).get("last_seen"))
+        out["real_d"] = _f(mo.get("draw", {}).get("last_seen"))
+        out["real_a"] = _f(mo.get("away", {}).get("last_seen"))
+
+    # 大小球 2.5
+    tg = m.get("total_goals", {})
+    if "2.5" in tg:
+        out["real_over25"] = _f(tg["2.5"].get("over", {}).get("last_seen"))
+        out["real_under25"] = _f(tg["2.5"].get("under", {}).get("last_seen"))
+
+    # 亚盘：取第一条（主线）
+    ah_home = m.get("asian_handicap", {}).get("home", {})
+    ah_away = m.get("asian_handicap", {}).get("away", {})
+    if ah_home:
+        line = list(ah_home.keys())[0]
+        out["real_ah_line"] = line
+        out["real_ah_home"] = _f(ah_home[line].get("last_seen"))
+        if line in ah_away:
+            out["real_ah_away"] = _f(ah_away[line].get("last_seen"))
+    return out
+
 def _match_words(s):
     import unicodedata as _ud
     s = _ud.normalize('NFKD', str(s)).encode('ascii','ignore').decode()
