@@ -638,6 +638,12 @@ def judge_prediction_hit(pred_label, actual_result):
     else: actual = "客胜"
     return pred_label == actual, actual
 
+def judge_ou_hit_by_line(p,a,l=2.5):
+    t=a["home"]+a["away"]
+    if p=="大球": return t>l,"大球",t
+    if p=="小球": return t<l,"小球",t
+    return False,"—",t
+
 def judge_over_under_hit(pred_label, actual_result):
     total = actual_result["home"] + actual_result["away"]
     if total >= 3: actual = "大球"

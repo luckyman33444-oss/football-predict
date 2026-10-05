@@ -843,13 +843,15 @@ with tab5:
                                 win_str = "✅" if win_hit else "❌"
                             else: win_str = "—"
                             ou_dir = str(m.get("大小球", ""))
-                            if "大球" in ou_dir:
-                                ou_hit, _, _ = judge_over_under_hit("大球", actual)
-                                ou_str = "✅" if ou_hit else "❌"
-                            elif "小球" in ou_dir:
-                                ou_hit, _, _ = judge_over_under_hit("小球", actual)
-                                ou_str = "✅" if ou_hit else "❌"
-                            else: ou_str = "—"
+                            import re as _re
+                            _m = _re.search(r"([大小])\s*([\d.]+)", ou_dir)
+                            if _m:
+                                _l = float(_m.group(2))
+                                _t = actual["home"] + actual["away"]
+                                _h = (_t > _l) if _m.group(1) == "大" else (_t < _l)
+                                ou_str = "✅" if _h else "❌"
+                            else:
+                                ou_str = "—"
                             score1 = str(m.get("主力比分", "—")); score2 = str(m.get("备选比分", "—"))
                             score3 = str(m.get("第三比分", "—"))
                             score1_hit = judge_score_hit(score1, actual); score2_hit = judge_score_hit(score2, actual)
@@ -897,11 +899,16 @@ with tab5:
                     st.divider()
                     dl_buffer = io.BytesIO()
                     with pd.ExcelWriter(dl_buffer, engine='openpyxl') as w:
+                        wrote = False
                         if review_scope in ("只复盘推荐比赛", "两者都复盘") and review_rows:
                             rec_out = pd.DataFrame(review_rows).drop(columns=["_odds_val"], errors="ignore")
                             rec_out.to_excel(w, sheet_name="推荐复盘", index=False)
+                            wrote = True
                         if review_scope in ("复盘当天全部预测", "两者都复盘") and all_rows:
                             pd.DataFrame(all_rows).to_excel(w, sheet_name="全部预测复盘", index=False)
+                            wrote = True
+                        if not wrote:
+                            pd.DataFrame({"说明": ["无数据"]}).to_excel(w, sheet_name="说明", index=False)
                     st.download_button("📥 下载复盘报告 Excel", data=dl_buffer.getvalue(),
                         file_name=f"复盘_{date_str}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_review_upload")
