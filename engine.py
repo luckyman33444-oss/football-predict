@@ -11,7 +11,7 @@ import io
 from data import (
     CST, _FALLBACK_SECRETS,
     INJURY_WEIGHT_PER_PLAYER, INJURY_WEIGHT_MIN, H2H_WEIGHT_LOW, H2H_WEIGHT_HIGH,
-    API_FOOTBALL_BASE, BSD_BASE, ESPN_BASE,
+    API_FOOTBALL_BASE, BSD_BASE, ESPN_BASE, TSA_BASE,
     DIXON_COLES_RHO, BLEND_WEIGHT_MODEL,
     FOOTBALL_API_LEAGUE_IDS, MOTIVATION_WEIGHT, ESPN_LEAGUES,
     LEAGUE_GRADE, LEAGUE_CN, TEAM_CN,
@@ -28,6 +28,9 @@ def _get_secret(name, default=""):
 API_FOOTBALL_KEY = _get_secret("API_FOOTBALL_KEY")
 BSD_TOKEN = _get_secret("BSD_TOKEN")
 BSD_HEADERS = {"Authorization": f"Token {BSD_TOKEN}"}
+
+TSA_TOKEN = _get_secret("THESTATSAPI_KEY")
+TSA_HEADERS = {"Authorization": f"Bearer {TSA_TOKEN}", "Accept": "application/json"}
 
 def get_league_grade(league_cn_name):
     if not league_cn_name: return "B"
@@ -340,6 +343,20 @@ def adjust_with_h2h(xg_h, xg_a, h2h_info):
     if away_rate < 0.20: away_weight = H2H_WEIGHT_LOW; notes.append(f"客队历史胜率低({away_rate*100:.0f}%)→进攻×{away_weight:.2f}")
     elif away_rate > 0.60: away_weight = H2H_WEIGHT_HIGH; notes.append(f"客队历史胜率高({away_rate*100:.0f}%)→进攻×{away_weight:.2f}")
     return xg_h * home_weight, xg_a * away_weight, home_weight, away_weight, " ｜ ".join(notes) if notes else ""
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_tsa_odds(match_id):
+    """TheStatsAPI 单场赔率（含亚盘/大小球/1X2）。失败返回 None。"""
+    if not TSA_TOKEN:
+        return None
+    try:
+        r = requests.get(f"{TSA_BASE}/football/matches/{match_id}/odds",
+                         headers=TSA_HEADERS, timeout=15)
+        if r.status_code != 200:
+            return None
+        return r.json().get("data")
+    except Exception:
+        return None
 
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_event_odds_full(event_id):

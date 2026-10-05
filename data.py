@@ -10,6 +10,7 @@ CST = timezone(timedelta(hours=8))
 _FALLBACK_SECRETS = {
     "BSD_TOKEN": "5d8f48995ad96cead191f0611fdc042ece77b77c",
     "API_FOOTBALL_KEY": "d00cc95c3d639618d9313dc86f883685",
+    "THESTATSAPI_KEY": "fapi_s7AHHIxd23wFlsW1bK7vgSTQxGul3daN",
 }
 
 # ============ 权重常量 ============
@@ -22,6 +23,7 @@ H2H_WEIGHT_HIGH = 1.10
 API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
 BSD_BASE = "https://sports.bzzoiro.com/api/v2"
 ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer"
+TSA_BASE = "https://api.thestatsapi.com/api"
 
 # ============ V5.0 模型参数 ============
 DIXON_COLES_RHO = {"top": -0.10, "mid": -0.13, "low": -0.15, "friendly": -0.13}
