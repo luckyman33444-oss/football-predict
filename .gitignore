@@ -2,3 +2,7 @@ detail.csv
 summary.md
 summary_*.md
 __pycache__/
+fix_*.py
+append*.py
+append_*.py
+test_*.py
