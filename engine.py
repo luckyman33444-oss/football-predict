@@ -765,6 +765,32 @@ def judge_score_hit(pred_score_str, actual_result):
     if ph_result == ah_result: return "⚠️"
     return "❌"
 
+def load_bz_preds(date_from, date_to):
+    """从本地读 Bzzoiro 预测（按日期范围）。没有返回 None。"""
+    f = _DATA_DIR / "bz" / f"preds_{date_from}_{date_to}.json"
+    if f.exists():
+        try:
+            return _json.loads(f.read_text(encoding='utf-8'))
+        except Exception:
+            return None
+    return None
+
+def save_bz_preds(date_from, date_to, data):
+    """存 Bzzoiro 预测到本地。"""
+    f = _DATA_DIR / "bz" / f"preds_{date_from}_{date_to}.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(_json.dumps(data, ensure_ascii=False), encoding='utf-8')
+
+def fetch_or_load_bz_preds(date_from, date_to):
+    """有盘读盘，没盘拉 API 并存。返回 (results, err)。"""
+    d = load_bz_preds(date_from, date_to)
+    if d is not None:
+        return d, None
+    d, err = fetch_predictions_range(date_from, date_to)
+    if not err and d:
+        save_bz_preds(date_from, date_to, d)
+    return d, err
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_predictions_range(date_from, date_to):
     all_results = []; offset = 0; limit = 100
