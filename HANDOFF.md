@@ -702,3 +702,42 @@ def words(s):
     s = unicodedata.normalize('NFKD', str(s)).encode('ascii','ignore').decode()
     return set(w for w in re.sub(r'[^a-z0-9 ]', ' ', s.lower()).split() if len(w) > 2)
 # 主队词 ∪ 客队词，重叠 ≥2 词即认为同一场
+
+---
+
+## 三十一、落盘层（2026-10-06）
+
+### 目的
+
+**拉一次 → 落盘 → 之后从盘读，永不消耗配额。**
+
+### 已实现（engine.py）
+
+| 函数 | 落盘位置 | 说明 |
+|---|---|---|
+| `load_tsa_odds` / `save_tsa_odds` / `fetch_or_load_tsa_odds` | `data/tsa_odds/{match_id}.json` | TSA 单场赔率 |
+| `load_tsa_matches` / `save_tsa_matches` / `fetch_or_load_tsa_matches` | `data/tsa_matches/{date}.json` | TSA 按日比赛列表 |
+| `load_bz_preds` / `save_bz_preds` / `fetch_or_load_bz_preds` | `data/bz/preds_{from}_{to}.json` | Bzzoiro 预测 |
+| `load_bz_events` / `save_bz_events` / `fetch_or_load_bz_events` | `data/bz/events_{from}_{to}.json` | Bzzoiro 赛果 |
+
+### 关键细节
+
+1. **Bzzoiro 日期字段 = `event_date`**（不是 `date`），UTC 时间，需 `to_cst_date()` 转北京
+2. **TheStatsAPI 日期字段 = `utc_date`**，也需转北京（用 `datetime.fromisoformat` + `astimezone(CST)`）
+3. **JSON key 只能 str**：Bzzoiro 赛果的 event_id 是 int，存时转 str，读时转回 int（`{int(k): v for k,v in raw.items()}`）
+4. **`data/` 已加 gitignore**，数据不上传
+5. **`@st.cache_data` 装饰器不能悬空**——插入新函数时，装饰器要跟函数一起搬
+
+### 待做
+
+- TSA 赛后 xG 落盘（`data/tsa_stats/{match_id}.json`）
+- 映射表落盘（Bz event_id ↔ TSA match_id）→ `data/mapping.csv`
+
+### 用法（回测时）
+
+```python
+# 有盘读盘，没盘拉 API 并存
+d = engine.fetch_or_load_tsa_odds(match_id)
+d = engine.fetch_or_load_tsa_matches(date_str)
+preds, err = engine.fetch_or_load_bz_preds(from_date, to_date)
+events = engine.fetch_or_load_bz_events(from_date, to_date)
