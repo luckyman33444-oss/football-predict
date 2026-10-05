@@ -344,6 +344,34 @@ def adjust_with_h2h(xg_h, xg_a, h2h_info):
     elif away_rate > 0.60: away_weight = H2H_WEIGHT_HIGH; notes.append(f"客队历史胜率高({away_rate*100:.0f}%)→进攻×{away_weight:.2f}")
     return xg_h * home_weight, xg_a * away_weight, home_weight, away_weight, " ｜ ".join(notes) if notes else ""
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_tsa_matches_by_date(date_str):
+    """TheStatsAPI 按日期拉比赛（批量，自动翻页）。date_str 格式 YYYY-MM-DD。失败返回 []。"""
+    if not TSA_TOKEN:
+        return []
+    out = []
+    page = 1
+    while page <= 20:
+        try:
+            r = requests.get(f"{TSA_BASE}/football/matches",
+                             headers=TSA_HEADERS, timeout=20,
+                             params={"date_from": date_str, "date_to": date_str,
+                                     "page": page, "per_page": 100})
+            if r.status_code != 200:
+                break
+            j = r.json()
+            items = j.get("data", [])
+            if not items:
+                break
+            out.extend(items)
+            meta = j.get("meta", {})
+            if page >= meta.get("total_pages", 1):
+                break
+            page += 1
+        except Exception:
+            break
+    return out
+
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_tsa_odds(match_id):
     """TheStatsAPI 单场赔率（含亚盘/大小球/1X2）。失败返回 None。"""
