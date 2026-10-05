@@ -227,7 +227,7 @@ with tab2:
                 core_ids = set(st.session_state.core_matches)
                 core_df = notstarted_all[notstarted_all["event_id"].isin(core_ids)].copy()
                 other_df_all = notstarted_all[~notstarted_all["event_id"].isin(core_ids)].copy()
-                end_window_auto = now + timedelta(hours=24)
+                end_window_auto = now.replace(hour=23, minute=59, second=59, microsecond=0)
                 other_df = other_df_all[other_df_all["kickoff_dt"] <= end_window_auto].copy()
                 def calc_conf(row):
                     _ph = row.get("_prob_home") or 0
