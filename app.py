@@ -666,7 +666,7 @@ with tab2:
                         _tsa_ah = _tsa.get("real_ah_line")
                         _tsa_ah_str = f"{_tsa_ah} ({_tsa.get('real_ah_home','')}/{_tsa.get('real_ah_away','')})" if _tsa_ah else "—"
                         rec_rows.append({"场次": i, "比赛": md["比赛"], "联赛": md["联赛"], "等级": md.get("等级", "B"), "时间": md["时间"],
-                                         "event_id": md["event_id"], "推荐方向": best_opt[0], "推荐概率": f"{best_opt[1]*100:.1f}%",
+                                         "event_id": md["event_id"], "模型判断": best_opt[0], "模型概率": f"{best_opt[1]*100:.1f}%",
                                          "下注建议": md.get("bet_advice", "—"),
                                          "调整后方向": adj_name, "调整后概率": f"{adj_prob*100:.1f}%",
                                          "亚盘": mc.get("ah_line", "—"), "亚盘判断": mc.get("ah_note", "—"),
@@ -694,7 +694,7 @@ with tab2:
                                       "当天全部预测场次": len(all_today_rows), "核心比赛": "是" if core_count > 0 else "否"}]
                     for r in rec_rows: meta_combined.append(r)
                     meta_combined.append({"场次": "—", "比赛": f"【当天全部预测 {len(all_today_rows)} 场】",
-                                          "联赛": "—", "时间": "—", "event_id": "—", "推荐方向": "—", "推荐概率": "—",
+                                          "联赛": "—", "时间": "—", "event_id": "—", "模型判断": "—", "模型概率": "—",
                                           "赔率": "—", "大小球方向": "—", "比分1": "—", "比分2": "—", "盘口走势": "—", "角色": "—"})
                     for r in all_today_rows: meta_combined.append(r)
                     excel_data = build_excel(bet_rows,
@@ -755,20 +755,19 @@ with tab5:
                     with c4: st.metric("核心比赛", str(info_row.get("核心比赛", "—")))
                     try: date_str = str(info_row["存档时间"]).split()[0]
                     except: pass
-                if "推荐方向" in full_meta.columns:
-                    rec_mask = (full_meta["推荐方向"].notna() &
-                                (full_meta["推荐方向"].astype(str).str.strip() != "—") &
-                                (full_meta["推荐方向"].astype(str).str.strip() != "") &
-                                (full_meta["推荐方向"].astype(str).str.strip() != "nan"))
+                if "模型判断" in full_meta.columns:
+                    rec_mask = (full_meta["模型判断"].notna() &
+                                (full_meta["模型判断"].astype(str).str.strip() != "—") &
+                                (full_meta["模型判断"].astype(str).str.strip() != "") &
+                                (full_meta["模型判断"].astype(str).str.strip() != "nan"))
                     rec_df = full_meta[rec_mask].copy()
                     st.markdown(f"### 🎯 推荐比赛 **{len(rec_df)} 场**")
                     if len(rec_df) > 0:
-                        show_cols = [c for c in ["场次", "比赛", "联赛", "等级", "时间", "推荐方向", "推荐概率",
+                        show_cols = [c for c in ["场次", "比赛", "联赛", "等级", "时间", "模型判断", "模型概率",
               "市场方向", "大小球方向", "真实亚盘", "真实大小球", "真实1X2",
               "调整后方向", "调整后概率", "亚盘", "调整后比分1", "调整后比分2", "赔率",
               "比分1", "比分2", "角色", "方向一致", "下注建议"] if c in rec_df.columns]
-                        _rec_show = rec_df[show_cols].rename(columns={"推荐方向": "模型判断", "推荐概率": "模型概率"})
-                        st.dataframe(_rec_show, use_container_width=True, hide_index=True)
+                        st.dataframe(rec_df[show_cols], use_container_width=True, hide_index=True)
                 if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
                     all_mask = (full_meta["预测结果"].notna() &
                                 (full_meta["预测结果"].astype(str).str.strip() != "—") &
@@ -812,13 +811,13 @@ with tab5:
                             try: eid = int(eid)
                             except: continue
                             actual = actual_results.get(eid)
-                            rec_dir = str(m.get("推荐方向", "")); adj_dir = str(m.get("调整后方向", "—"))
+                            rec_dir = str(m.get("模型判断", "")); adj_dir = str(m.get("调整后方向", "—"))
                             odds_str = str(m.get("赔率", "—"))
                             try: odds_val = float(odds_str) if odds_str not in ("—", "nan", "") else None
                             except: odds_val = None
                             if not actual:
-                                review_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "推荐方向": rec_dir,
-                                                    "推荐概率": m.get("推荐概率", "—"), "调整后方向": adj_dir,
+                                review_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "模型判断": rec_dir,
+                                                    "模型概率": m.get("模型概率", "—"), "调整后方向": adj_dir,
                                                     "调整后概率": m.get("调整后概率", "—"),
                                                     "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                                     "调整后比分": f"{m.get('调整后比分1', '—')} / {m.get('调整后比分2', '—')}",
@@ -838,8 +837,8 @@ with tab5:
                             score2_hit = judge_score_hit(m.get("比分2", "—"), actual)
                             direction_but_wrong = "—"
                             if score1_hit == "⚠️" or score2_hit == "⚠️": direction_but_wrong = "⚠️"
-                            review_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "推荐方向": rec_dir,
-                                                "推荐概率": m.get("推荐概率", "—"), "调整后方向": adj_dir,
+                            review_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "模型判断": rec_dir,
+                                                "模型概率": m.get("模型概率", "—"), "调整后方向": adj_dir,
                                                 "调整后概率": m.get("调整后概率", "—"),
                                                 "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                                 "调整后比分": f"{m.get('调整后比分1', '—')} / {m.get('调整后比分2', '—')}",
@@ -878,7 +877,7 @@ with tab5:
                         valid_recs = []
                         for r in review_rows:
                             if r["原推荐命中"] not in ("✅", "❌"): continue
-                            prob_str = str(r.get("推荐概率", "")).replace("%", "").strip()
+                            prob_str = str(r.get("模型概率", "")).replace("%", "").strip()
                             try: prob_val = float(prob_str)
                             except Exception: continue
                             valid_recs.append({"prob": prob_val, "hit": r["原推荐命中"] == "✅"})
@@ -1116,7 +1115,7 @@ with tab6:
                     dir_rows_r = []
                     for d, s in sorted(dir_stats_r.items(), key=lambda x: -x[1]["t"]):
                         rate = s["h"] / s["t"] * 100 if s["t"] else 0
-                        dir_rows_r.append({"推荐方向": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"})
+                        dir_rows_r.append({"模型判断": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"})
                     st.dataframe(pd.DataFrame(dir_rows_r), use_container_width=True, hide_index=True)
                     st.markdown("### 📊 按大小球推荐方向")
                     dir_stats_o = {}
@@ -1128,7 +1127,7 @@ with tab6:
                     dir_rows_o = []
                     for d, s in sorted(dir_stats_o.items(), key=lambda x: -x[1]["t"]):
                         rate = s["h"] / s["t"] * 100 if s["t"] else 0
-                        dir_rows_o.append({"推荐方向": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"})
+                        dir_rows_o.append({"模型判断": d, "场次": s["t"], "命中": s["h"], "命中率": f"{rate:.1f}%"})
                     st.dataframe(pd.DataFrame(dir_rows_o), use_container_width=True, hide_index=True)
                     st.markdown("### 📊 按联赛（至少 3 场）")
                     lg_stats = {}
