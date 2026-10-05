@@ -1,4 +1,4 @@
-# Football Predict 交接（V5.9）
+# Football Predict 交接（V5.10）
 
 > 本文件是唯一交接入口。接手时先读本文件，再按「文档地图」定位需要的文件。
 
@@ -19,7 +19,7 @@
 |---|---|---|
 | app.py | Streamlit UI，7 个 Tab | 改界面/交互/筛选器 |
 | engine.py | 模型 + 回测 + Excel 导出 | 改算法/回测逻辑 |
-| data.py | 常量：DIXON_COLES_RHO、MATCH_TIER_MULTIPLIER、BLEND_WEIGHT_MODEL、TEAM_CN(1520队)、LEAGUE_CN、LEAGUE_GRADE | 加联赛/队名/调参数 |
+| data.py | 常量：DIXON_COLES_RHO、BLEND_WEIGHT_MODEL、TEAM_CN(1520队)、LEAGUE_CN、LEAGUE_GRADE | 加联赛/队名/调参数 |
 
 ### 运行脚本（工具，按需跑）
 
@@ -142,7 +142,6 @@ Bzzoiro API → fetch_all_predictions → parse_prediction（engine.py）→ df_
 2. 接入更多数据源（伤停、Elo、xG 增强）→ 提升模型本身
 3. 观察一致性（模型/市场分歧场次）→ 新增筛选维度
 4. 回测实时化（把 Tab2 参数也纳入回测）→ 让报告反映真实能力
-5. 删 MATCH_TIER_MULTIPLIER（基本 =1.0，死机制）→ 简化
 
 ## 六、关键结论（勿重复踩坑）
 
@@ -156,7 +155,6 @@ Bzzoiro API → fetch_all_predictions → parse_prediction（engine.py）→ df_
 ## 七、待办
 
 - 未验证：阵容权重、战意（无历史数据，属经验默认）
-- 可选：删 MATCH_TIER_MULTIPLIER（死机制）
 - 可选：接入真实赔率做价值投注验证
 
 ## 八、工作方式
@@ -452,3 +450,200 @@ git --no-pager diff app.py
 - 实时性（下注前能看到当前盘口）
 - 免费或低成本
 - 覆盖 Bzzoiro 已有的联赛
+
+
+---
+
+## 二十四、数据源现状（2026-10-06）
+
+### 主源：Bzzoiro 免费档
+
+| 项目 | 现状 |
+|---|---|
+| 每日场次 | ~374 |
+| 联赛 | 50 |
+| 赛前 xG | ✅ |
+| 1X2 | ✅ |
+| 大小球 | ✅ 但只有 2.5 线 |
+| 亚盘 | ❌ 无（Tab1 显示的是模型 xG 映射，非真实盘）|
+| Token | `BSD_TOKEN` |
+
+### 新增：TheStatsAPI（$50/月已订阅）
+
+| 项目 | 现状 |
+|---|---|
+| 联赛 | 204 |
+| 赛前赔率 | ✅ opening + last_seen |
+| 真实亚盘 | ✅ Bet365 11 档 + Betfair 30 档 |
+| 大小球多线 | ✅ 0.5~5.5 六条线 |
+| 庄家 | Bet365 / Paddy Power / BetMGM UK / Pinnacle（仅1X2）/ Betfair Exchange |
+| 赛前 xG | ❌ 无（关键：只有赛后 xG）|
+| 赛后 xG | ✅ full 质量 + 射门图 |
+| 批量赔率 | ❌ 单场拉 |
+| 配额 | 10 万/月（≈3300/天）|
+| Token | `THESTATSAPI_KEY`（已写 ~/.bashrc）|
+
+**覆盖验证**：中北美国家联赛 ✅ / 国际友谊 ✅ / MLS ✅ / NWSL ✅ / USL ✅ / 阿甲 ✅ / 巴甲 ✅ / 哥甲 ✅ / 五大联赛 ✅
+**唯一缺口**：世界杯预选赛无 xG
+
+**重大发现**：TheStatsAPI 的 xG 是「赛后 xG」（`xg_quality: full`），不是赛前预测值 → 不能替代 Bzzoiro 做预测，只能用于回测校准。
+
+### 已放弃的数据源（2026-10-06）
+
+| 数据源 | 放弃原因 |
+|---|---|
+| OddsPapi | Key 死活激活不了（401）|
+| Odds-API.io | 免费 Key 无限期停发 |
+| InferSports | 有真实亚盘但延迟 3 天，覆盖窄（27 场/天）|
+
+---
+
+## 二十五、TheStatsAPI 完整 API 参考
+
+### 基础信息
+
+| 项 | 值 |
+|---|---|
+| Base URL | `https://api.thestatsapi.com/api` |
+| 认证 | `Authorization: Bearer $THESTATSAPI_KEY` |
+| 文档 | `https://thestatsapi.com/docs/llms-full.txt`（可 grep）|
+| Token 前缀 | `fapi_...` |
+
+### 端点清单
+
+### 庄家与市场覆盖（实测 1 场）
+
+| 庄家 | 1X2 | 亚盘 | 大小球 | 亚盘档位 |
+|---|---|---|---|---|
+| Bet365 | ✅ | ✅ | ✅ | 11 档 |
+| Betfair Exchange | ✅ | ✅ | ✅ | 30 档（-4 到 +3.5）|
+| BetMGM UK | ✅ | ✅ | ✅ | 1 档 |
+| Paddy Power | ✅ | ❌ | ✅ | — |
+| Pinnacle | ✅ | ❌ | ❌ | 仅 1X2 |
+
+**要点**：Pinnacle 只有 1X2，无亚盘。算公平赔率用 Betfair Exchange 替代。
+
+### xG 语义（关键）
+
+| 比赛状态 | xg_available | xg_quality |
+|---|---|---|
+| 未开赛 | ❌ false | none |
+| 已结束 | ✅ true | full |
+
+**结论**：TheStatsAPI 的 xG 是赛后实际 xG，不是赛前预测。不能替代 Bzzoiro 做预测。
+
+### 覆盖率（2026-10-06 实测）
+
+全站 204 联赛：xG 137（67%），赔率 202（99%）
+
+重点联赛 comp_id：
+- 阿甲 `comp_4540` ✅
+- 巴甲 `comp_4795` ✅
+- 巴乙 `comp_1085` ✅
+- 德甲 `comp_4643` / 德乙 `comp_0406` / 德丙 `comp_2837` ✅
+- 西甲 `comp_8814` / 西乙 `comp_0976` ✅
+- 世预赛 ❌ 无
+
+### 配额与调用策略
+
+| 项 | 值 |
+|---|---|
+| 免费试用 | 7 天，10,000/月 |
+| 付费（起动机）| $50/月，10 万次/月 |
+| 付费（生长）| $129/月，50 万次/月 |
+
+策略：联赛缓存 1h / 比赛缓存 1h / 赔率缓存 30min；只拉有信号场次；每天约 100 次，占配额 3%。
+
+### 常见错误
+
+| 错误码 | 含义 | 修法 |
+|---|---|---|
+| UNAUTHORIZED 401 | Key 格式错 | 用 `Bearer $THESTATSAPI_KEY`，别写 `$fapi_xxx` |
+| KEY_REVOKED 403 | Key 无订阅 | 去后台开试用/订阅 |
+| NOT_FOUND 404 | 路径不对 | 查文档 |
+| invalid event id | ID 格式错 | 要 mt_xxx / sn_xxx / comp_xxx |
+
+---
+
+## 二十六、TheStatsAPI 接入路线图（4 阶段）
+
+| 阶段 | 内容 | 产出 |
+|---|---|---|
+| 1. 基础设施 | engine.py 加 `fetch_tsa_odds(match_id)` + 缓存 | 能拉真实盘口 |
+| 2. 显示层 | Tab1/Tab3 加「真实亚盘」+「多线大小球」列 | 界面显示真数据 |
+| 3. 逻辑层 | Tab2 备选串 + Tab7 筛选改真实数据 | 逻辑与显示一致 |
+| 4. 验证 | 回测重跑，定新阈值 | 新成绩基线 |
+
+### 字段映射
+
+| 现用字段 | TheStatsAPI | 用途 |
+|---|---|---|
+| 亚盘（模型映射，假）| `asian_handicap.last_seen` | Tab1 显示真实盘 |
+| 大小球（只有2.5）| `total_goals` 的 0.5~5.5 | Tab1/2 多线 |
+| 隐含赔率（假）| `match_odds.last_seen` | 算真实概率 |
+| 无法算 CLV | `opening` vs `last_seen` | 盘口移动 |
+
+### 缓存策略
+
+| 数据 | TTL |
+|---|---|
+| 联赛列表 | 1 小时 |
+| 比赛列表 | 1 小时 |
+| 赔率 | 30 分钟 |
+| 赛后 xG | 永久 |
+
+---
+
+## 二十七、终端工作方式（2026-10-06 更新）
+
+统一流程：
+
+```bash
+code fix_xxx.py     # 打开编辑器
+# Ctrl+A 清空 → 粘贴代码 → Ctrl+S 保存
+python fix_xxx.py   # 终端跑
+
+---
+
+## 二十八、V5.9 第3批：复盘 bug 修复（2026-10-05）
+
+1. **Tab5 大小球命中列全空**
+   - 根因：`judge_over_under_hit` 写死判 2.5 线，但推荐是 `大1.5`/`小3.0`
+   - 修法：engine.py 加 `judge_ou_hit_by_line(p, a, l)`，按推荐线判；app.py 用正则 `([大小])\s*([\d.]+)` 解析方向和线
+
+2. **Excel 导出 `IndexError: At least one sheet must be visible`**
+   - 根因：两个条件分支都没命中时，无 sheet 写入
+   - 修法：加 `wrote` 标记 + 兜底「说明」sheet
+
+---
+
+## 二十九、⚠️ 给下一个对话的提醒
+
+### 接手前必读
+
+1. 读本文件全部，特别是第八、十三节（工作方式）
+2. **不要重写本文件，只追加**（重写会丢失历史细节）
+3. 改代码流程：`code 文件名` → Ctrl+A 清空 → 粘贴 → Ctrl+S → 终端跑
+4. 每次只做一件事，改完验语法 + `git diff` 再继续
+
+### 当前进度（2026-10-06）
+
+- ✅ 已订阅 TheStatsAPI（$50/月）
+- ✅ 已修两个复盘 bug（大小球命中 + Excel 兜底 sheet）
+- ⏳ **下一步：TheStatsAPI 接入阶段 1**（engine.py 加 `fetch_tsa_odds`）
+
+### 已知矛盾（别再问）
+
+- TheStatsAPI 只有**赛后 xG**，没赛前 → 不能替代 Bzzoiro
+- 「提升模型」方向已否决，别再投入伤停/Elo/xG 增强
+- 筛选器维度已挖尽
+
+### 用户偏好
+
+- 中文交流
+- **一步一步来，不要一次给太多**
+- 终端工作，不用 nano
+- 数据源决策前先诊断，不直接改代码
+
+---
+
