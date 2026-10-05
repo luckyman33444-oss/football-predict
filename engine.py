@@ -7,6 +7,8 @@ import math, requests, pandas as pd, streamlit as st
 from datetime import date, datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
+import json as _json
+from pathlib import Path as _Path
 
 from data import (
     CST, _FALLBACK_SECRETS,
@@ -371,6 +373,34 @@ def fetch_tsa_matches_by_date(date_str):
         except Exception:
             break
     return out
+
+_DATA_DIR = _Path("data")
+
+def load_tsa_odds(match_id):
+    """从本地读 TheStatsAPI 赔率。没有返回 None。"""
+    f = _DATA_DIR / "tsa_odds" / f"{match_id}.json"
+    if f.exists():
+        try:
+            return _json.loads(f.read_text(encoding='utf-8'))
+        except Exception:
+            return None
+    return None
+
+def save_tsa_odds(match_id, data):
+    """存 TheStatsAPI 赔率到本地。"""
+    f = _DATA_DIR / "tsa_odds" / f"{match_id}.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(_json.dumps(data, ensure_ascii=False), encoding='utf-8')
+
+def fetch_or_load_tsa_odds(match_id):
+    """有盘读盘，没盘拉 API 并存。"""
+    d = load_tsa_odds(match_id)
+    if d is not None:
+        return d
+    d = fetch_tsa_odds(match_id)
+    if d is not None:
+        save_tsa_odds(match_id, d)
+    return d
 
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_tsa_odds(match_id):
