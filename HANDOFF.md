@@ -741,3 +741,33 @@ d = engine.fetch_or_load_tsa_odds(match_id)
 d = engine.fetch_or_load_tsa_matches(date_str)
 preds, err = engine.fetch_or_load_bz_preds(from_date, to_date)
 events = engine.fetch_or_load_bz_events(from_date, to_date)
+
+---
+
+## 三十二、Tab 精简（2026-10-06）
+
+### 7 Tab → 5 Tab
+
+**删除**：
+- **Tab3 全部赛事**（与 Tab1 重复，ESPN 已被 TheStatsAPI 覆盖 204 联赛）
+- ESPN 引擎层函数**保留**（`fetch_espn_all` / `ESPN_LEAGUES` / `ESPN_BASE`），后续可接入 Tab1 做辅助信息（预测模型/伤病/实时事件/新闻）
+
+**新结构**：
+
+| Tab | 功能 |
+|---|---|
+| Tab1 今日预测 | 含「全部场次 / 高置信清单」切换（吸收原 Tab7）|
+| Tab2 3串1核心 | 不变 |
+| Tab3 搜索队名 | 原 Tab4 |
+| Tab4 赛后复盘 | 原 Tab5 |
+| Tab5 历史回测 | 原 Tab6 |
+
+### Tab1 内切换
+
+```python
+with tab1:
+    mode = st.radio("显示模式", ["全部场次", "高置信清单"], horizontal=True, key="tab1_mode")
+    if mode == "高置信清单":
+        render_high_confidence(df_all)
+    else:
+        render_all_matches(df_all)
