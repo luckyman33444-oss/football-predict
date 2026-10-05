@@ -6,3 +6,7 @@ fix_*.py
 append*.py
 append_*.py
 test_*.py
+diag_*.py
+list_*.py
+code_*.py
+data/
