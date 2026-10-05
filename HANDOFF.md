@@ -798,3 +798,29 @@ with tab1:
 | `real_ah_home/away` | 亚盘两侧赔率 |
 
 ### 实测（印度 vs 乌拉圭）
+
+---
+
+## 三十四、run_bt.py 切落盘（2026-10-06）
+
+### 改动
+
+| 原 | 改 |
+|---|---|
+| `fetch_predictions_range` | `fetch_or_load_bz_preds` |
+| `fetch_events_range` | `fetch_or_load_bz_events` |
+| `ev.get("date")` | `to_cst_date(ev.get("event_date"))` |
+
+### 效果
+
+- **第一次跑**：调 API，落盘 `data/bz/preds_*.json` + `data/bz/events_*.json`
+- **第二次跑**：从盘读，**不消耗配额**
+- 实测：3-4 号跑两次，结果一致（119 行），文件都在
+
+### 已知限制
+
+落盘**按「日期范围」存文件**：
+- 跑「10-03~10-04」→ 存 `preds_2026-10-03_2026-10-04.json`
+- 跑「10-03~10-05」→ 存 `preds_2026-10-03_2026-10-05.json`（**不命中上面那个**）
+
+**不同范围会重复调 API**。后续可改成「按天存」（`preds_2026-10-03.json`），但回测通常固定范围，暂不急。
