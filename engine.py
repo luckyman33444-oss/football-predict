@@ -483,6 +483,56 @@ def parse_tsa_odds_summary(odds_data, prefer="Bet365"):
             out["real_ah_away"] = _f(ah_away[line].get("last_seen"))
     return out
 
+def judge_real_ah_hit(ah_str, home_score, away_score):
+    """判定真实亚盘命中。ah_str='+3.5 (1.9/1.9)' 或 '—'。返回 ✅/❌/⚪/⚠️/—。"""
+    if not ah_str or ah_str == "—":
+        return "—"
+    import re as _re
+    m = _re.match(r"^\s*([+-]?[\d.]+)", str(ah_str))
+    if not m:
+        return "—"
+    try:
+        line = float(m.group(1))
+    except Exception:
+        return "—"
+    diff = home_score - away_score + line
+    # 四分之一球盘判定
+    frac = abs(line * 2) % 2  # 0=整数或半球, 1=四分之一
+    if abs(diff) < 1e-9:
+        return "⚪"
+    if line * 2 % 1 == 0:
+        # 整数/半球盘
+        return "✅" if diff > 0 else "❌"
+    # 四分之一球盘（如 -0.25/-0.75）
+    if diff > 0.5:
+        return "✅"
+    if 0 < diff < 0.5:
+        return "⚠️"  # 赢半
+    if -0.5 < diff < 0:
+        return "⚠️"  # 输半
+    return "❌"
+
+def judge_real_ou_hit(ou_str, home_score, away_score):
+    """判定真实大小球命中。ou_str='大2.5 1.222' 或 '—'。返回 ✅/❌/⚪/—。"""
+    if not ou_str or ou_str == "—":
+        return "—"
+    import re as _re
+    m = _re.match(r"^\s*([大小])\s*([\d.]+)", str(ou_str))
+    if not m:
+        return "—"
+    direction = m.group(1)
+    try:
+        line = float(m.group(2))
+    except Exception:
+        return "—"
+    total = home_score + away_score
+    if abs(total - line) < 1e-9:
+        return "⚪"
+    if direction == "大":
+        return "✅" if total > line else "❌"
+    else:
+        return "✅" if total < line else "❌"
+
 def _match_words(s):
     import unicodedata as _ud
     s = _ud.normalize('NFKD', str(s)).encode('ascii','ignore').decode()
