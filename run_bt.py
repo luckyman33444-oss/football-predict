@@ -5,8 +5,9 @@ import pandas as pd
 
 from engine import (
     backtest_one,
-    fetch_predictions_range,
-    fetch_events_range,
+    fetch_or_load_bz_preds,
+    fetch_or_load_bz_events,
+    to_cst_date,
 )
 
 # 从命令行读日期，不传就用默认 7-9 月
@@ -14,14 +15,14 @@ START = sys.argv[1] if len(sys.argv) > 1 else "2026-07-03"
 END   = sys.argv[2] if len(sys.argv) > 2 else "2026-09-30"
 
 print(f"① 拉取 {START} ～ {END} 的预测...")
-preds, err = fetch_predictions_range(START, END)
+preds, err = fetch_or_load_bz_preds(START, END)
 if err:
     print("预测拉取失败：", err)
     raise SystemExit(1)
 print(f"   拿到 {len(preds)} 条预测")
 
 print("② 拉取实际比分...")
-actual_map = fetch_events_range(START, END)
+actual_map = fetch_or_load_bz_events(START, END)
 print(f"   拿到 {len(actual_map)} 场比分")
 
 print("③ 开始回测...")
@@ -35,7 +36,7 @@ for i, p in enumerate(preds):
     if r:
         # 从原始预测里取日期
         ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
-        ev_date = ev.get("date") or ev.get("start_time") or ev.get("commence_time") or ""
+        ev_date = to_cst_date(ev.get("event_date") or "")
         r["日期"] = str(ev_date)[:10]
         rows.append(r)
     if (i + 1) % 200 == 0:
