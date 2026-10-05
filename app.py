@@ -745,6 +745,8 @@ with tab5:
             rec_df = None; all_today_df = None; date_str = None
             if "基本信息" in sheet_names:
                 full_meta = pd.read_excel(uploaded_file, sheet_name="基本信息")
+                # 兼容旧名（推荐方向/推荐概率 → 模型判断/模型概率）
+                full_meta = full_meta.rename(columns={"推荐方向": "模型判断", "推荐概率": "模型概率"})
                 info_cols = ["存档时间", "推荐场次", "当天全部预测场次", "核心比赛"]
                 if all(c in full_meta.columns for c in info_cols):
                     info_row = full_meta.iloc[0]
