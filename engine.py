@@ -808,6 +808,33 @@ def fetch_predictions_range(date_from, date_to):
         else: break
     return all_results, None
 
+def load_bz_events(date_from, date_to):
+    """从本地读 Bzzoiro 实际比分。key 会转回 int。"""
+    f = _DATA_DIR / "bz" / f"events_{date_from}_{date_to}.json"
+    if f.exists():
+        try:
+            raw = _json.loads(f.read_text(encoding='utf-8'))
+            return {int(k): v for k, v in raw.items()}
+        except Exception:
+            return None
+    return None
+
+def save_bz_events(date_from, date_to, data):
+    """存 Bzzoiro 实际比分。key 转 str（JSON 要求）。"""
+    f = _DATA_DIR / "bz" / f"events_{date_from}_{date_to}.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(_json.dumps({str(k): v for k, v in data.items()}, ensure_ascii=False), encoding='utf-8')
+
+def fetch_or_load_bz_events(date_from, date_to):
+    """有盘读盘，没盘拉 API 并存。"""
+    d = load_bz_events(date_from, date_to)
+    if d is not None:
+        return d
+    d = fetch_events_range(date_from, date_to)
+    if d:
+        save_bz_events(date_from, date_to, d)
+    return d
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_events_range(date_from, date_to):
     actual = {}; offset = 0; limit = 200
