@@ -3,7 +3,7 @@
 engine.py —— 所有计算/请求函数。改算法改这里，改配置去 data.py。
 """
 
-import math, requests, pandas as pd, streamlit as st
+import math, re, requests, pandas as pd, streamlit as st
 from datetime import date, datetime, timezone, timedelta
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import io
@@ -427,6 +427,88 @@ def fetch_or_load_tsa_odds(match_id):
     if d is not None:
         save_tsa_odds(match_id, d)
     return d
+
+def _match_words(s):
+    import unicodedata as _ud
+    s = _ud.normalize('NFKD', str(s)).encode('ascii','ignore').decode()
+    return set(w for w in re.sub(r'[^a-z0-9 ]', ' ', s.lower()).split() if len(w) > 2)
+
+def build_mapping_for_dates(date_from, date_to, save=True):
+    """匹配 Bz↔TSA 场次，返回 rows。save=True 时写入 mapping.csv。"""
+    from datetime import datetime as _dt, timedelta as _td
+    preds, _err = fetch_or_load_bz_preds(date_from, date_to)
+    bz_list = []
+    for p in preds:
+        ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
+        bz_list.append({
+            "bz_event_id": ev.get("id"),
+            "date": to_cst_date(ev.get("event_date","")),
+            "home": ev.get("home_team",""),
+            "away": ev.get("away_team",""),
+            "league": ev.get("league_name",""),
+        })
+
+    # TSA 拉 date_from-1 ~ date_to+1，覆盖时区
+    d0 = _dt.strptime(date_from,"%Y-%m-%d") - _td(days=1)
+    d1 = _dt.strptime(date_to,"%Y-%m-%d") + _td(days=1)
+    tsa_all = []
+    cur = d0
+    while cur <= d1:
+        for m in fetch_or_load_tsa_matches(cur.strftime("%Y-%m-%d")):
+            tsa_all.append({
+                "tsa_match_id": m["id"],
+                "home": m["home_team"]["name"],
+                "away": m["away_team"]["name"],
+            })
+        cur += _td(days=1)
+
+    rows = []
+    for b in bz_list:
+        if not b["bz_event_id"]: continue
+        bw = _match_words(b["home"]) | _match_words(b["away"])
+        best = None; best_score = 0
+        for t in tsa_all:
+            tw = _match_words(t["home"]) | _match_words(t["away"])
+            sc = len(bw & tw)
+            if sc > best_score:
+                best_score = sc; best = t
+        if best_score >= 2 and best:
+            rows.append({
+                "bz_event_id": b["bz_event_id"],
+                "tsa_match_id": best["tsa_match_id"],
+                "date": b["date"],
+                "home": b["home"],
+                "away": b["away"],
+                "league": b["league"],
+            })
+    if save and rows:
+        save_tsa_mapping(rows)
+    return rows
+
+_MAP_PATH = _DATA_DIR / "mapping.csv"
+
+def load_tsa_mapping():
+    """读 Bz↔TSA 映射表。返回 dict {bz_event_id(int): tsa_match_id(str)}。"""
+    if not _MAP_PATH.exists():
+        return {}
+    try:
+        df = pd.read_csv(_MAP_PATH)
+        return {int(r["bz_event_id"]): str(r["tsa_match_id"]) for _, r in df.iterrows()}
+    except Exception:
+        return {}
+
+def save_tsa_mapping(rows):
+    """把新映射追加到 mapping.csv。rows = list of dict。"""
+    if not rows:
+        return
+    _MAP_PATH.parent.mkdir(parents=True, exist_ok=True)
+    new_df = pd.DataFrame(rows)
+    if _MAP_PATH.exists():
+        old = pd.read_csv(_MAP_PATH)
+        merged = pd.concat([old, new_df], ignore_index=True).drop_duplicates(subset=["bz_event_id"], keep="last")
+    else:
+        merged = new_df
+    merged.to_csv(_MAP_PATH, index=False, encoding='utf-8-sig')
 
 @st.cache_data(ttl=86400, show_spinner=False)
 def fetch_tsa_stats(match_id):
