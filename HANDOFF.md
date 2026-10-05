@@ -771,3 +771,30 @@ with tab1:
         render_high_confidence(df_all)
     else:
         render_all_matches(df_all)
+        
+---
+
+## 三十三、Tab2 真实盘口接入（2026-10-06）
+
+### 已完成
+
+| 步骤 | 内容 |
+|---|---|
+| 1 | `parse_tsa_odds_summary`（engine.py）→ 解析 TSA 赔率为系统字段 |
+| 2 | Tab2 循环里查映射表 → 拉 TSA 赔率 → 存 `tsa_odds_map` |
+| 3 | Tab2 推荐行加 3 列：真实亚盘 / 真实大小球 / 真实1X2 |
+| 4 | Tab2「生成推荐」前自动 `build_mapping_for_dates(今天)` |
+| 5 | 映射表时区修复（Bz 也扩 ±1 天，10-06 从 4 条 → 29 条）|
+| 6 | 亚盘客队 key 符号转换（`+3.5` → `-3.5`）|
+
+### 解析字段（`parse_tsa_odds_summary`）
+
+| 字段 | 含义 |
+|---|---|
+| `_bk` | 庄家名（优先 Bet365）|
+| `real_h/d/a` | 1X2 赔率（last_seen）|
+| `real_over25/under25` | 大小球 2.5 |
+| `real_ah_line` | 亚盘主线（取第一条）|
+| `real_ah_home/away` | 亚盘两侧赔率 |
+
+### 实测（印度 vs 乌拉圭）
