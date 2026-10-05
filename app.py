@@ -12,7 +12,7 @@ if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
 st.title("⚽ 足球预测 v5.9（全中文 + 亚洲盘 + 市场强度筛选）")
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🌐 全部赛事", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测", "⭐ 高置信清单"])
+tab1, tab2, tab4, tab5, tab6, tab7 = st.tabs(["📅 今日预测", "🎯 3串1核心", "🔍 搜索队名", "📊 赛后复盘", "📈 历史回测", "⭐ 高置信清单"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
 if not API_FOOTBALL_KEY: st.warning("⚠️ 未检测到 API_FOOTBALL_KEY")
@@ -602,39 +602,6 @@ with tab2:
                     st.download_button("📥 下载本次推荐 Excel", data=excel_data,
                         file_name=f"推荐_{datetime.now(CST).strftime('%Y%m%d_%H%M')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_all_excel", type="primary")
-
-# ========== Tab 3 ==========
-with tab3:
-    st.caption("合并 Bzzoiro 预测 + ESPN 赛事")
-    espn_date = st.date_input("选择日期", value=date.today(), key="espn_date")
-    espn_date_str = espn_date.strftime("%Y-%m-%d")
-    bsd_today = df_all[df_all["event_date"] == espn_date_str] if not df_all.empty else pd.DataFrame()
-    with st.spinner(f"正在获取 {espn_date_str} 的 ESPN 赛事..."):
-        espn_events = fetch_espn_all(espn_date_str)
-    espn_rows = [parse_espn_event(e) for e in espn_events if parse_espn_event(e)]
-    bsd_keys = set(); merged = []
-    if not bsd_today.empty:
-        for _, r in bsd_today.iterrows():
-            bsd_keys.add((r["_home_key"], r["_away_key"]))
-            merged.append({"时间": r["时间"], "联赛": r["联赛"], "状态": r["状态"], "主队": r["主队"], "客队": r["客队"],
-                           "实际比分": "—", "主力比分": r["主力比分"], "备选比分": r["备选比分"],
-                           "预测结果": r["预测结果"], "上半场": r["上半场"], "下半场": r["下半场"],
-                           "主胜": r["主胜"], "和局": r["和局"], "客胜": r["客胜"], "大小球": r["大小球"], "来源": "Bzzoiro"})
-    for row in espn_rows:
-        key1 = (row["_home_key"], row["_away_key"]); key2 = (row["_away_key"], row["_home_key"])
-        if key1 in bsd_keys or key2 in bsd_keys: continue
-        merged.append({"时间": row["时间"], "联赛": row["联赛"], "状态": row["状态"], "主队": row["主队"], "客队": row["客队"],
-                       "实际比分": row["实际比分"], "主力比分": "—", "备选比分": "—", "预测结果": "暂无预测",
-                       "上半场": "—", "下半场": "—", "主胜": "—", "和局": "—", "客胜": "—", "大小球": "—", "来源": "ESPN"})
-    st.success(f"**{espn_date_str}** 共 {len(merged)} 场")
-    if merged:
-        merged_df = pd.DataFrame(merged).sort_values("时间")
-        all_leagues2 = sorted(merged_df["联赛"].unique())
-        sel_leagues2 = st.multiselect("筛选联赛", all_leagues2, default=[], key="lg2")
-        if sel_leagues2: merged_df = merged_df[merged_df["联赛"].isin(sel_leagues2)]
-        cols = ["时间", "联赛", "状态", "主队", "客队", "实际比分", "主力比分", "备选比分", "预测结果",
-                "上半场", "下半场", "主胜", "和局", "客胜", "大小球", "来源"]
-        st.dataframe(merged_df[cols], use_container_width=True, hide_index=True)
 
 # ========== Tab 4 ==========
 with tab4:
