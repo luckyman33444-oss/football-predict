@@ -485,13 +485,18 @@ def _match_words(s):
 def build_mapping_for_dates(date_from, date_to, save=True):
     """匹配 Bz↔TSA 场次，返回 rows。save=True 时写入 mapping.csv。"""
     from datetime import datetime as _dt, timedelta as _td
-    preds, _err = fetch_or_load_bz_preds(date_from, date_to)
+    _d0 = (_dt.strptime(date_from,"%Y-%m-%d") - _td(days=1)).strftime("%Y-%m-%d")
+    _d1 = (_dt.strptime(date_to,"%Y-%m-%d") + _td(days=1)).strftime("%Y-%m-%d")
+    preds, _err = fetch_or_load_bz_preds(_d0, _d1)
     bz_list = []
     for p in preds:
         ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
+        cst_d = to_cst_date(ev.get("event_date",""))
+        if cst_d < date_from or cst_d > date_to:
+            continue
         bz_list.append({
             "bz_event_id": ev.get("id"),
-            "date": to_cst_date(ev.get("event_date","")),
+            "date": cst_d,
             "home": ev.get("home_team",""),
             "away": ev.get("away_team",""),
             "league": ev.get("league_name",""),
