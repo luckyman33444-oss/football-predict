@@ -276,7 +276,7 @@ with tab2:
                 else:
                     st.success(note)
                     with st.spinner("正在获取赔率、盘口走势、首发阵容和伤停..."):
-                        odds_map = {}; lineup_map = {}; movement_map = {}; h2h_map = {}; handicap_map = {}; standings_cache = {}
+                        odds_map = {}; lineup_map = {}; movement_map = {}; h2h_map = {}; handicap_map = {}; standings_cache = {}; tsa_odds_map = {}
                         for _, row in selected.iterrows():
                             eid = row.get("event_id")
                             od = fetch_event_odds_full(eid) if eid else None
@@ -286,6 +286,14 @@ with tab2:
                             lineup_map[eid] = get_lineup_info(eid) if eid else None
                             h2h_map[eid] = fetch_h2h_info(eid) if eid else None
                             handicap_map[eid] = extract_handicap_lines(simple) if simple else {}
+                            try:
+                                _tsa_map = load_tsa_mapping()
+                                _tsa_mid = _tsa_map.get(int(eid)) if eid else None
+                                if _tsa_mid:
+                                    _raw = fetch_or_load_tsa_odds(_tsa_mid)
+                                    tsa_odds_map[eid] = parse_tsa_odds_summary(_raw)
+                            except Exception:
+                                tsa_odds_map[eid] = {}
                     matches_data = []
                     for _, row in selected.iterrows():
                         eid = row["event_id"]
