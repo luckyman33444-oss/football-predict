@@ -346,6 +346,32 @@ def adjust_with_h2h(xg_h, xg_a, h2h_info):
     elif away_rate > 0.60: away_weight = H2H_WEIGHT_HIGH; notes.append(f"客队历史胜率高({away_rate*100:.0f}%)→进攻×{away_weight:.2f}")
     return xg_h * home_weight, xg_a * away_weight, home_weight, away_weight, " ｜ ".join(notes) if notes else ""
 
+def load_tsa_matches(date_str):
+    """从本地读 TheStatsAPI 该日比赛列表。"""
+    f = _DATA_DIR / "tsa_matches" / f"{date_str}.json"
+    if f.exists():
+        try:
+            return _json.loads(f.read_text(encoding='utf-8'))
+        except Exception:
+            return None
+    return None
+
+def save_tsa_matches(date_str, data):
+    """存 TheStatsAPI 该日比赛列表到本地。"""
+    f = _DATA_DIR / "tsa_matches" / f"{date_str}.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(_json.dumps(data, ensure_ascii=False), encoding='utf-8')
+
+def fetch_or_load_tsa_matches(date_str):
+    """有盘读盘，没盘拉 API 并存。"""
+    d = load_tsa_matches(date_str)
+    if d is not None:
+        return d
+    d = fetch_tsa_matches_by_date(date_str)
+    if d:
+        save_tsa_matches(date_str, d)
+    return d
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_tsa_matches_by_date(date_str):
     """TheStatsAPI 按日期拉比赛（批量，自动翻页）。date_str 格式 YYYY-MM-DD。失败返回 []。"""
