@@ -509,11 +509,26 @@ with tab2:
                         opts = []
                         hw_real = o.get("home_win"); dr_real = o.get("draw"); aw_real = o.get("away_win")
                         over_real = o.get("over_25_goals"); under_real = o.get("under_25_goals")
+                        # V5.12: 备选串大小球切 TSA 真实赔率（有则用，无则 fallback 模型）
+                        _tsa_ou_t2 = tsa_odds_map.get(eid) or {}
+                        _ro_t2 = _tsa_ou_t2.get("real_over25"); _ru_t2 = _tsa_ou_t2.get("real_under25")
+                        _p_over = row["_prob_over_pct"] / 100 if row["_prob_over_pct"] else 0
+                        _p_under = row["_prob_under_pct"] / 100 if row["_prob_under_pct"] else 0
+                        _o_over = over_real; _o_under = under_real
+                        if _ro_t2 and _ru_t2:
+                            try:
+                                _ro_f = float(_ro_t2); _ru_f = float(_ru_t2)
+                                _inv = 1/_ro_f + 1/_ru_f
+                                _p_over = (1/_ro_f) / _inv
+                                _p_under = (1/_ru_f) / _inv
+                                _o_over = _ro_f; _o_under = _ru_f
+                            except (TypeError, ValueError, ZeroDivisionError):
+                                pass
                         if row["_prob_home"]: opts.append(("主胜", row["_prob_home"] / 100, hw_real or implied_odds(row["_prob_home"]), hw_real is not None, mv.get("home_signal", "")))
                         if row["_prob_draw"]: opts.append(("和局", row["_prob_draw"] / 100, dr_real or implied_odds(row["_prob_draw"]), dr_real is not None, mv.get("draw_signal", "")))
                         if row["_prob_away"]: opts.append(("客胜", row["_prob_away"] / 100, aw_real or implied_odds(row["_prob_away"]), aw_real is not None, mv.get("away_signal", "")))
-                        if row["_prob_over_pct"]: opts.append(("大球(2.5+)", row["_prob_over_pct"] / 100, over_real or implied_odds(row["_prob_over_pct"]), over_real is not None, mv.get("over_signal", "")))
-                        if row["_prob_under_pct"]: opts.append(("小球(2.5-)", row["_prob_under_pct"] / 100, under_real or implied_odds(row["_prob_under_pct"]), under_real is not None, mv.get("over_signal", "")))
+                        if _p_over: opts.append(("大球(2.5+)", _p_over, _o_over or implied_odds(_p_over * 100), _o_over is not None, mv.get("over_signal", "")))
+                        if _p_under: opts.append(("小球(2.5-)", _p_under, _o_under or implied_odds(_p_under * 100), _o_under is not None, mv.get("over_signal", "")))
                         opts.sort(key=lambda x: -x[1])
                         scores = row["_scores_list"] if row["_scores_list"] else []
                         main_s = scores[0] if len(scores) > 0 else ("—", 0)
