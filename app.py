@@ -330,29 +330,51 @@ with tab2:
                         h2h_xg_h, h2h_xg_a, h2h_hw, h2h_aw, h2h_reason = adjust_with_h2h(adj_xg_h, adj_xg_a, h2h)
                         final_xg_h = h2h_xg_h; final_xg_a = h2h_xg_a
                         motivation_reason = ""
-                        if enable_motivation and API_FOOTBALL_KEY:
+                        _home_rank_out = None; _away_rank_out = None
+                        if enable_motivation:
                             league_name_en = row.get("联赛", "")
-                            league_id = None
-                            for espn_code, api_id in FOOTBALL_API_LEAGUE_IDS.items():
-                                if ESPN_LEAGUES.get(espn_code) == league_name_en: league_id = api_id; break
-                            if league_id:
-                                season = datetime.now(CST).year
-                                cache_key = f"{league_id}_{season}"
-                                if cache_key not in standings_cache: standings_cache[cache_key] = fetch_standings(league_id, season)
-                                standings = standings_cache.get(cache_key)
-                                if standings:
-                                    home_info = find_team_in_standings(standings, row["主队"], "")
-                                    away_info = find_team_in_standings(standings, row["客队"], "")
-                                    if home_info or away_info:
-                                        total_teams = len(standings)
-                                        home_rank = home_info.get("rank") if home_info else None
-                                        away_rank = away_info.get("rank") if away_info else None
-                                        home_tier = judge_motivation_tier(home_rank, total_teams, 0, 0)
-                                        away_tier = judge_motivation_tier(away_rank, total_teams, 0, 0)
-                                        final_xg_h, final_xg_a, m_hw, m_aw = apply_motivation_adjustment(final_xg_h, final_xg_a, home_tier, away_tier)
-                                        tier_cn = {"title_race": "争冠", "european": "欧战", "mid_table": "中游", "relegation": "保级"}
-                                        motivation_reason = (f"主队{tier_cn.get(home_tier, home_tier)}(第{home_rank}名)×{m_hw:.2f} ｜ "
-                                                             f"客队{tier_cn.get(away_tier, away_tier)}(第{away_rank}名)×{m_aw:.2f}")
+                            total_teams = 0; home_rank = None; away_rank = None
+                            # 1. 先试 API-Football
+                            _api_id = None
+                            for _ec, _aid in FOOTBALL_API_LEAGUE_IDS.items():
+                                if ESPN_LEAGUES.get(_ec) == league_name_en:
+                                    _api_id = _aid; break
+                            if _api_id:
+                                _season = datetime.now(CST).year
+                                _ck = f"api_{_api_id}_{_season}"
+                                if _ck not in standings_cache:
+                                    standings_cache[_ck] = fetch_standings(_api_id, _season)
+                                _std = standings_cache.get(_ck)
+                                if _std:
+                                    _hi = find_team_in_standings(_std, row["主队"], "")
+                                    _ai = find_team_in_standings(_std, row["客队"], "")
+                                    total_teams = len(_std)
+                                    home_rank = _hi.get("rank") if _hi else None
+                                    away_rank = _ai.get("rank") if _ai else None
+                            # 2. API-Football 没排名 → 试 ESPN
+                            if not home_rank and not away_rank:
+                                for _ec, _cn in ESPN_LEAGUES.items():
+                                    if _cn == league_name_en:
+                                        _ck = f"espn_{_ec}"
+                                        if _ck not in standings_cache:
+                                            standings_cache[_ck] = fetch_espn_standings(_ec)
+                                        _std = standings_cache.get(_ck)
+                                        if _std:
+                                            total_teams = len(_std)
+                                            _hi = get_espn_standings_for_team(_ec, row["主队"])
+                                            _ai = get_espn_standings_for_team(_ec, row["客队"])
+                                            home_rank = _hi.get("rank") if _hi else None
+                                            away_rank = _ai.get("rank") if _ai else None
+                                        break
+                            _home_rank_out = home_rank; _away_rank_out = away_rank
+                            # 3. 有排名 → 调 xG
+                            if home_rank or away_rank:
+                                home_tier = judge_motivation_tier(home_rank, total_teams, 0, 0)
+                                away_tier = judge_motivation_tier(away_rank, total_teams, 0, 0)
+                                final_xg_h, final_xg_a, m_hw, m_aw = apply_motivation_adjustment(final_xg_h, final_xg_a, home_tier, away_tier)
+                                tier_cn = {"title_race": "争冠", "european": "欧战", "mid_table": "中游", "relegation": "保级"}
+                                motivation_reason = (f"主队{tier_cn.get(home_tier, home_tier)}(第{home_rank}名)×{m_hw:.2f} ｜ "
+                                                     f"客队{tier_cn.get(away_tier, away_tier)}(第{away_rank}名)×{m_aw:.2f}")
                         trust = get_league_trust_level(row.get("联赛", ""))
                         if enable_dc:
                             if tier == "friendly": rho = DIXON_COLES_RHO.get("friendly", -0.13)
@@ -435,6 +457,7 @@ with tab2:
                             "_xg_h": xg_h, "_xg_a": xg_a,
                             "市场判断": ("主胜" if (row["_prob_home"] or 0) >= (row["_prob_away"] or 0) else "客胜"),
                             "市场差": abs((row["_prob_home"] or 0) - (row["_prob_away"] or 0)),
+                            "主队排名": _home_rank_out, "客队排名": _away_rank_out,
                         })
                     grade_counts = {}
                     for md in matches_data:
@@ -678,6 +701,7 @@ with tab2:
                                          "比分1": md["main_score"][0], "比分2": md["alt_score"][0],
                                          "盘口走势": best_opt[4] if best_opt[4] else "—",
                                          "方向一致": md["direction_agreement"], "角色": "主胆" if best_idx == (i-1) else "拖",
+"主队排名": md.get("主队排名"), "客队排名": md.get("客队排名"),
 "真实亚盘": _tsa_ah_str,
 "真实大小球": (f"大2.5 {_tsa.get('real_over25','')}" if _tsa.get("real_over25") else "—"),
 "真实1X2": (f"{_tsa.get('real_h','')}/{_tsa.get('real_d','')}/{_tsa.get('real_a','')}" if _tsa.get("real_h") else "—")})
@@ -766,7 +790,7 @@ with tab5:
                     st.markdown(f"### 🎯 推荐比赛 **{len(rec_df)} 场**")
                     if len(rec_df) > 0:
                         show_cols = [c for c in ["场次", "比赛", "联赛", "等级", "时间", "模型判断", "模型概率",
-              "市场方向", "大小球方向", "真实亚盘", "真实大小球", "真实1X2",
+              "市场方向", "大小球方向", "真实亚盘", "真实大小球", "真实1X2", "主队排名", "客队排名",
               "调整后方向", "调整后概率", "亚盘", "调整后比分1", "调整后比分2", "赔率",
               "比分1", "比分2", "角色", "方向一致", "下注建议"] if c in rec_df.columns]
                         st.dataframe(rec_df[show_cols], use_container_width=True, hide_index=True)
