@@ -535,7 +535,16 @@ def parse_tsa_odds_summary(odds_data, prefer="Bet365"):
     ah_home = m.get("asian_handicap", {}).get("home", {})
     ah_away = m.get("asian_handicap", {}).get("away", {})
     if ah_home:
-        line = list(ah_home.keys())[0]
+        # V5.12: 选主线（两侧赔率最接近1.90），不取第一条
+        _best_ln = None; _best_sc = 999
+        for _l, _i in ah_home.items():
+            _o = ("-" + _l[1:]) if _l.startswith("+") else (("+" + _l[1:]) if _l.startswith("-") else _l)
+            if _o not in ah_away: continue
+            _hv = _f(_i.get("last_seen")); _av = _f(ah_away[_o].get("last_seen"))
+            if _hv is None or _av is None: continue
+            _sc = abs(_hv - 1.90) + abs(_av - 1.90)
+            if _sc < _best_sc: _best_sc = _sc; _best_ln = _l
+        line = _best_ln if _best_ln else list(ah_home.keys())[0]
         out["real_ah_line"] = line
         out["real_ah_home"] = _f(ah_home[line].get("last_seen"))
         # 客队 key 符号相反：+3.5 → -3.5

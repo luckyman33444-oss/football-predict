@@ -170,7 +170,11 @@ def render_all_matches(df_all):
                     _fl = float(_ln); _fh = float(_h); _fa = float(_a)
                 except Exception:
                     _tab1_tsa_cache[_eid] = None; return None
-                _side = "主赢" if _fh < _fa else "客赢"
+                # V5.12: 平赔不判边（|Δ|<0.02 → 均势）
+                _diff = _fh - _fa
+                if abs(_diff) < 0.02: _side = "均势"
+                elif _diff < 0: _side = "主赢"
+                else: _side = "客赢"
                 if _fl < 0: _r = f"主让{abs(_fl):g}·{_side}"
                 elif _fl > 0: _r = f"客让{_fl:g}·{_side}"
                 else: _r = f"平手·{_side}"
