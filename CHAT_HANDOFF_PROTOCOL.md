@@ -973,3 +973,46 @@ get_espn_standings_for_team(code, team_name_cn)
 - ⏳ 查「大小球≥65」掉 1.5pp（样本变化 or 队名翻译影响）
 - ⏳ 战意修正改动**没进回测** → 要「回测实时化」才能验证
 - ⏳ ESPN 队名匹配优化（补 20%）
+
+---
+
+## 三十九、ESPN 队名匹配验证（2026-10-16）
+
+### 结论：丙（队名匹配优化）**已完成**
+
+**端到端测试**（8 队抽查）全通过：
+
+| 联赛 | 队名 | 排名 |
+|---|---|---|
+| arg.1 | 博卡青年 | 3 |
+| arg.1 | 塔列雷斯 | 15 |
+| arg.1 | 拉努斯 | 5 |
+| esp.1 | 莱万特 | 17 |
+| jpn.1 | 京都不死鸟 | 16 |
+| eng.1 | 曼城 | 1 |
+| eng.1 | 利物浦 | 9 |
+| col.1 | 麦德林独立 | 5 |
+
+### 关键发现：`_norm_team` 已能处理所有差异
+
+| ESPN 返回 | TEAM_CN 键 | 归一化后 |
+|---|---|---|
+| `CA Lanús` | `Lanús` | `lanus` |
+| `Levante UD` | `Levante` | `levante` |
+| `Kyoto Sanga FC` | `Kyoto Sanga` | `kyotosanga` |
+| `Talleres (Córdoba)` | `CA Talleres` | `talleres` |
+
+**归一化函数去掉**：
+- 重音（`á→a`）
+- 括号内容（`(Córdoba)`）
+- 前后缀（`CA` / `FC` / `UD` / `SC` 等）
+
+### 诊断陷阱（勿重复踩）
+
+**用「直接字典查」诊断会误报 miss**：
+```python
+# ❌ 错误：直接查字典，跳过归一化
+if en_name not in TEAM_CN: miss.append(...)
+
+# ✅ 正确：模拟实际运行（走归一化）
+if engine._norm_team(en_name) not in norm_idx: miss.append(...)
