@@ -234,6 +234,65 @@ def fetch_standings(league_id, season):
     except:
         return None
 
+def _norm_team(s):
+    """归一化队名：去重音、括号、前后缀，小写去空格。"""
+    import unicodedata as _ud
+    s = _ud.normalize('NFKD', str(s)).encode('ascii','ignore').decode()
+    s = re.sub(r'\s*\(.*?\)', '', s)  # 去括号
+    for p in ['AFC','FC','CF','CD','SC','AC','SV','AS','UD','RC','CS','CA']:
+        s = re.sub(rf'\b{p}\b', '', s, flags=re.IGNORECASE)
+    return re.sub(r'[^a-z0-9]', '', s.lower())
+
+def get_espn_standings_for_team(league_code, team_name_cn):
+    """按中文队名查 ESPN 积分榜。返回 {rank, points, group} 或 None。"""
+    from data import TEAM_CN
+    d = fetch_espn_standings(league_code)
+    if not d:
+        return None
+    target_cn = str(team_name_cn).strip()
+    # 1. 中文 → 英文（反向查）
+    en_candidates = []
+    for en, cn in TEAM_CN.items():
+        if str(cn).strip() == target_cn:
+            en_candidates.append(en)
+    if not en_candidates:
+        return None
+    # 2. 用归一化匹配
+    target_norms = {_norm_team(x) for x in en_candidates}
+    for espn_name, info in d.items():
+        if _norm_team(espn_name) in target_norms:
+            return info
+    return None
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def fetch_espn_standings(league_code):
+    """ESPN 积分榜。返回 {team_displayName: {rank, points, group}}。失败返回 {}。"""
+    try:
+        r = requests.get(f"https://site.api.espn.com/apis/v2/sports/soccer/{league_code}/standings", timeout=15)
+        if r.status_code != 200:
+            return {}
+        d = r.json()
+    except Exception:
+        return {}
+    result = {}
+    for grp in d.get("children", []):
+        grp_name = grp.get("name", "")
+        entries = grp.get("standings", {}).get("entries", [])
+        for e in entries:
+            name = e.get("team", {}).get("displayName", "")
+            if not name:
+                continue
+            rank = None; points = None
+            for st in e.get("stats", []):
+                if st.get("name") == "rank":
+                    try: rank = int(st.get("value"))
+                    except Exception: pass
+                elif st.get("name") == "points":
+                    try: points = int(st.get("value"))
+                    except Exception: pass
+            result[name] = {"rank": rank, "points": points, "group": grp_name}
+    return result
+
 def judge_motivation_tier(rank, total_teams, points, max_points):
     if rank is None or total_teams == 0: return "mid_table"
     if rank <= 4: return "title_race" if rank <= 2 else "european"
