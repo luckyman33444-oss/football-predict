@@ -455,7 +455,16 @@ with tab2:
                             rho = 0
                         adj_pred = predict_full_dc(final_xg_h, final_xg_a, rho=rho)
                         # 2026-10-17 修复：xG 缺失时模型无信息 → 用市场概率覆盖（避免稀释市场信号）
-                        if adj_pred and (pd.isna(row.get("_xg_h")) or pd.isna(row.get("_xg_a"))):
+                        _xg_ok = (not pd.isna(row.get("_xg_h"))) and (not pd.isna(row.get("_xg_a")))
+                        _xg_mkt_conflict = False
+                        if _xg_ok:
+                            try:
+                                _xs = "主" if float(row.get("_xg_h")) >= float(row.get("_xg_a")) else "客"
+                                _ms = "主" if (row.get("_prob_home") or 0) >= (row.get("_prob_away") or 0) else "客"
+                                _xg_mkt_conflict = (_xs != _ms)
+                            except Exception:
+                                pass
+                        if adj_pred and (_xg_mkt_conflict or pd.isna(row.get("_xg_h")) or pd.isna(row.get("_xg_a"))):
                             _mh = (row.get("_prob_home") or 0) / 100
                             _md = (row.get("_prob_draw") or 0) / 100
                             _ma = (row.get("_prob_away") or 0) / 100
