@@ -9,48 +9,60 @@ st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 
 st.markdown("""
 <style>
-/* 赛博主题 2026-10-17 */
+/* 赛博主题 2026-10-17（纯紫版） */
 h1 {
-    background: linear-gradient(90deg, #00ffff, #bf00ff);
+    background: linear-gradient(90deg, #bf00ff, #ff40aa);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    text-shadow: 0 0 30px rgba(0,255,255,0.5);
+    text-shadow: 0 0 30px rgba(191,0,255,0.6);
     font-weight: 700;
     letter-spacing: 2px;
 }
 h2, h3 {
-    color: #00ffff;
-    text-shadow: 0 0 10px rgba(0,255,255,0.4);
-    border-left: 3px solid #00ffff;
+    color: #bf00ff;
+    text-shadow: 0 0 10px rgba(191,0,255,0.5);
+    border-left: 3px solid #bf00ff;
     padding-left: 10px;
 }
 .stButton > button {
-    background: linear-gradient(135deg, #00ffff22, #bf00ff22);
-    border: 1px solid #00ffff;
-    color: #00ffff;
-    box-shadow: 0 0 15px rgba(0,255,255,0.3);
+    background: linear-gradient(135deg, #bf00ff, #8a00cc);
+    border: 1px solid #bf00ff;
+    color: #ffffff;
+    font-weight: 600;
+    box-shadow: 0 0 15px rgba(191,0,255,0.5);
     transition: all 0.2s;
 }
 .stButton > button:hover {
-    background: linear-gradient(135deg, #00ffff44, #bf00ff44);
-    box-shadow: 0 0 25px rgba(0,255,255,0.6);
+    background: linear-gradient(135deg, #d040ff, #a020ee);
+    box-shadow: 0 0 25px rgba(191,0,255,0.9);
+    color: #ffffff;
 }
 div[data-testid="stDataFrame"] {
-    border: 1px solid #00ffff33;
-    box-shadow: 0 0 20px rgba(0,255,255,0.15);
+    border: 1px solid #bf00ff55;
+    box-shadow: 0 0 20px rgba(191,0,255,0.2);
     border-radius: 8px;
+}
+div[data-testid="stDataFrame"] thead tr th {
+    background: #1a0a2a !important;
+    border-bottom: 2px solid #bf00ff !important;
+    color: #d8a0ff !important;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+div[data-testid="stDataFrame"] tbody tr {
+    border-bottom: 1px solid rgba(191,0,255,0.15);
 }
 div[data-testid="stMetric"] {
     background: linear-gradient(135deg, #141420, #0a0a12);
-    border: 1px solid #00ffff33;
+    border: 1px solid #bf00ff55;
     border-radius: 8px;
-    box-shadow: 0 0 10px rgba(0,255,255,0.1);
+    box-shadow: 0 0 10px rgba(191,0,255,0.15);
 }
 section[data-testid="stSidebar"] {
     background: #0a0a12;
-    border-right: 1px solid #00ffff33;
+    border-right: 1px solid #bf00ff55;
 }
-.stRadio > div { color: #00ffff; }
+.stRadio > div { color: #bf00ff; }
 </style>
 """, unsafe_allow_html=True)
 def render_all_matches(df_all):
