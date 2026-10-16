@@ -762,7 +762,22 @@ with tab2:
                         mc = md.get("model_compare", {})
                         if not mc: continue
                         _mkt_h = mc.get("_mkt_h", 0); _mkt_a = mc.get("_mkt_a", 0)
+                        # V5.12: 市场方向改真实让球后胜负（TSA优先），无 TSA fallback 1X2
+                        _tsa_ah_t2 = tsa_odds_map.get(md.get("event_id")) or {}
+                        _ah_l = _tsa_ah_t2.get("real_ah_line")
+                        _ah_h = _tsa_ah_t2.get("real_ah_home")
+                        _ah_a = _tsa_ah_t2.get("real_ah_away")
                         _mkt_side = "主" if _mkt_h >= _mkt_a else "客"
+                        if _ah_l and _ah_h is not None and _ah_a is not None:
+                            try:
+                                _fl = float(_ah_l); _fh = float(_ah_h); _fa = float(_ah_a)
+                                _d = _fh - _fa
+                                _s = "均势" if abs(_d) < 0.02 else ("主赢" if _d < 0 else "客赢")
+                                if _fl < 0: _mkt_side = f"主让{abs(_fl):g}·{_s}"
+                                elif _fl > 0: _mkt_side = f"客让{_fl:g}·{_s}"
+                                else: _mkt_side = f"平手·{_s}"
+                            except (TypeError, ValueError):
+                                pass
                         _gap = abs(_mkt_h - _mkt_a)
                         _conf = "🔒 高" if _gap > 35 else ("✅ 中" if _gap >= 20 else "⚠️ 低")
                         ah_rows.append({
