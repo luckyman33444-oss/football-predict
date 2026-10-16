@@ -250,22 +250,13 @@ with tab2:
                 end_window_auto = now.replace(hour=23, minute=59, second=59, microsecond=0)
                 other_df = other_df_all[other_df_all["kickoff_dt"] <= end_window_auto].copy()
                 def calc_conf(row):
+                    # 2026-10-16 简化：回测证明 _conf 排序 ≈ 市场差排序（差异<1pp）
                     _ph = row.get("_prob_home") or 0
                     _pa = row.get("_prob_away") or 0
-                    _pd = row.get("_prob_draw") or 100
-                    _po = row.get("_prob_over_pct") or 0
-                    if abs(_ph - _pa) < 15:
-                        return -1
-                    x2 = max(_ph, _pa, _pd)
-                    ou = max(_po, 100 - _po)
-                    conf = x2 + ou
                     _gap = abs(_ph - _pa)
-                    if _gap >= 65: conf += 30
-                    elif _gap >= 55: conf += 20
-                    elif _gap >= 35: conf += 10
-                    if _pd < 22: conf += 5
-                    if ou >= 60: conf += 5
-                    return conf
+                    if _gap < 15:
+                        return -1
+                    return _gap
                 if not core_df.empty: core_df["_conf"] = core_df.apply(calc_conf, axis=1)
                 if not other_df.empty: other_df["_conf"] = other_df.apply(calc_conf, axis=1)
                 if not core_df.empty: core_df = core_df[core_df["_conf"] >= 0]
