@@ -1220,3 +1220,65 @@ def _final_dir(r):
 **现状**（app.py `parse_prediction` 或 Tab1）：
 ```python
 "市场判断": "主胜" if prob_home >= prob_away else "客胜"
+
+---
+
+## 四十五、V5.12 TSA 全面接入（2026-10-17）
+
+### 8 个 commit（按时间）
+
+| # | commit | 内容 |
+|---|---|---|
+| 1 | db0a593 | Tab2 大小球选边 + 方向切 TSA（无 TSA fallback 模型）|
+| 2 | c1cc782 | Tab1「市场判断」→ TSA 让球盘方向（只读缓存）+ 补 import os/json |
+| 3 | 71e1a4e | V5.12 页面级 TSA 缓存（建 mapping + 拉当天赔率，session_state 幂等）|
+| 4 | e7dbe37 | 亚盘取主线（|odds-1.90| 最小）+ 平赔不判边（|Δ|<0.02→均势）|
+| 5 | 9aff5a4 | Tab2 亚盘汇总「市场方向」改真实让球后胜负 |
+| 6 | 38204bd | Tab2 备选串大小球切 TSA（赔率反推概率，无 TSA fallback 模型）|
+| 7 | 9acb16e | 高置信清单补 3 列：下注建议 / 不平局 / 强信号 |
+| 8 | acbbd62 | 高置信清单「不平局」从 _pd 重算（<20 ⭐⭐⭐ / <22 ⭐⭐ / <25 ⭐）|
+
+### 关键改动（engine.py）
+
+- `parse_tsa_odds_summary`：亚盘改「取主线」—— 遍历 `asian_handicap.home` 所有 line，找 `away` 相反符号对应，取 `|odds-1.90|` 最小的那条（原来取 `keys()[0]`，随机顺序）
+
+### 关键改动（app.py）
+
+- **Tab1 `render_all_matches`**：V5.12 块插在 `if "市场判断" in df.columns:` 之前
+  - `load_tsa_mapping()` + 只读 `data/tsa_odds/{mid}.json`（**不调 API**）
+  - 无 TSA → fallback 1X2「主胜/客胜」
+  - 显示 `主让0.5·主赢` / `客让1·均势` / `平手·客赢`
+  - 判定 `|Δ|<0.02 → 均势`（Bet365 常两边赔率相等）
+- **Tab1 高置信清单 `render_high_confidence`**：
+  - `_want` 加 3 列：下注建议 / 不平局 / 强信号
+  - `_df` 上重算这 3 列（口径与主表一致）
+  - `不平局` = `_pd.apply(<20⭐⭐⭐ / <22⭐⭐ / <25⭐ / else —)`
+- **Tab2**：
+  - `md["大小球方向"]` = TSA 优先（`_ou_dir_601`，601 行附近）
+  - 亚盘汇总「市场方向」= TSA 让球盘（`主让0.5·主赢` 之类）
+  - 备选串大小球 = TSA 赔率反推概率（`(1/odds)/Σ(1/odds)`），无 TSA fallback 模型
+- **页面级 V5.12 块**（`with tab1:` 之前，缩进 0）：
+  - `build_mapping_for_dates(今天, 今天)` + 合并历史 mapping
+  - 对 `_map_tsa` 里无缓存的场次循环 `fetch_or_load_tsa_odds`
+  - `st.session_state["_tsa_cache_built_for"]` 幂等（每天一次）
+
+### 关键结论
+
+- **TSA 缓存存原始 JSON**（含全部庄家 / 全档盘口），`fetch_or_load_tsa_odds` 有盘读盘、无则拉 → 当天首次 ~192 场（30-60 秒），之后 0 配额
+- **配额**：单次全量 ~192，占月配额 **0.6%**（10 万/月）
+- **Cloud 文件系统不持久**：部署 / Reboot / 休眠唤醒 → `data/` 清空 → 重新拉（**正常现象**，别慌）
+- **Bet365 不一定开 2.5 大小球线** → `真实大小球` 显示 `—`（待改：跨庄家补 Betfair）
+
+### 遗留（下一对话可做）
+
+1. **备选串「赔率来源」显示 bug**：fallback 走模型时仍标「真实」，需区分
+2. **Cloud 缓存持久化**：选项甲（不动，接受 0.6% 配额）/ 丙（S3 / GitHub 持久化）
+3. **真实赔率做价值投注验证**（TSA 已订阅 $50/月）
+4. **TSA 大小球跨庄家补**（Bet365 无 2.5 时找 Betfair / Paddy Power）
+
+### 工作方式提醒（重要）
+
+- **本文件只追加不重写**，下轮从 `## 四十六、` 往后加
+- **Python 脚本不能直接粘终端** → 必走 `code xxx.py` → 粘贴 → Ctrl+S → `python xxx.py && rm xxx.py`
+- **`row = row.copy()` 会断引用**：改 df 行数据时，用局部变量更安全
+- **缩进验证**：改完跑 `python -c "...print(i, len(l)-len(l.lstrip()))"`，别信 `sed` / `cat -A` 的渲染（会骗人）
