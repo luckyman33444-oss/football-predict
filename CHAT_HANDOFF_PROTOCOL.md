@@ -1089,3 +1089,16 @@ if engine._norm_team(en_name) not in norm_idx: miss.append(...)
 - 9 月：1894 条
 
 **拉不到全年** → 回测样本上限约 4700-5000 场。
+
+---
+
+## 四十一、丙：Tab2 反向跟市场 + 空值 bug（2026-10-16）
+
+### 丙已完成：反向时跟市场
+
+**代码**（app.py 431 行附近）：
+```python
+direction_agreement = judge_direction_agreement(opts[0][0], adj_best[0])
+if "反向" in direction_agreement:
+    adj_best = (opts[0][0], opts[0][1])       # 跟市场
+    direction_agreement = "⚠️ 反向·跟市场"    # 新标记
