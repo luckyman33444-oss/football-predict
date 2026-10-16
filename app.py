@@ -909,60 +909,31 @@ with tab2:
                                 bet_rows.append({"注单": f"注{n}", "第1场": a, "第2场": b, "第3场": c}); n += 1
                     st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     st.divider()
-                    st.subheader("🛡️ 稳健串（只选方向一致的比赛）")
-                    eligible = [md for md in matches_data if "同向" in md.get("direction_agreement", "")]
-                    excluded = [md for md in matches_data if "同向" not in md.get("direction_agreement", "")]
-                    if excluded:
-                        st.caption(f"已排除 **{len(excluded)}** 场「换维度」比赛（模型自己都不确定）：")
-                        for ex in excluded: st.write(f"- {ex['比赛']}：{ex['direction_agreement']}")
-                    stable_rows = []; stable_rows_b = []
-                    if len(eligible) < 3: st.warning(f"⚠️ 只有 **{len(eligible)}** 场「方向一致」比赛，不足 3 场，**稳健串不建议下注**。")
+                    # V5.12: 盾 —— 3 场里最稳的 1 场
+                    st.subheader("🛡️ 盾：3 场里最稳的 1 场（单场稳胆）")
+                    _shield = []
+                    for _md in matches3:
+                        _opts = _md.get("opts") or []
+                        if not _opts: continue
+                        _top = max(_opts, key=lambda x: x[1])
+                        _grade = _md.get("等级", "B")
+                        _bonus = 0.10 if _grade == "S" else (0.05 if _grade == "A" else 0.0)
+                        _score = _top[1] + _bonus
+                        _shield.append((_score, _md, _top, _grade))
+                    if _shield:
+                        _shield.sort(key=lambda x: -x[0])
+                        _bs, _bmd, _btop, _bg = _shield[0]
+                        _name, _prob, _odds, _src, _ = _btop
+                        _src_txt = {"TSA": "真实TSA", "Bz": "真实Bz"}.get(_src, "隐含")
+                        if _prob >= 0.75: _adv = "🟢🟢 重仓"
+                        elif _prob >= 0.65: _adv = "🟢 可下"
+                        elif _prob >= 0.55: _adv = "🟡 小注"
+                        else: _adv = "🔴 不推"
+                        st.success(f"**{_bmd['比赛']}**  →  **{_name}**  ｜  {_adv}")
+                        st.caption(f"等级 **{_bg}**  ｜  概率 **{_prob*100:.1f}%**  ｜  赔率 **{fmt_odds(_odds)}** ({_src_txt})")
                     else:
-                        combo = []
-                        for md in eligible:
-                            mkt = md.get("市场判断", "—")
-                            pick_odds = None; is_real = "imp"; pick_prob = 0
-                            for opt in md["opts"]:
-                                if opt[0] == mkt:
-                                    pick_odds = opt[2]; is_real = opt[3]; pick_prob = opt[1]; break
-                            if pick_odds is None:
-                                pick_prob = md["adj_best"][1]
-                                pick_odds = implied_odds(pick_prob * 100)
-                            combo.append((md, (mkt, pick_prob, pick_odds, is_real, "")))
-                        prob = 1; total_odds = 1
-                        for _, opt in combo:
-                            prob *= opt[1]
-                            if opt[2]: total_odds *= opt[2]
-                        st.write(f"**命中概率：{prob*100:.1f}%** ｜ **总赔率：{total_odds:.2f}**")
-                        for i, (md, opt) in enumerate(combo, 1):
-                            pick_name, pick_prob, pick_odds, is_real, movement = opt
-                            stable_rows.append({"场次": i, "等级": md.get("等级", "B"), "比赛": md["比赛"], "推荐": pick_name,
-                                                "概率": f"{pick_prob*100:.1f}%", "下注建议": get_bet_advice(pick_prob * 100),
-                                                "赔率": fmt_odds(pick_odds), "赔率来源": {"TSA":"真实TSA","Bz":"真实Bz"}.get(is_real, "隐含"),
-                                                "方向一致": md["direction_agreement"]})
-                        st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
-                    st.markdown("**备选串（调整后第二高概率）：**")
-                    combo_b = []
-                    for md in matches_data:
-                        # V5.12: S/A 场次优先大小球（TSA 回测 74.3%）
-                        _grade_b = md.get("等级", "B")
-                        _ou_opts_b = [o for o in md["opts"] if "大球" in o[0] or "小球" in o[0]]
-                        if _grade_b in ("S", "A") and _ou_opts_b:
-                            combo_b.append((md, max(_ou_opts_b, key=lambda x: x[1])))
-                        elif len(md["opts"]) >= 2: combo_b.append((md, md["opts"][1]))
-                        else: combo_b.append((md, md["opts"][0]))
-                    prob_b = 1; total_odds_b = 1
-                    for _, opt in combo_b:
-                        prob_b *= opt[1]
-                        if opt[2]: total_odds_b *= opt[2]
-                    st.write(f"**命中概率：{prob_b*100:.1f}%** ｜ **总赔率：{total_odds_b:.2f}**")
-                    for i, (md, opt) in enumerate(combo_b, 1):
-                        pick_name, pick_prob, pick_odds, is_real, movement = opt
-                        stable_rows_b.append({"场次": i, "等级": md.get("等级", "B"), "比赛": md["比赛"], "推荐": pick_name,
-                                              "概率": f"{pick_prob*100:.1f}%", "下注建议": get_bet_advice(pick_prob * 100),
-                                              "赔率": fmt_odds(pick_odds), "赔率来源": {"TSA":"真实TSA","Bz":"真实Bz"}.get(is_real, "隐含"),
-                                              "方向一致": md["direction_agreement"]})
-                    st.dataframe(pd.DataFrame(stable_rows_b), use_container_width=True, hide_index=True)
+                        st.info("无可用推荐。")
+                    st.divider()
                     today_str_save = datetime.now(CST).strftime("%Y-%m-%d")
                     now_time = now.strftime("%H:%M")
                     rec_rows = []
@@ -1007,7 +978,7 @@ with tab2:
                                           "赔率": "—", "大小球方向": "—", "比分1": "—", "比分2": "—", "盘口走势": "—", "角色": "—"})
                     for r in all_today_rows: meta_combined.append(r)
                     excel_data = build_excel(bet_rows,
-                        [{"类型": "稳健串", **r} for r in stable_rows] + [{"类型": "备选串", **r} for r in stable_rows_b],
+                        [],  # 稳健串+备选串已删
                         info_rows if info_rows else None, None, meta_rows=meta_combined)
                     st.divider()
                     st.subheader("⭐ 今日值得重注（差≥55 或 概率≥75%）")
