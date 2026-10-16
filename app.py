@@ -6,6 +6,53 @@ from data import CST
 from engine import *
 
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
+
+st.markdown("""
+<style>
+/* 赛博主题 2026-10-17 */
+h1 {
+    background: linear-gradient(90deg, #00ffff, #bf00ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 30px rgba(0,255,255,0.5);
+    font-weight: 700;
+    letter-spacing: 2px;
+}
+h2, h3 {
+    color: #00ffff;
+    text-shadow: 0 0 10px rgba(0,255,255,0.4);
+    border-left: 3px solid #00ffff;
+    padding-left: 10px;
+}
+.stButton > button {
+    background: linear-gradient(135deg, #00ffff22, #bf00ff22);
+    border: 1px solid #00ffff;
+    color: #00ffff;
+    box-shadow: 0 0 15px rgba(0,255,255,0.3);
+    transition: all 0.2s;
+}
+.stButton > button:hover {
+    background: linear-gradient(135deg, #00ffff44, #bf00ff44);
+    box-shadow: 0 0 25px rgba(0,255,255,0.6);
+}
+div[data-testid="stDataFrame"] {
+    border: 1px solid #00ffff33;
+    box-shadow: 0 0 20px rgba(0,255,255,0.15);
+    border-radius: 8px;
+}
+div[data-testid="stMetric"] {
+    background: linear-gradient(135deg, #141420, #0a0a12);
+    border: 1px solid #00ffff33;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0,255,255,0.1);
+}
+section[data-testid="stSidebar"] {
+    background: #0a0a12;
+    border-right: 1px solid #00ffff33;
+}
+.stRadio > div { color: #00ffff; }
+</style>
+""", unsafe_allow_html=True)
 def render_all_matches(df_all):
     if df_all.empty: st.warning("没有获取到预测数据。")
     else:
