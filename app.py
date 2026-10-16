@@ -359,6 +359,27 @@ if all_preds:
 else: df_all = pd.DataFrame()
 
 # ========== Tab 1 ==========
+# V5.12: 页面级 TSA 缓存（乙→丙，每天一次；Tab1/Tab2 共用）
+#   首次：建 mapping + 拉当天所有场次赔率并存盘；当日重开：0 配额
+_tsa_today_key = datetime.now(CST).strftime("%Y-%m-%d")
+if st.session_state.get("_tsa_cache_built_for") != _tsa_today_key:
+    try:
+        _rows_tsa = build_mapping_for_dates(_tsa_today_key, _tsa_today_key, save=True) or []
+        _map_tsa = {int(r["bz_event_id"]): r["tsa_match_id"] for r in _rows_tsa}
+        _hist_tsa = load_tsa_mapping() or {}
+        for _k, _v in _hist_tsa.items():
+            _map_tsa.setdefault(_k, _v)
+        _missing = [m for m in _map_tsa.values() if not (load_tsa_odds(m))]
+        if _missing:
+            with st.spinner(f"首次缓存 TSA 赔率（{len(_missing)} 场）..."):
+                for _mid in _missing:
+                    try:
+                        fetch_or_load_tsa_odds(_mid)
+                    except Exception:
+                        pass
+        st.session_state["_tsa_cache_built_for"] = _tsa_today_key
+    except Exception:
+        pass
 with tab1:
     mode = st.radio("显示模式", ["全部场次", "高置信清单"], horizontal=True, key="tab1_mode")
     if mode == "高置信清单":
