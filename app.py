@@ -1,6 +1,7 @@
 import pandas as pd, streamlit as st
 from datetime import date, datetime, timedelta
 import io
+import os, json
 
 from data import CST
 from engine import *
@@ -139,8 +140,46 @@ def render_all_matches(df_all):
                 "主胜", "和局", "客胜", "平局概率", "不平局", "强信号", "大小球", "市场大小球", "亚盘"
             ]].copy()
             display_df = display_df.rename(columns={"预测结果": "模型判断"})
+            # V5.11: Tab1「市场判断」→ TSA 让球盘方向（只读缓存，无则 fallback 1X2）
+            _tab1_tsa_map = {}
+            try:
+                _tab1_tsa_map = load_tsa_mapping()
+            except Exception:
+                _tab1_tsa_map = {}
+            _tab1_tsa_cache = {}
+            def _get_tsa_ah_dir(_eid):
+                if _eid in _tab1_tsa_cache: return _tab1_tsa_cache[_eid]
+                try:
+                    _mid = _tab1_tsa_map.get(int(_eid)) if _eid else None
+                except Exception:
+                    _mid = None
+                if not _mid:
+                    _tab1_tsa_cache[_eid] = None; return None
+                try:
+                    _fp = os.path.join("data", "tsa_odds", f"{_mid}.json")
+                    if not os.path.exists(_fp):
+                        _tab1_tsa_cache[_eid] = None; return None
+                    with open(_fp, encoding="utf-8") as _f: _raw = json.load(_f)
+                    _d = parse_tsa_odds_summary(_raw) if _raw else {}
+                except Exception:
+                    _tab1_tsa_cache[_eid] = None; return None
+                _ln = _d.get("real_ah_line"); _h = _d.get("real_ah_home"); _a = _d.get("real_ah_away")
+                if not (_ln and _h and _a):
+                    _tab1_tsa_cache[_eid] = None; return None
+                try:
+                    _fl = float(_ln); _fh = float(_h); _fa = float(_a)
+                except Exception:
+                    _tab1_tsa_cache[_eid] = None; return None
+                _side = "主赢" if _fh < _fa else "客赢"
+                if _fl < 0: _r = f"主让{abs(_fl):g}·{_side}"
+                elif _fl > 0: _r = f"客让{_fl:g}·{_side}"
+                else: _r = f"平手·{_side}"
+                _tab1_tsa_cache[_eid] = _r; return _r
+            _ah_series = df["event_id"].apply(_get_tsa_ah_dir).tolist()
+            _orig_mkt = df["市场判断"].tolist() if "市场判断" in df.columns else [None] * len(df)
+            _mkt_final = [(_a2 if _a2 else _o) for _a2, _o in zip(_ah_series, _orig_mkt)]
             if "市场判断" in df.columns:
-                display_df.insert(display_df.columns.get_loc("模型判断") + 1, "市场判断", df["市场判断"].values)
+                display_df.insert(display_df.columns.get_loc("模型判断") + 1, "市场判断", _mkt_final)
                 display_df.insert(display_df.columns.get_loc("市场判断") + 1, "最终方向", df["最终方向"].values)
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
             def _bet_advice_col(r):
