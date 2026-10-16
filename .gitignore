@@ -11,3 +11,5 @@ list_*.py
 code_*.py
 data/
 .streamlit/secrets.toml
+tsa_bt_*
+tsa_bt*
