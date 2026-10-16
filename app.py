@@ -63,12 +63,17 @@ def render_all_matches(df_all):
                 "主队排名", "客队排名",
                 "主力比分", "备选比分", "第三比分", "预测结果",
                 "模型主胜", "模型和局", "模型客胜",
-                "主胜", "和局", "客胜", "平局概率", "高置信", "强信号", "大小球", "市场大小球", "亚盘"
+                "主胜", "和局", "客胜", "平局概率", "不平局", "强信号", "大小球", "市场大小球", "亚盘"
             ]].copy()
             display_df = display_df.rename(columns={"预测结果": "模型判断"})
             if "市场判断" in df.columns:
                 display_df.insert(display_df.columns.get_loc("模型判断") + 1, "市场判断", df["市场判断"].values)
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
+            def _bet_advice_col(r):
+                _m = max(r.get("_prob_home") or 0, r.get("_prob_draw") or 0, r.get("_prob_away") or 0)
+                return get_bet_advice(_m)
+            _bet_col_vals = df.apply(_bet_advice_col, axis=1).values
+            display_df.insert(display_df.columns.get_loc("不平局") + 1, "下注建议", _bet_col_vals)
             edited = st.data_editor(display_df, use_container_width=True, hide_index=True,
                 column_config={"加入核心": st.column_config.CheckboxColumn("加入核心", help="勾选后点下方按钮保存到核心列表", default=False)},
                 key="editor_tab1")
