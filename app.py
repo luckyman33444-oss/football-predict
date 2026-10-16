@@ -1,9 +1,8 @@
-import math, requests, pandas as pd, streamlit as st
-from datetime import date, datetime, timezone, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import pandas as pd, streamlit as st
+from datetime import date, datetime, timedelta
 import io
 
-from data import CST, LEAGUE_GRADE, TEAM_CN, LEAGUE_CN
+from data import CST
 from engine import *
 
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
