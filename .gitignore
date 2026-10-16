@@ -10,3 +10,4 @@ diag_*.py
 list_*.py
 code_*.py
 data/
+.streamlit/secrets.toml

@@ -7,11 +7,8 @@ from datetime import timezone, timedelta
 CST = timezone(timedelta(hours=8))
 
 # ============ 密钥兜底 ============
-_FALLBACK_SECRETS = {
-    "BSD_TOKEN": "5d8f48995ad96cead191f0611fdc042ece77b77c",
-    "API_FOOTBALL_KEY": "d00cc95c3d639618d9313dc86f883685",
-    "THESTATSAPI_KEY": "fapi_s7AHHIxd23wFlsW1bK7vgSTQxGul3daN",
-}
+# 2026-10-17 安全：删除明文 key（改从 st.secrets / 环境变量读）
+_FALLBACK_SECRETS = {}
 
 # ============ 权重常量 ============
 INJURY_WEIGHT_PER_PLAYER = 0.05

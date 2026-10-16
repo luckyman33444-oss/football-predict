@@ -20,11 +20,17 @@ from data import (
 )
 
 def _get_secret(name, default=""):
+    # 1. Streamlit secrets（Cloud 部署）
     try:
         if name in st.secrets and st.secrets[name]:
             return str(st.secrets[name])
     except Exception:
         pass
+    # 2. 环境变量（本地开发，~/.bashrc）
+    import os as _os
+    if _os.environ.get(name):
+        return _os.environ[name]
+    # 3. 默认值（已废弃明文，仅保留兼容）
     return _FALLBACK_SECRETS.get(name, default)
 
 API_FOOTBALL_KEY = _get_secret("API_FOOTBALL_KEY")
