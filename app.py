@@ -248,6 +248,17 @@ def render_high_confidence(df_all):
             _df["_mk"] = _df["市场判断"].astype(str).str.strip()
             _df["_gap"] = (_df["_ph"] - _df["_pa"]).abs()
             _df["_ou_str"] = _df["_po"].apply(lambda x: max(x, 100 - x))
+            # V5.12: 补 3 列（与 Tab1 主表口径一致）
+            _df["不平局"] = _df["高置信"].fillna("—") if "高置信" in _df.columns else "—"
+            def _tag_hc(r):
+                t = []
+                if r["_gap"] >= 55: t.append("主客超强")
+                elif r["_gap"] >= 35: t.append("主客强")
+                if r["_ou_str"] >= 60: t.append("大小强")
+                if pd.notna(r["_pd"]) and r["_pd"] < 22: t.append("和局低")
+                return "＋".join(t) if t else "—"
+            _df["强信号"] = _df.apply(_tag_hc, axis=1)
+            _df["下注建议"] = _df.apply(lambda r: get_bet_advice(max(r["_ph"], r["_pa"])), axis=1)
 
             _m_high22 = (_df["_pd"] < 22) & _df["_mk"].isin(["主胜", "客胜"])
             _m_high25 = (_df["_pd"] < 25) & _df["_mk"].isin(["主胜", "客胜"])
@@ -323,7 +334,7 @@ def render_high_confidence(df_all):
             if _high.empty:
                 st.info("当天没有符合条件的场次。")
             else:
-                _want = ["时间", "联赛", "联赛等级", "主队", "客队", "市场判断", "_pd", "_gap", "_ou_str",
+                _want = ["时间", "联赛", "联赛等级", "主队", "客队", "下注建议", "不平局", "强信号", "市场判断", "_pd", "_gap", "_ou_str",
                          "预测结果", "最终方向", "主力比分", "备选比分", "第三比分", "大小球", "真实大小球", "亚盘"]
                 _avail = [c for c in _want if c in _high.columns]
                 _show = _high[_avail].copy()
