@@ -32,6 +32,7 @@ def render_all_matches(df_all):
             # D2: 平局概率 + 高置信
             df["平局概率"] = df["市场和局_pct"].apply(lambda x: f"{x:.1f}%" if x is not None and x != "—" else "—")
             df["高置信"] = df["高置信"].fillna("—") if "高置信" in df.columns else "—"
+            df["不平局"] = df["高置信"]
             _ph = pd.to_numeric(df.get("_prob_home"), errors="coerce").fillna(0)
             _pa = pd.to_numeric(df.get("_prob_away"), errors="coerce").fillna(0)
             _po = pd.to_numeric(df.get("_prob_over_pct"), errors="coerce").fillna(0)
