@@ -907,3 +907,25 @@ full_meta = full_meta.rename(columns={"推荐方向": "模型判断", "推荐概
 
 - **等今晚比赛踢完 → 实测 Tab5 真实盘口命中**（用 `推荐_20261006_*.xlsx`）
 - 丙：ESPN 辅助信息接入 Tab1
+
+---
+
+## 三十七、积分榜接入 + 队名翻译（2026-10-16）
+
+### 背景
+
+**问题**：Tab2 战意修正只覆盖 22 个联赛（API-Football 的 `FOOTBALL_API_LEAGUE_IDS`），用户常用的阿甲/哥甲/USL 全缺失 → 战意修正失效。
+
+**方案**：ESPN 补位。
+
+### ESPN 积分榜（engine.py）
+
+```python
+fetch_espn_standings(league_code)
+    → {team_displayName: {rank, points, group}}
+    → 端点：https://site.api.espn.com/apis/v2/sports/soccer/{code}/standings
+    → 支持多组合并（阿甲 Group A/B、USL Eastern/Western）
+
+_norm_team(s)                     # 队名归一化（去重音/括号/前后缀）
+get_espn_standings_for_team(code, team_name_cn)
+    # 中文队名 → TEAM_CN 反查英文 → 归一化匹配 → 返回排名
