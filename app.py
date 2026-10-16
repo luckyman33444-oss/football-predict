@@ -425,6 +425,10 @@ with tab2:
                         if blend_info: full_reason += " ｜ 盘口融合: " + blend_info
                         if cap_info: full_reason += " ｜ " + cap_info
                         direction_agreement = judge_direction_agreement(opts[0][0], adj_best[0])
+                        # 2026-10-16 丙：反向时跟市场（回测 33 场，模型仅 9.1%）
+                        if "反向" in direction_agreement:
+                            adj_best = (opts[0][0], opts[0][1])
+                            direction_agreement = "⚠️ 反向·跟市场"
                         advice_pct = adj_best[1] * 100 if adj_best[1] else 0
                         bet_advice = get_bet_advice(advice_pct)
                         base_xg_h = row["_xg_h"] or 1.5
