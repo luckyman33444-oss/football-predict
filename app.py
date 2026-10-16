@@ -235,9 +235,7 @@ def render_high_confidence(df_all):
                 _def_idx = _future[0] if _future else len(_avail) - 1
 
             _sel_date = st.selectbox("选择日期", _avail, index=_def_idx, key="date7")
-            _mode = st.radio("筛选类型",
-                ["⭐ 重注（差≥55 或 概率≥75%）", "高置信 和局<22%", "高置信扩量 和局<25%", "大小球强 市场≥60%", "大小球很强 市场≥65%", "主客和强 市场差≥35", "主客和很强 市场差≥45", "主客和超强 市场差≥55", "主客和极致 市场差≥65", "全部强信号"],
-                horizontal=True, key="mode7")
+            _mode = st.radio("筛选类型", ["⭐ 重注（差≥55 或 概率≥75%）", "大小球≥65 + S/A（TSA验证）", "和局<22%（最优单信号）", "全部强信号（兜底）"], horizontal=True, key="mode7")
 
             _df = df_all[df_all["event_date"] == _sel_date].copy()
 
@@ -263,7 +261,10 @@ def render_high_confidence(df_all):
             _m_high22 = (_df["_pd"] < 22) & _df["_mk"].isin(["主胜", "客胜"])
             _m_high25 = (_df["_pd"] < 25) & _df["_mk"].isin(["主胜", "客胜"])
             _m_ou60 = _df["_ou_str"] >= 60
-            _m_ou65 = _df["_ou_str"] >= 65
+            # V5.12: 大小球≥65 加 S/A 过滤（TSA 回测 71.7% → 74.3%）
+            _grade_ou65 = _df["联赛等级"] if "联赛等级" in _df.columns else pd.Series(["?"]*len(_df), index=_df.index)
+            _m_ou65 = (_df["_ou_str"] >= 65) & _grade_ou65.isin(["S", "A"])
+            _m_ou65_naive = _df["_ou_str"] >= 65  # 无 S/A 过滤的旧版（备用）
             _m_gap35 = _df["_gap"] >= 35
             _m_gap45 = _df["_gap"] >= 45
             _m_gap55 = _df["_gap"] >= 55
@@ -272,15 +273,9 @@ def render_high_confidence(df_all):
             _m_bet = _m_gap55 | _m_prob75
 
             if "重注" in _mode: _elig = _m_bet; _name = "⭐ 重注（差≥55 或 概率≥75%）"
+            elif "≥65" in _mode: _elig = _m_ou65; _name = "大小球≥65+S/A（TSA验证）"
             elif "和局<22" in _mode: _elig = _m_high22; _name = "高置信(和局<22%)"
-            elif "和局<25" in _mode: _elig = _m_high25; _name = "高置信扩量(和局<25%)"
-            elif "≥60" in _mode: _elig = _m_ou60; _name = "大小球强(市场≥60%)"
-            elif "≥65" in _mode: _elig = _m_ou65; _name = "大小球很强(市场≥65%)"
-            elif "差≥65" in _mode: _elig = _m_gap65; _name = "主客和极致(市场差≥65)"
-            elif "差≥55" in _mode: _elig = _m_gap55; _name = "主客和超强(市场差≥55)"
-            elif "差≥45" in _mode: _elig = _m_gap45; _name = "主客和很强(市场差≥45)"
-            elif "差≥35" in _mode: _elig = _m_gap35; _name = "主客和强(市场差≥35)"
-            else: _elig = _m_high22 | _m_ou60 | _m_gap35; _name = "全部强信号"
+            else: _elig = _m_high22 | _m_ou60 | _m_gap35; _name = "全部强信号（兜底）"
 
             _high = _df[_elig].copy()
             def _high_fd(r):
