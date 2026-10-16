@@ -178,7 +178,7 @@ def render_high_confidence(df_all):
 
             _sel_date = st.selectbox("选择日期", _avail, index=_def_idx, key="date7")
             _mode = st.radio("筛选类型",
-                ["高置信 和局<22%", "高置信扩量 和局<25%", "大小球强 市场≥60%", "大小球很强 市场≥65%", "主客和强 市场差≥35", "主客和很强 市场差≥45", "主客和超强 市场差≥55", "主客和极致 市场差≥65", "全部强信号"],
+                ["⭐ 重注（差≥55 或 概率≥75%）", "高置信 和局<22%", "高置信扩量 和局<25%", "大小球强 市场≥60%", "大小球很强 市场≥65%", "主客和强 市场差≥35", "主客和很强 市场差≥45", "主客和超强 市场差≥55", "主客和极致 市场差≥65", "全部强信号"],
                 horizontal=True, key="mode7")
 
             _df = df_all[df_all["event_date"] == _sel_date].copy()
@@ -199,8 +199,11 @@ def render_high_confidence(df_all):
             _m_gap45 = _df["_gap"] >= 45
             _m_gap55 = _df["_gap"] >= 55
             _m_gap65 = _df["_gap"] >= 65
+            _m_prob75 = pd.concat([_df["_ph"], _df["_pa"]], axis=1).max(axis=1) >= 75
+            _m_bet = _m_gap55 | _m_prob75
 
-            if "和局<22" in _mode: _elig = _m_high22; _name = "高置信(和局<22%)"
+            if "重注" in _mode: _elig = _m_bet; _name = "⭐ 重注（差≥55 或 概率≥75%）"
+            elif "和局<22" in _mode: _elig = _m_high22; _name = "高置信(和局<22%)"
             elif "和局<25" in _mode: _elig = _m_high25; _name = "高置信扩量(和局<25%)"
             elif "≥60" in _mode: _elig = _m_ou60; _name = "大小球强(市场≥60%)"
             elif "≥65" in _mode: _elig = _m_ou65; _name = "大小球很强(市场≥65%)"
@@ -266,8 +269,8 @@ with tab1:
 # ========== Tab 2 ==========
 with tab2:
     now = datetime.now(CST)
-    end_window = now + timedelta(hours=2)
-    st.caption(f"⏰ 当前北京时间 **{now.strftime('%H:%M')}** ｜ 查询窗口 **{now.strftime('%H:%M')} ～ {end_window.strftime('%H:%M')}**")
+    _end_window = now.replace(hour=23, minute=59, second=59, microsecond=0)
+    st.caption(f"⏰ 当前北京时间 **{now.strftime('%H:%M')}** ｜ 查询窗口 **{now.strftime('%H:%M')} ～ {_end_window.strftime('%H:%M')}**（当天剩余）")
     col1, col2 = st.columns([3, 1])
     with col1:
         enable_lineup_info = st.checkbox("👥 显示首发阵容 + 伤停", value=True, key="lineup_switch")
@@ -797,6 +800,29 @@ with tab2:
                     excel_data = build_excel(bet_rows,
                         [{"类型": "稳健串", **r} for r in stable_rows] + [{"类型": "备选串", **r} for r in stable_rows_b],
                         info_rows if info_rows else None, None, meta_rows=meta_combined)
+                    st.divider()
+                    st.subheader("⭐ 今日值得重注（差≥55 或 概率≥75%）")
+                    if not df_all.empty:
+                        _today = datetime.now(CST).strftime("%Y-%m-%d")
+                        _cand = df_all[df_all["event_date"] == _today].copy()
+                        _cand = _cand[_cand["状态"] == "未开始"]
+                        _cand["_ph"] = pd.to_numeric(_cand.get("_prob_home"), errors="coerce").fillna(0)
+                        _cand["_pa"] = pd.to_numeric(_cand.get("_prob_away"), errors="coerce").fillna(0)
+                        _cand["_mx"] = pd.concat([_cand["_ph"], _cand["_pa"]], axis=1).max(axis=1)
+                        _cand["_gap"] = (_cand["_ph"] - _cand["_pa"]).abs()
+                        _z = _cand[(_cand["_gap"] >= 55) | (_cand["_mx"] >= 75)].copy()
+                        _z = _z.sort_values("_gap", ascending=False)
+                        if _z.empty:
+                            st.info("今日暂无符合条件的重注场次。")
+                        else:
+                            _z_show = _z[[c for c in ["时间", "联赛", "联赛等级", "主队", "客队",
+                                "预测结果", "模型主胜", "模型和局", "模型客胜",
+                                "市场判断", "主胜", "和局", "客胜",
+                                "大小球", "市场大小球", "亚盘",
+                                "主力比分", "备选比分", "第三比分"] if c in _z.columns]].copy()
+                            _z_show = _z_show.rename(columns={"预测结果": "模型判断", "联赛等级": "等级"})
+                            st.dataframe(_z_show, use_container_width=True, hide_index=True)
+                            st.caption(f"共 **{len(_z)}** 场（全市场筛选，含上方 3 串 1）")
                     st.divider()
                     st.subheader("💾 一键下载")
                     st.caption(f"推荐 {len(rec_rows)} 场，当天全部预测 {len(all_today_rows)} 场")
