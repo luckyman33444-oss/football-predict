@@ -944,7 +944,12 @@ with tab2:
                     st.markdown("**备选串（调整后第二高概率）：**")
                     combo_b = []
                     for md in matches_data:
-                        if len(md["opts"]) >= 2: combo_b.append((md, md["opts"][1]))
+                        # V5.12: S/A 场次优先大小球（TSA 回测 74.3%）
+                        _grade_b = md.get("等级", "B")
+                        _ou_opts_b = [o for o in md["opts"] if "大球" in o[0] or "小球" in o[0]]
+                        if _grade_b in ("S", "A") and _ou_opts_b:
+                            combo_b.append((md, max(_ou_opts_b, key=lambda x: x[1])))
+                        elif len(md["opts"]) >= 2: combo_b.append((md, md["opts"][1]))
                         else: combo_b.append((md, md["opts"][0]))
                     prob_b = 1; total_odds_b = 1
                     for _, opt in combo_b:
