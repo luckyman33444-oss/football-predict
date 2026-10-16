@@ -257,8 +257,8 @@ with tab2:
                     if _gap < 15:
                         return -1
                     return _gap
-                if not core_df.empty: core_df["_conf"] = core_df.apply(calc_conf, axis=1)
-                if not other_df.empty: other_df["_conf"] = other_df.apply(calc_conf, axis=1)
+                core_df["_conf"] = core_df.apply(calc_conf, axis=1) if not core_df.empty else pd.Series(dtype=float)
+                other_df["_conf"] = other_df.apply(calc_conf, axis=1) if not other_df.empty else pd.Series(dtype=float)
                 if not core_df.empty: core_df = core_df[core_df["_conf"] >= 0]
                 if not other_df.empty: other_df = other_df[other_df["_conf"] >= 0]
                 n_core_in_window = len(core_df)
