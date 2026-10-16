@@ -549,7 +549,18 @@ with tab2:
                             best_name, best_prob = pick_best_result(adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
                             adj_best = (best_name, best_prob)
                             # V5.6 A+: 模型前3 ∪ 全局8池（与 backtest_one 同步）
-                            _b = adj_pred["over_scores"] if adj_pred["over25"] >= 0.5 else adj_pred["under_scores"]
+                            # V5.11: 大小球选边切 TSA 真实盘口（赔率低=概率高），无 TSA 时 fallback 模型
+                            _tsa_ou = tsa_odds_map.get(eid) or {}
+                            _ro, _ru = _tsa_ou.get("real_over25"), _tsa_ou.get("real_under25")
+                            _is_over = None
+                            if _ro and _ru:
+                                try:
+                                    _is_over = float(_ro) < float(_ru)
+                                except (TypeError, ValueError):
+                                    _is_over = None
+                            if _is_over is None:
+                                _is_over = adj_pred["over25"] >= 0.5
+                            _b = adj_pred["over_scores"] if _is_over else adj_pred["under_scores"]
                             _m = list(_b[:3]); _e = {(s[0], s[1]) for s in _m}
                             for _h, _a in [(1,1),(1,0),(2,1),(0,1),(0,0),(2,0),(1,2),(2,2)]:
                                 if (_h, _a) not in _e: _m.append((_h, _a, 0.0))
@@ -595,10 +606,23 @@ with tab2:
                             "final_xg_h": final_xg_h, "final_xg_a": final_xg_a, "adj_pred": adj_pred,
                             "ah_line": ah_line, "ah_note": ah_note, "score_dir": score_dir,
                         }
+                        # V5.11: 大小球方向切 TSA 真实盘口，无 TSA 时 fallback 模型
+                        _tsa_ou_601 = tsa_odds_map.get(eid) or {}
+                        _ro601, _ru601 = _tsa_ou_601.get("real_over25"), _tsa_ou_601.get("real_under25")
+                        _ou_dir_601 = None
+                        if _ro601 and _ru601:
+                            try:
+                                _ou_dir_601 = "大球" if float(_ro601) < float(_ru601) else "小球"
+                            except (TypeError, ValueError):
+                                _ou_dir_601 = None
+                        if _ou_dir_601 is None and adj_pred:
+                            _ou_dir_601 = "大球" if adj_pred["over25"] >= 0.5 else "小球"
+                        if _ou_dir_601 is None:
+                            _ou_dir_601 = row.get("大小球") or "—"
                         matches_data.append({
                             "event_id": eid, "比赛": f"{row['主队']} vs {row['客队']}",
                             "时间": row["时间"], "联赛": row["联赛"], "等级": grade,
-                            "状态": row["状态"], "大小球方向": row["大小球"],
+                            "状态": row["状态"], "大小球方向": _ou_dir_601,
                             "是否核心": "⭐ 核心" if is_core else "自动",
                             "opts": opts, "main_score": main_s, "alt_score": alt_s,
                             "real_odds": o, "movement": mv, "lineup": lu, "h2h": h2h, "handicap": hc,
@@ -681,7 +705,7 @@ with tab2:
                             "场次": i, "比赛": md["比赛"],
                             "模型亚盘": mc["ah_line"], "模型判断": mc["ah_note"],
                             "市场方向": _mkt_side, "市场差": round(_gap, 1), "亚盘置信": _conf,
-                            "大小球方向": ("大球" if mc["adj_pred"] and mc["adj_pred"]["over25"] >= 0.5 else "小球") if mc["adj_pred"] else "—",
+                            "大小球方向": md["大小球方向"],
                             "比分倾向": mc["score_dir"],
                         })
                     if ah_rows: st.dataframe(pd.DataFrame(ah_rows), use_container_width=True, hide_index=True)
