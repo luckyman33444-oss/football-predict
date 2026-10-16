@@ -1102,3 +1102,42 @@ direction_agreement = judge_direction_agreement(opts[0][0], adj_best[0])
 if "反向" in direction_agreement:
     adj_best = (opts[0][0], opts[0][1])       # 跟市场
     direction_agreement = "⚠️ 反向·跟市场"    # 新标记
+    
+---
+
+## 四十二、xG 污染修复（2026-10-17）
+
+### 问题
+
+Tab2 推荐的场次，调整后概率**暴跌**（市场 78.6% → 调整后 33.9%），下注建议错显「🔴 反向」。
+
+### 根因（两层）
+
+**根因 1：xG 缺失时模型用默认值硬猜**
+- Bzzoiro 对冷门联赛不给 xG（返回 None → pandas 转 NaN）
+- 代码 `xg_h = row["_xg_h"] or 1.5` fallback 到「五五开」
+- 融合后：`0.7 × 模型(29%) + 0.3 × 市场(78.6%) = 44%` → 稀释市场信号
+
+**根因 2：xG 方向与市场矛盾时模型仍主导**
+- 如 AFC法尔德：xG说客队强(-0.55)，市场说主胜(78.8%)
+- 模型按 xG 算 → 客胜 → 融合后 42%
+
+### 修复（app.py ~458 行）
+
+```python
+if adj_pred:
+    _mh = (row.get("_prob_home") or 0) / 100
+    _md = (row.get("_prob_draw") or 0) / 100
+    _ma = (row.get("_prob_away") or 0) / 100
+    _tot = _mh + _md + _ma
+    _xg_missing = pd.isna(row.get("_xg_h")) or pd.isna(row.get("_xg_a"))
+    if _tot > 0:
+        _mkt_side = "主" if _mh >= _ma else "客"
+        try:
+            _xg_side = "主" if float(row.get("_xg_h")) >= float(row.get("_xg_a")) else "客"
+        except Exception:
+            _xg_side = _mkt_side
+        if _xg_missing or (_xg_side != _mkt_side):
+            adj_pred["hw"] = _mh / _tot
+            adj_pred["d"] = _md / _tot
+            adj_pred["aw"] = _ma / _tot
