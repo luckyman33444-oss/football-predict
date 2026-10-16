@@ -14,7 +14,13 @@ def rate(s):
 
 n_all = len(df)
 rows.append({"板块": "概览", "指标": "总场次", "命中": "", "样本": n_all, "命中率": ""})
-rows.append({"板块": "概览", "指标": "日期范围", "命中": "", "样本": "2026-07-03 ~ 2026-10-02", "命中率": ""})
+if "日期" in df.columns:
+    _ds = df["日期"].dropna().astype(str)
+    _ds = _ds[_ds.str.len() >= 10].sort_values()
+    _range = f"{_ds.iloc[0][:10]} ~ {_ds.iloc[-1][:10]}" if len(_ds) else "—"
+else:
+    _range = "—"
+rows.append({"板块": "概览", "指标": "日期范围", "命中": "", "样本": _range, "命中率": ""})
 
 # 1 胜平负
 for col, name in [('胜平负命中','模型'),('市场命中','市场'),('融合命中','融合')]:
