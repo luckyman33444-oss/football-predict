@@ -130,6 +130,24 @@ LEAGUE_CN = {
 
 # ============ 球队中文名 ============
 TEAM_CN = {
+    # 批次3（ESPN 匹配补）
+    "Unión (Santa Fe)": "圣菲联",
+    "Instituto (Córdoba)": "科尔多瓦学院",
+    "Platense": "普拉滕斯",
+    "Gimnasia (Mendoza)": "门多萨体操",
+    "Gimnasia La Plata": "拉普拉塔体操",
+    "Águilas Doradas": "金鹰",
+    "Alianza FC": "阿利安萨",
+    "Atlético Junior": "巴兰基亚青年",
+    "Fortaleza CEIF": "福塔莱萨CEIF",
+    "Sporting JAX": "杰克逊维尔体育",
+    "Alavés": "阿拉维斯",
+    "Deportivo": "拉科鲁尼亚",
+    "Racing Santander": "桑坦德竞技",
+    "JEF United Ichihara-Chiba": "千叶市原",
+    "Tokyo Verdy 1969": "东京绿茵",
+    "Athletico Paranaense": "巴拉纳竞技",
+    "Atlético-MG": "米内罗竞技",
     # 批次2
     "Liverpool FC": "利物浦",
     "El Merriekh Bentiu": "埃尔梅里克",
