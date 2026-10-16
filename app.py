@@ -45,8 +45,22 @@ def render_all_matches(df_all):
                 if isinstance(r.get("市场和局_pct"), (int, float)) and r["市场和局_pct"] < 22: t.append("和局低")
                 return "＋".join(t) if t else "—"
             df["强信号"] = df.apply(_tag, axis=1)
+            # 积分榜排名（ESPN，按联赛缓存）
+            _CN2CODE = {cn: code for code, cn in ESPN_LEAGUES.items()}
+            _std_cache2 = {}
+            def _rank_for(lg, tm):
+                _c = _CN2CODE.get(lg)
+                if not _c: return None
+                if _c not in _std_cache2:
+                    _std_cache2[_c] = fetch_espn_standings(_c)
+                if not _std_cache2[_c]: return None
+                _i = get_espn_standings_for_team(_c, tm)
+                return _i.get("rank") if _i else None
+            df["主队排名"] = df.apply(lambda r: _rank_for(r["联赛"], r["主队"]), axis=1)
+            df["客队排名"] = df.apply(lambda r: _rank_for(r["联赛"], r["客队"]), axis=1)
             display_df = df[[
                 "时间", "联赛", "联赛等级", "状态", "主队", "客队",
+                "主队排名", "客队排名",
                 "主力比分", "备选比分", "第三比分", "预测结果",
                 "模型主胜", "模型和局", "模型客胜",
                 "主胜", "和局", "客胜", "平局概率", "高置信", "强信号", "大小球", "市场大小球", "亚盘"
