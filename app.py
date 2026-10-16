@@ -243,6 +243,12 @@ def render_high_confidence(df_all):
                 return _mkt if _xs != _ms else _mdl
             _high["最终方向"] = _high.apply(_high_fd, axis=1)
             _high = _high.sort_values("_gap", ascending=False)
+            # 2026-10-17 Cloud 上 data/ 不存在 → 先建当天映射
+            try:
+                _today_map = datetime.now(CST).strftime("%Y-%m-%d")
+                build_mapping_for_dates(_today_map, _today_map, save=True)
+            except Exception:
+                pass
             # 2026-10-17 拉 TSA 真实大小球（T-3 延迟）
             try:
                 _high_tsa_map = load_tsa_mapping()
