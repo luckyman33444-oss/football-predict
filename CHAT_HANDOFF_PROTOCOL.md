@@ -1,4 +1,4 @@
-# Football Predict 交接（V5.10）
+# Football Predict 交接协议（CHAT_HANDOFF_PROTOCOL）
 
 > 本文件是唯一交接入口。接手时先读本文件，再按「文档地图」定位需要的文件。
 
@@ -42,7 +42,7 @@
 
 | 文件 | 作用 |
 |---|---|
-| HANDOFF.md | 本文件，交接入口 |
+| CHAT_HANDOFF_PROTOCOL.md | 本文件，交接入口 |
 | README.md | GitHub 首页简介（文件清单 + 部署说明）|
 
 ### 归档（保留历史，不参与运行）

@@ -15,7 +15,7 @@
 - `run_all.sh` — 一键跑回测 + 报告 + 归档
 
 ## 文档
-- `HANDOFF.md` — 交接文档（含关键结论与待办）
+- `CHAT_HANDOFF_PROTOCOL.md` — 交接协议（含关键结论与待办）
 
 ## 部署
 Push 到 main 后，Streamlit Cloud 自动部署（1-2 分钟）。

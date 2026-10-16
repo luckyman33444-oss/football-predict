@@ -77,6 +77,15 @@ LEAGUE_GRADE = {
 
 # ============ 联赛中文名 ============
 LEAGUE_CN = {
+    # 2026-10-16 补
+    "Serie C, Girone A": "意丙A组", "Serie C, Girone B": "意丙B组", "Serie C, Girone C": "意丙C组",
+    "A-League Men": "澳超", "Veikkausliiga": "芬超", "Trendyol Super Lig": "土超",
+    "Danish Superliga": "丹超", "Czech First League": "捷甲", "Girabola": "安哥拉甲",
+    "CAF Champions League": "非冠", "Tunisian Ligue Professionnelle 1": "突尼斯甲",
+    "Stoiximan Super League": "希腊超", "Superliga": "罗甲", "Ligue 2": "法乙",
+    "Ligue 3": "法丙", "Brasileirão Serie A": "巴甲", "La Liga": "西甲",
+    "Serie B": "意乙", "2. Bundesliga": "德乙", "Austrian Bundesliga": "奥甲",
+    "Polish Ekstraklasa": "波兰甲", "FA Cup": "英足总杯",
     "Premier League": "英超", "LaLiga": "西甲", "Serie A": "意甲",
     "Bundesliga": "德甲", "Ligue 1": "法甲", "Champions League": "欧冠",
     "Europa League": "欧联杯", "Eredivisie": "荷甲", "Primeira Liga": "葡超",
