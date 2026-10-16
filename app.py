@@ -454,6 +454,16 @@ with tab2:
                         else:
                             rho = 0
                         adj_pred = predict_full_dc(final_xg_h, final_xg_a, rho=rho)
+                        # 2026-10-17 修复：xG 缺失时模型无信息 → 用市场概率覆盖（避免稀释市场信号）
+                        if adj_pred and ((row.get("_xg_h") is None) or (row.get("_xg_a") is None)):
+                            _mh = (row.get("_prob_home") or 0) / 100
+                            _md = (row.get("_prob_draw") or 0) / 100
+                            _ma = (row.get("_prob_away") or 0) / 100
+                            _tot = _mh + _md + _ma
+                            if _tot > 0:
+                                adj_pred["hw"] = _mh / _tot
+                                adj_pred["d"] = _md / _tot
+                                adj_pred["aw"] = _ma / _tot
                         blend_info = ""; cap_info = ""
                         if adj_pred:
                             if enable_blend:
