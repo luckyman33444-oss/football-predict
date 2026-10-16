@@ -249,7 +249,7 @@ def render_high_confidence(df_all):
             _df["_gap"] = (_df["_ph"] - _df["_pa"]).abs()
             _df["_ou_str"] = _df["_po"].apply(lambda x: max(x, 100 - x))
             # V5.12: 补 3 列（与 Tab1 主表口径一致）
-            _df["不平局"] = _df["高置信"].fillna("—") if "高置信" in _df.columns else "—"
+            _df["不平局"] = _df["_pd"].apply(lambda x: "⭐⭐⭐" if pd.notna(x) and x < 20 else ("⭐⭐" if pd.notna(x) and x < 22 else ("⭐" if pd.notna(x) and x < 25 else "—")))
             def _tag_hc(r):
                 t = []
                 if r["_gap"] >= 55: t.append("主客超强")
