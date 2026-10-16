@@ -530,11 +530,11 @@ with tab2:
                                 _o_over = _ro_f; _o_under = _ru_f
                             except (TypeError, ValueError, ZeroDivisionError):
                                 pass
-                        if row["_prob_home"]: opts.append(("主胜", row["_prob_home"] / 100, hw_real or implied_odds(row["_prob_home"]), hw_real is not None, mv.get("home_signal", "")))
-                        if row["_prob_draw"]: opts.append(("和局", row["_prob_draw"] / 100, dr_real or implied_odds(row["_prob_draw"]), dr_real is not None, mv.get("draw_signal", "")))
-                        if row["_prob_away"]: opts.append(("客胜", row["_prob_away"] / 100, aw_real or implied_odds(row["_prob_away"]), aw_real is not None, mv.get("away_signal", "")))
-                        if _p_over: opts.append(("大球(2.5+)", _p_over, _o_over or implied_odds(_p_over * 100), _o_over is not None, mv.get("over_signal", "")))
-                        if _p_under: opts.append(("小球(2.5-)", _p_under, _o_under or implied_odds(_p_under * 100), _o_under is not None, mv.get("over_signal", "")))
+                        if row["_prob_home"]: opts.append(("主胜", row["_prob_home"] / 100, hw_real or implied_odds(row["_prob_home"]), ("Bz" if hw_real is not None else "imp"), mv.get("home_signal", "")))
+                        if row["_prob_draw"]: opts.append(("和局", row["_prob_draw"] / 100, dr_real or implied_odds(row["_prob_draw"]), ("Bz" if dr_real is not None else "imp"), mv.get("draw_signal", "")))
+                        if row["_prob_away"]: opts.append(("客胜", row["_prob_away"] / 100, aw_real or implied_odds(row["_prob_away"]), ("Bz" if aw_real is not None else "imp"), mv.get("away_signal", "")))
+                        if _p_over: opts.append(("大球(2.5+)", _p_over, _o_over or implied_odds(_p_over * 100), ("TSA" if (_ro_t2 and _ru_t2) else ("Bz" if _o_over is not None else "imp")), mv.get("over_signal", "")))
+                        if _p_under: opts.append(("小球(2.5-)", _p_under, _o_under or implied_odds(_p_under * 100), ("TSA" if (_ro_t2 and _ru_t2) else ("Bz" if _o_under is not None else "imp")), mv.get("over_signal", "")))
                         opts.sort(key=lambda x: -x[1])
                         scores = row["_scores_list"] if row["_scores_list"] else []
                         main_s = scores[0] if len(scores) > 0 else ("—", 0)
@@ -921,7 +921,7 @@ with tab2:
                         combo = []
                         for md in eligible:
                             mkt = md.get("市场判断", "—")
-                            pick_odds = None; is_real = False; pick_prob = 0
+                            pick_odds = None; is_real = "imp"; pick_prob = 0
                             for opt in md["opts"]:
                                 if opt[0] == mkt:
                                     pick_odds = opt[2]; is_real = opt[3]; pick_prob = opt[1]; break
@@ -938,7 +938,7 @@ with tab2:
                             pick_name, pick_prob, pick_odds, is_real, movement = opt
                             stable_rows.append({"场次": i, "等级": md.get("等级", "B"), "比赛": md["比赛"], "推荐": pick_name,
                                                 "概率": f"{pick_prob*100:.1f}%", "下注建议": get_bet_advice(pick_prob * 100),
-                                                "赔率": fmt_odds(pick_odds), "赔率来源": "真实" if is_real else "隐含",
+                                                "赔率": fmt_odds(pick_odds), "赔率来源": {"TSA":"真实TSA","Bz":"真实Bz"}.get(is_real, "隐含"),
                                                 "方向一致": md["direction_agreement"]})
                         st.dataframe(pd.DataFrame(stable_rows), use_container_width=True, hide_index=True)
                     st.markdown("**备选串（调整后第二高概率）：**")
@@ -960,7 +960,7 @@ with tab2:
                         pick_name, pick_prob, pick_odds, is_real, movement = opt
                         stable_rows_b.append({"场次": i, "等级": md.get("等级", "B"), "比赛": md["比赛"], "推荐": pick_name,
                                               "概率": f"{pick_prob*100:.1f}%", "下注建议": get_bet_advice(pick_prob * 100),
-                                              "赔率": fmt_odds(pick_odds), "赔率来源": "真实" if is_real else "隐含",
+                                              "赔率": fmt_odds(pick_odds), "赔率来源": {"TSA":"真实TSA","Bz":"真实Bz"}.get(is_real, "隐含"),
                                               "方向一致": md["direction_agreement"]})
                     st.dataframe(pd.DataFrame(stable_rows_b), use_container_width=True, hide_index=True)
                     today_str_save = datetime.now(CST).strftime("%Y-%m-%d")
