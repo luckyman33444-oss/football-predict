@@ -910,29 +910,45 @@ with tab2:
                     st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     st.divider()
                     # V5.12: 盾 —— 3 场里最稳的 1 场
-                    st.subheader("🛡️ 盾：3 场里最稳的 1 场（单场稳胆）")
+                    st.subheader("🛡️ 盾：TSA 真实让球盘（3 场里最稳的 1 场）")
                     _shield = []
                     for _md in matches3:
-                        _opts = _md.get("opts") or []
-                        if not _opts: continue
-                        _top = max(_opts, key=lambda x: x[1])
-                        _grade = _md.get("等级", "B")
-                        _bonus = 0.10 if _grade == "S" else (0.05 if _grade == "A" else 0.0)
-                        _score = _top[1] + _bonus
-                        _shield.append((_score, _md, _top, _grade))
+                        _eid = _md.get("event_id")
+                        _t = tsa_odds_map.get(_eid) or {}
+                        _ln = _t.get("real_ah_line"); _h = _t.get("real_ah_home"); _a = _t.get("real_ah_away")
+                        if _ln is not None and _h is not None and _a is not None:
+                            try:
+                                _fl, _fh, _fa = float(_ln), float(_h), float(_a)
+                                _inv = 1/_fh + 1/_fa
+                                _p_h = (1/_fh)/_inv; _p_a = (1/_fa)/_inv
+                                if _p_h >= _p_a:
+                                    _side = "主赢盘"; _bp = _p_h; _bo = _fh
+                                else:
+                                    _side = "客赢盘"; _bp = _p_a; _bo = _fa
+                                if _fl < 0: _rec = f"主让{abs(_fl):g}·{_side}"
+                                elif _fl > 0: _rec = f"客让{_fl:g}·{_side}"
+                                else: _rec = f"平手·{_side}"
+                                _shield.append((_bp, _md, _rec, _bp, _bo, "TSA"))
+                            except (TypeError, ValueError, ZeroDivisionError):
+                                pass
+                        else:
+                            # fallback: 无 TSA → 用模型最优
+                            _opts = _md.get("opts") or []
+                            if _opts:
+                                _top = max(_opts, key=lambda x: x[1])
+                                _src = _top[3] if len(_top) > 3 else "imp"
+                                _shield.append((_top[1], _md, _top[0], _top[1], _top[2], _src))
                     if _shield:
                         _shield.sort(key=lambda x: -x[0])
-                        _bs, _bmd, _btop, _bg = _shield[0]
-                        _name, _prob, _odds, _src, _ = _btop
-                        _src_txt = {"TSA": "真实TSA", "Bz": "真实Bz"}.get(_src, "隐含")
-                        if _prob >= 0.75: _adv = "🟢🟢 重仓"
-                        elif _prob >= 0.65: _adv = "🟢 可下"
-                        elif _prob >= 0.55: _adv = "🟡 小注"
-                        else: _adv = "🔴 不推"
-                        st.success(f"**{_bmd['比赛']}**  →  **{_name}**  ｜  {_adv}")
-                        st.caption(f"等级 **{_bg}**  ｜  概率 **{_prob*100:.1f}%**  ｜  赔率 **{fmt_odds(_odds)}** ({_src_txt})")
+                        _bs, _bmd, _rec, _bp, _bo, _bsrc = _shield[0]
+                        _src_txt = {"TSA": "真实TSA", "Bz": "真实Bz"}.get(_bsrc, "隐含")
+                        if _bp >= 0.60: _adv = "🟢🟢 重仓"
+                        elif _bp >= 0.55: _adv = "🟢 可下"
+                        else: _adv = "🟡 小注"
+                        st.success(f"**{_bmd['比赛']}**  →  **{_rec}**  ｜  {_adv}")
+                        st.caption(f"等级 **{_bmd.get('等级', 'B')}**  ｜  市场隐含概率 **{_bp*100:.1f}%**  ｜  赔率 **{fmt_odds(_bo)}** ({_src_txt})")
                     else:
-                        st.info("无可用推荐。")
+                        st.info("3 场均无 TSA 让球盘，无法生成盾。")
                     st.divider()
                     today_str_save = datetime.now(CST).strftime("%Y-%m-%d")
                     now_time = now.strftime("%H:%M")
