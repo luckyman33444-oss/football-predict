@@ -229,13 +229,27 @@ def render_high_confidence(df_all):
             else: _elig = _m_high22 | _m_ou60 | _m_gap35; _name = "全部强信号"
 
             _high = _df[_elig].copy()
+            def _high_fd(r):
+                _xgh = r.get("_xg_h"); _xga = r.get("_xg_a")
+                _ph = r.get("_ph") or 0; _pa = r.get("_pa") or 0
+                _mdl = r.get("预测结果", "—")
+                _mkt = "主胜" if _ph >= _pa else "客胜"
+                if pd.isna(_xgh) or pd.isna(_xga): return _mkt
+                try:
+                    _xs = "主" if float(_xgh) >= float(_xga) else "客"
+                except Exception:
+                    return _mkt
+                _ms = "主" if _ph >= _pa else "客"
+                return _mkt if _xs != _ms else _mdl
+            _high["最终方向"] = _high.apply(_high_fd, axis=1)
+            _high = _high.sort_values("_gap", ascending=False)
             st.markdown(f"### {_sel_date}：**{_name}** 共 **{len(_high)}** 场")
 
             if _high.empty:
                 st.info("当天没有符合条件的场次。")
             else:
                 _want = ["时间", "联赛", "联赛等级", "主队", "客队", "市场判断", "_pd", "_gap", "_ou_str",
-                         "预测结果", "主力比分", "备选比分", "第三比分", "大小球", "亚盘"]
+                         "预测结果", "最终方向", "主力比分", "备选比分", "第三比分", "大小球", "亚盘"]
                 _avail = [c for c in _want if c in _high.columns]
                 _show = _high[_avail].copy()
                 _show = _show.rename(columns={"联赛等级": "等级", "_pd": "平局%", "_gap": "市场差", "_ou_str": "大小球强度%", "预测结果": "模型判断"})
