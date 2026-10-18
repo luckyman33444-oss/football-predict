@@ -213,7 +213,7 @@ def predict_full_dc(xg_h, xg_a, rho=-0.05):
             "away_over": away_over, "away_under": away_under,
             "hw": hw, "d": d, "aw": aw, "over25": ov25, "under25": un25, "h1": h1, "h2": h2,
             "best_result": best_result, "best_prob": best_prob,
-            "ou_text": ou_text, "ou_lines": ou_lines,
+            "ou_text": "—", "ou_lines": {},  # V5.37: 彻底写死，不再依赖前面
             "ah_line": "—", "ah_note": "—"}
 def fetch_standings(league_id, season):
     if not API_FOOTBALL_KEY: return None
