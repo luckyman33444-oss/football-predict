@@ -996,7 +996,7 @@ def fetch_actual_results(date_str):
         from_dt = date_str; to_dt = date_str
     try:
         # V5.13: 复用 fetch_or_load_bz_events（带分页 + 落盘缓存）
-        actual = fetch_or_load_bz_events(from_dt, to_dt)
+        actual = fetch_events_range(from_dt, to_dt)  # V5.14: 复盘强制拉最新，不读缓存
         if not isinstance(actual, dict): actual = {}
     except Exception as e: errors.append(f"events 请求异常：{e}")
     if not actual:
