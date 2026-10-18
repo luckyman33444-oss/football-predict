@@ -1210,6 +1210,10 @@ with tab2:
                     # 3) 选出 3 场中最稳的那个
                     if _shield_candidates:
                         # 优先选赔率 >= 1.50 的盘口（拒绝蚊子肉），再按概率排序
+                        # V5.61: 强制过滤概率低于 60% 的垃圾盘口
+                        _shield_candidates = [x for x in _shield_candidates if x[0] >= 0.60]
+                        if not _shield_candidates:
+                            st.warning("🛡️ **今日无合适防守盘口**：所有兼容盘口概率均低于 60%。建议放弃盾。")
                         _group_good = [x for x in _shield_candidates if x[3] >= 1.50]
                         _group_bad = [x for x in _shield_candidates if x[3] < 1.50]
                         if _group_good:
