@@ -1155,9 +1155,11 @@ with tab5:
                                 adj_win_str = "✅" if adj_win_hit else "❌"
                             else: adj_win_str = "—"
                             win_str = "✅" if win_hit else "❌"
-                            score1_hit = judge_score_hit(m.get("比分1", "—"), actual)
-                            score2_hit = judge_score_hit(m.get("比分2", "—"), actual)
-                            _real_ah_hit = judge_real_ah_hit(m.get("真实亚盘", "—"), actual["home"], actual["away"])
+                            # V5.13: 比分口径统一为调整后比分（跟比分串一致）
+                            score1_hit = judge_score_hit(m.get("调整后比分1", "—"), actual)
+                            score2_hit = judge_score_hit(m.get("调整后比分2", "—"), actual)
+                            # V5.13: 按推荐方向判亚盘（跟调整后方向一致）
+                            _real_ah_hit = judge_real_ah_hit_dir(m.get("真实亚盘", "—"), adj_dir, actual["home"], actual["away"])
                             _real_ou_hit = judge_real_ou_hit(m.get("真实大小球", "—"), actual["home"], actual["away"])
                             direction_but_wrong = "—"
                             if score1_hit == "⚠️" or score2_hit == "⚠️": direction_but_wrong = "⚠️"
@@ -1188,11 +1190,19 @@ with tab5:
                                     roi = profit / len(roi_pool) * 100
                                     roi_str = f"{roi:+.1f}%"; roi_delta = f"{len(roi_pool)} 场有效赔率"
                                 else: roi_str = "—"; roi_delta = "无有效赔率"
-                                c1, c2, c3, c4 = st.columns(4)
+                                # V5.13: 比分串全中判定
+                                _valid_recs = [r for r in review_rows if r["实际比分"] != "未结束/无数据"]
+                                if len(_valid_recs) >= 3:
+                                    _all_hit = all((r.get("比分1命中") == "✅") or (r.get("比分2命中") == "✅") for r in _valid_recs[:3])
+                                    _combo_str = "✅ 全中" if _all_hit else "❌ 未全中"
+                                else:
+                                    _combo_str = f"仅 {len(_valid_recs)} 场完赛"
+                                c1, c2, c3, c4, c5 = st.columns(5)
                                 with c1: st.metric("推荐已完赛", f"{total} 场")
                                 with c2: st.metric("原推荐命中", f"{wr*100:.1f}%", f"{wh}/{len(wg)}" if wg else "无")
                                 with c3: st.metric("调整后命中", f"{ar*100:.1f}%", f"{ah}/{len(ag)}" if ag else "无")
                                 with c4: st.metric("原推荐 ROI", roi_str, roi_delta)
+                                with c5: st.metric("比分串（3场）", _combo_str)
                                 if wg and ag:
                                     delta = ar - wr
                                     if delta > 0.02: st.success(f"✅ **调整让命中率提升 {delta*100:+.1f}%**")

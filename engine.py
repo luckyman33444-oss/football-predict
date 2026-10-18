@@ -586,6 +586,41 @@ def judge_real_ah_hit(ah_str, home_score, away_score):
         return "⚠️"  # 输半
     return "❌"
 
+def judge_real_ah_hit_dir(ah_str, rec_dir, home_score, away_score):
+    """按推荐方向判定真实亚盘命中。rec_dir='主胜'/'客胜'。返回 ✅/❌/⚪/⚠️/—。"""
+    if not ah_str or ah_str == "—":
+        return "—"
+    if not rec_dir or rec_dir in ("—", "和局"):
+        return "—"
+    import re as _re
+    m = _re.match(r"^\s*([+-]?[\d.]+)", str(ah_str))
+    if not m:
+        return "—"
+    try:
+        line = float(m.group(1))
+    except Exception:
+        return "—"
+    diff = home_score - away_score + line
+    if rec_dir == "主胜":
+        if abs(diff) < 1e-9: return "⚪"
+        if line * 2 % 1 == 0:
+            return "✅" if diff > 0 else "❌"
+        if diff > 0.5: return "✅"
+        if 0 < diff < 0.5: return "⚠️"
+        if -0.5 < diff < 0: return "⚠️"
+        return "❌"
+    elif rec_dir == "客胜":
+        if abs(diff) < 1e-9: return "⚪"
+        if line * 2 % 1 == 0:
+            return "✅" if diff < 0 else "❌"
+        if diff < -0.5: return "✅"
+        if -0.5 < diff < 0: return "⚠️"
+        if 0 < diff < 0.5: return "⚠️"
+        return "❌"
+    else:
+        return "—"
+
+
 def judge_real_ou_hit(ou_str, home_score, away_score):
     """判定真实大小球命中。ou_str='大2.5 1.222' 或 '—'。返回 ✅/❌/⚪/—。"""
     if not ou_str or ou_str == "—":
