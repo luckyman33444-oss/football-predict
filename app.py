@@ -1016,9 +1016,10 @@ with tab2:
                         _src_txt = {"TSA": "真实TSA", "Bz": "真实Bz"}.get(_bsrc, "隐含")
                         if _bs >= 0.80: _adv = "🟢🟢 重仓"
                         elif _bs >= 0.70: _adv = "🟢 可下"
-                        else: _adv = "🟡 小注"
-                        st.success(f"**{_bmd['比赛']}**  →  **{_rec}**  ｜  {_adv}")
-                        st.caption(f"等级 **{_bmd.get('等级', 'B')}**  ｜  隐含概率 **{_bs*100:.1f}%**  ｜  赔率 **{fmt_odds(_bo)}** ({_src_txt})  ｜  {_reason}")
+                        if _bo < 1.50:
+                            st.info("ℹ️ 兼容盘口赔率低于1.50，系统已过滤（防蚊子肉）。")
+                        else:
+                            st.caption(f"等级 **{_bmd.get('等级', 'B')}**  ｜  隐含概率 **{_bs*100:.1f}%**  ｜  赔率 **{fmt_odds(_bo)}** ({_src_txt})  ｜  {_reason}")
                     else:
                         st.info("3 场均无兼容 TSA 盘口，无法生成盾。")
                     st.divider()

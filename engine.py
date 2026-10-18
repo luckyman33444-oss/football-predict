@@ -884,16 +884,16 @@ def judge_consistency(model_pick, market_signal):
     if not market_signal or market_signal in ("", "—", "中性"): return {"tag": "中性", "emoji": "➖", "note": "市场无明显变动"}
     if model_pick in ("主胜", "大球(2.5+)"):
         if market_signal == "看多": return {"tag": "一致", "emoji": "✅", "note": f"模型推荐{model_pick}，市场也看多"}
-        elif market_signal == "看淡": return {"tag": "冲突", "emoji": "⚠️", "note": f"模型推荐{model_pick}，但市场看淡"}
+        elif market_signal == "看淡": return {"tag": "中性", "emoji": "➖", "note": f"模型推荐{model_pick}，但市场看淡"}
     elif model_pick == "客胜":
         if market_signal == "看多": return {"tag": "一致", "emoji": "✅", "note": "模型推荐客胜，市场看多客胜"}
-        elif market_signal == "看淡": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐客胜，但市场看淡客胜"}
+        elif market_signal == "看淡": return {"tag": "中性", "emoji": "➖", "note": "模型推荐客胜，但市场看淡客胜"}
     elif model_pick == "小球(2.5-)":
         if market_signal == "看淡": return {"tag": "一致", "emoji": "✅", "note": "模型推荐小球，市场看淡大球"}
-        elif market_signal == "看多": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐小球，但市场看多大球"}
+        elif market_signal == "看多": return {"tag": "中性", "emoji": "➖", "note": "模型推荐小球，但市场看多大球"}
     elif model_pick == "和局":
         if market_signal == "看多": return {"tag": "一致", "emoji": "✅", "note": "模型推荐和局，市场看多和局"}
-        elif market_signal == "看淡": return {"tag": "冲突", "emoji": "⚠️", "note": "模型推荐和局，但市场看淡和局"}
+        elif market_signal == "看淡": return {"tag": "中性", "emoji": "➖", "note": "模型推荐和局，但市场看淡和局"}
     return {"tag": "中性", "emoji": "➖", "note": ""}
 
 def judge_direction_agreement(orig_pick, adj_pick):
