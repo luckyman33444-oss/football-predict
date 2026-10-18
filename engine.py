@@ -525,14 +525,16 @@ def parse_tsa_odds_summary(odds_data, prefer="Bet365"):
         out["real_d"] = _f(mo.get("draw", {}).get("last_seen"))
         out["real_a"] = _f(mo.get("away", {}).get("last_seen"))
 
-    # 大小球：多线全抓（1.5, 2.5, 3.5, 等）
+    # 大小球：多线全抓（兼容异常结构）
     tg = m.get("total_goals", {})
     ou_lines = {}
     for line in tg.keys():
-        ov = _f(tg[line].get("over", {}).get("last_seen"))
-        un = _f(tg[line].get("under", {}).get("last_seen"))
-        if ov and un:
-            ou_lines[str(line)] = {"over": ov, "under": un}
+        try:
+            ov = _f(tg[line].get("over", {}).get("last_seen"))
+            un = _f(tg[line].get("under", {}).get("last_seen"))
+            if ov and un:
+                ou_lines[str(line)] = {"over": ov, "under": un}
+        except: pass
     if ou_lines:
         out["real_ou_lines"] = ou_lines
         # 保留兼容旧逻辑的 2.5 字段

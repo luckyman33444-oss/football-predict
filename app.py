@@ -147,9 +147,7 @@ def render_all_matches(df_all):
                                 best = next((vl for vl in valid_lines if vl[0] == 2.5), valid_lines[0])
                                 lf, ov, un = best
                                 return f"{lf:g}球 大{ov}/小{un}"
-                    _po = r.get("_prob_over_pct")
-                    if _po is not None:
-                        return f"大2.5 {_po}%" if _po >= 50 else f"小2.5 {100-_po}%"
+                    # 彻底干掉 Bz 的百分比兜底，没有真实赔率就返回 —
                     return "—"
                 df["市场大小球"] = df.apply(_get_real_ou, axis=1)
             except Exception:
