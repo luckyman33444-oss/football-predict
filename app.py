@@ -972,10 +972,10 @@ with tab2:
                             st.markdown(f"**策略：第 {best_idx+1} 场做主胆（每场 2 个比分，共 8 注）**")
                         else:
                             st.markdown("**三场无明显主胆，每场选 2 个比分（共 8 注）**")
-                        # V5.23: 生成带队名和联赛的表头
-                        _h1 = f"{matches3[0]['联赛']} | {matches3[0]['主队']} vs {matches3[0]['客队']}"
-                        _h2 = f"{matches3[1]['联赛']} | {matches3[1]['主队']} vs {matches3[1]['客队']}"
-                        _h3 = f"{matches3[2]['联赛']} | {matches3[2]['主队']} vs {matches3[2]['客队']}"
+                        # V5.23: 生成带队名和联赛的表头 (使用 .get 防 KeyError)
+                        _h1 = f"{matches3[0].get('联赛', '')} | {matches3[0].get('比赛', '')}"
+                        _h2 = f"{matches3[1].get('联赛', '')} | {matches3[1].get('比赛', '')}"
+                        _h3 = f"{matches3[2].get('联赛', '')} | {matches3[2].get('比赛', '')}"
 
                         n = 1
                         for a in _sc[0]:
