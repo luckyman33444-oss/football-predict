@@ -6,6 +6,23 @@ import os, json
 from data import CST
 from engine import *
 
+def _get_tsa_ou_lines(eid):
+    if not eid: return "—"
+    try:
+        _tm = load_tsa_mapping()
+        mid = _tm.get(int(eid))
+        if not mid: return "—"
+        _d = parse_tsa_odds_summary(fetch_or_load_tsa_odds(mid))
+        _lines = _d.get("real_ou_lines", {})
+        if not _lines: return "—"
+        res = []
+        for k in ["1.5", "2.5", "3.5"]:
+            if k in _lines:
+                res.append(f"{k}球(大{_lines[k]['over']}/小{_lines[k]['under']})")
+        return " ｜ ".join(res) if res else "—"
+    except: return "—"
+
+
 def _sync_scores_tsa(df):
     """用 TSA 真实大小球强制纠偏比分"""
     import pandas as pd
@@ -1039,7 +1056,7 @@ with tab2:
                                         "盘口走势": movement if movement else "—",
                                         "一致性": f"{consistency['emoji']} {consistency['tag']}",
                                         "首发阵容": lineup_str, "伤停": injury_str, "历史交锋": h2h_str}
-                            if enable_handicap: row_data["三档盘口线"] = handicap_str
+                            row_data["三档盘口线"] = _get_tsa_ou_lines(md.get("event_id"))
                             diff = adj_prob - pick_prob
                             if abs(diff) < 0.005: diff_str = "≈ 0"
                             elif diff > 0: diff_str = f"↑ +{diff*100:.1f}%"
