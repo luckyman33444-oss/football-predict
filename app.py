@@ -624,12 +624,12 @@ with tab2:
                     
                     # 联赛权重调节（样本量小，仅做辅助微调，不做绝对黑名单）
                     _league = str(row.get("联赛", ""))
-                    _trust = ["土超", "西甲", "非冠", "西班牙女足", "葡超", "巴乙", "尼日利亚超", "挪超", "欧国联", "瑞典超"]
-                    _caution = ["巴甲", "德甲", "欧冠", "哥伦比亚甲", "美职联"]
+                    _trust = ["西甲", "英超", "土超", "法甲", "丹超", "葡超"]
+                    _caution = ["沙特联", "Liga Portugal 2", "日职联", "巴甲", "美职联", "哥伦比亚甲"]
                     
                     _bonus = 0
-                    if _league in _trust: _bonus = 15
-                    elif _league in _caution: _bonus = -20
+                    if _league in _trust: _bonus = 20
+                    elif _league in _caution: _bonus = -25
                     
                     return _gap + _bonus
                 core_df["_conf"] = core_df.apply(calc_conf, axis=1) if not core_df.empty else pd.Series(dtype=float)
