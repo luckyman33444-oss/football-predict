@@ -845,6 +845,7 @@ with tab2:
                             
                             if _is_over:
                                 _adj_dir_now = adj_best[0] if adj_best else "—"
+                                _adj_dir_now = adj_best[0] if adj_best else "—"
                                 if _adj_dir_now == "主胜":
                                     _b = [(3,0,0.5), (3,1,0.3), (2,0,0.2)] if is_deep else [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
                                 elif _adj_dir_now == "客胜":
