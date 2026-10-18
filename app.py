@@ -609,24 +609,29 @@ with tab2:
                 end_window_auto = now.replace(hour=23, minute=59, second=59, microsecond=0)
                 other_df = other_df_all[other_df_all["kickoff_dt"] <= end_window_auto].copy()
                 def calc_conf(row):
-                    # V5.42: 回测证明，纯市场差选场最强，S/A+大球加分是负优化，已彻底拔除
+                    # V5.44: 引入联赛历史胜率微调，提款机加分，毒药降级
                     _ph = row.get("_prob_home") or 0
                     _pa = row.get("_prob_away") or 0
                     _gap = abs(_ph - _pa)
                     
-                    # 1. 基础门槛
                     if _gap < 15: return -1
                     _a_dir = row.get("预测结果", "—")
                     if _a_dir not in ("主胜", "客胜", "和局"): return -1
-                    
-                    # 2. 市场方向必须一致，且核心概率大于 50%
                     if _a_dir == "主胜" and _ph < 50: return -1
                     if _a_dir == "客胜" and _pa < 50: return -1
                     if _a_dir == "主胜" and _ph < _pa: return -1
                     if _a_dir == "客胜" and _ph >= _pa: return -1
                     
-                    # 3. 直接按市场差排序
-                    return _gap
+                    # 联赛权重调节（样本量小，仅做辅助微调，不做绝对黑名单）
+                    _league = str(row.get("联赛", ""))
+                    _trust = ["土超", "西甲", "非冠", "西班牙女足", "葡超", "巴乙", "尼日利亚超", "挪超", "欧国联", "瑞典超"]
+                    _caution = ["巴甲", "德甲", "欧冠", "哥伦比亚甲", "美职联"]
+                    
+                    _bonus = 0
+                    if _league in _trust: _bonus = 15
+                    elif _league in _caution: _bonus = -20
+                    
+                    return _gap + _bonus
                 core_df["_conf"] = core_df.apply(calc_conf, axis=1) if not core_df.empty else pd.Series(dtype=float)
                 other_df["_conf"] = other_df.apply(calc_conf, axis=1) if not other_df.empty else pd.Series(dtype=float)
                 if not core_df.empty: core_df = core_df[core_df["_conf"] >= 0]
