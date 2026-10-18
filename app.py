@@ -174,6 +174,15 @@ def render_all_matches(df_all):
             if "市场判断" in df.columns:
                 display_df.insert(display_df.columns.get_loc("模型判断") + 1, "市场判断", _mkt_final)
                 display_df.insert(display_df.columns.get_loc("市场判断") + 1, "最终方向", df["最终方向"].values)
+
+                # V5.14: 标记市场让球方向与最终方向冲突
+                def _mkt_warn(row):
+                    _m = str(row.get("市场判断", ""))
+                    _f = str(row.get("最终方向", ""))
+                    if (_f == "主胜" and "客赢" in _m) or (_f == "客胜" and "主赢" in _m):
+                        return "⚠️ " + _m
+                    return _m
+                display_df["市场判断"] = display_df.apply(_mkt_warn, axis=1)
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
             def _bet_advice_col(r):
                 _m = max(r.get("_prob_home") or 0, r.get("_prob_draw") or 0, r.get("_prob_away") or 0)
@@ -1085,6 +1094,11 @@ with tab2:
                         file_name=f"推荐_{datetime.now(CST).strftime('%Y%m%d_%H%M')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_all_excel", type="primary")
 
+                    # V5.14: 自动保存推荐 Excel 到本地，供 Tab5 自动复盘
+                    os.makedirs("data/recs", exist_ok=True)
+                    with open(f"data/recs/{today_str_save}.xlsx", "wb") as _f:
+                        _f.write(excel_data)
+
 # ========== Tab 4 ==========
 with tab4:
     st.caption("搜索队名，可加入核心")
@@ -1113,8 +1127,16 @@ with tab4:
 with tab5:
     st.subheader("📊 赛后复盘（上传 Excel）")
     st.caption("上传早上下载的 Excel，系统自动读回预测，拉取实际比分。")
-    uploaded_file = st.file_uploader("选择 Excel", type=["xlsx"], key="upload_review")
-    if uploaded_file is None: st.info("💡 请先上传 Excel。")
+    # V5.14: 支持选择历史存档
+    _recs = sorted([f for f in os.listdir("data/recs") if f.endswith(".xlsx")], reverse=True) if os.path.exists("data/recs") else []
+    _opts = ["手动上传"] + [f.replace(".xlsx", "") for f in _recs]
+    _sel = st.selectbox("选择历史推荐", _opts, key="sel_rec")
+    if _sel == "手动上传":
+        uploaded_file = st.file_uploader("选择 Excel", type=["xlsx"], key="upload_review")
+    else:
+        _path = f"data/recs/{_sel}.xlsx"
+        uploaded_file = open(_path, "rb") if os.path.exists(_path) else None
+    if uploaded_file is None: st.info("💡 请先上传 Excel 或选择历史推荐。")
     else:
         try:
             xl = pd.ExcelFile(uploaded_file)

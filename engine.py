@@ -1494,7 +1494,7 @@ def build_excel(bet_rows, stable_rows, info_rows, review_rows=None, meta_rows=No
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
         if meta_rows: pd.DataFrame(meta_rows).to_excel(writer, sheet_name='基本信息', index=False)
         if bet_rows: pd.DataFrame(bet_rows).to_excel(writer, sheet_name='比分串', index=False)
-        if stable_rows: pd.DataFrame(stable_rows).to_excel(writer, sheet_name='稳健串', index=False)
+        if stable_rows: pd.DataFrame(stable_rows).to_excel(writer, sheet_name='盾推荐', index=False)
         if info_rows: pd.DataFrame(info_rows).to_excel(writer, sheet_name='情报面板', index=False)
         if review_rows: pd.DataFrame(review_rows).to_excel(writer, sheet_name='复盘', index=False)
     return buffer.getvalue()
