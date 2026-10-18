@@ -1129,9 +1129,17 @@ with tab5:
     st.caption("上传早上下载的 Excel，系统自动读回预测，拉取实际比分。")
     # V5.14: 支持选择历史存档
     _recs = sorted([f for f in os.listdir("data/recs") if f.endswith(".xlsx")], reverse=True) if os.path.exists("data/recs") else []
-    _opts = ["手动上传"] + [f.replace(".xlsx", "") for f in _recs]
-    _sel = st.selectbox("选择历史推荐", _opts, key="sel_rec")
-    if _sel == "手动上传":
+    _opts = ["⚡ 一键复盘最新存档", "手动上传"] + [f.replace(".xlsx", "") for f in _recs]
+    _sel = st.selectbox("选择复盘数据源", _opts, key="sel_rec")
+    if _sel == "⚡ 一键复盘最新存档":
+        if _recs:
+            _path = f"data/recs/{_recs[0]}"
+            uploaded_file = open(_path, "rb")
+            st.success(f"已自动加载最新存档：**{_recs[0].replace('.xlsx', '')}**")
+        else:
+            uploaded_file = None
+            st.warning("本地没有推荐存档，请先手动上传或去 Tab2 生成推荐。")
+    elif _sel == "手动上传":
         uploaded_file = st.file_uploader("选择 Excel", type=["xlsx"], key="upload_review")
     else:
         _path = f"data/recs/{_sel}.xlsx"
@@ -1196,7 +1204,8 @@ with tab5:
                 date_str = st.text_input("日期（YYYY-MM-DD）", value=datetime.now(CST).strftime("%Y-%m-%d"), key="manual_date")
             st.markdown(f"### 📅 复盘日期：**{date_str}**")
             review_scope = st.radio("选择复盘范围", ["只复盘推荐比赛", "复盘当天全部预测", "两者都复盘"], horizontal=True, key="review_scope")
-            if st.button("🔍 开始复盘", type="primary", key="btn_review_upload"):
+            _auto_trigger = (_sel == "⚡ 一键复盘最新存档" and len(_recs) > 0)
+            if st.button("🔍 开始复盘", type="primary", key="btn_review_upload") or _auto_trigger:
                 with st.spinner("正在拉取实际比分..."):
                     actual_results, fetch_errors = fetch_actual_results(date_str)
                 if fetch_errors:
