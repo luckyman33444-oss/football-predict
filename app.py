@@ -187,6 +187,12 @@ def render_all_matches(df_all):
             # 最终方向：xG 缺失 或 与市场矛盾时跟市场
             # V5.14: 最终方向已由 engine.py 统一计算，直接复用
             df["最终方向"] = df["预测结果"]
+            # V5.32: 防止因为取不到列导致 KeyError 崩溃
+            if "真实大小球" not in df.columns:
+                if "大小球" in df.columns:
+                    df["真实大小球"] = df["大小球"]
+                else:
+                    df["真实大小球"] = "—"
             display_df = df[[
                 "时间", "联赛", "联赛等级", "状态", "主队", "客队",
                 "主队排名", "客队排名",
