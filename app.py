@@ -6,6 +6,22 @@ import os, json
 from data import CST
 from engine import *
 
+def _merge_dir_ah(dir_str, ah_str):
+    if not ah_str or ah_str == "—" or not dir_str: return dir_str
+    try:
+        line_val = float(str(ah_str).split()[0])
+        if dir_str == "主胜":
+            if line_val < 0: return f"主胜 (让{abs(line_val):g})"
+            elif line_val > 0: return f"主胜 (受让{line_val:g})"
+            else: return "主胜 (平手)"
+        elif dir_str == "客胜":
+            if line_val < 0: return f"客胜 (受让{abs(line_val):g})"
+            elif line_val > 0: return f"客胜 (让{line_val:g})"
+            else: return "客胜 (平手)"
+    except: pass
+    return dir_str
+
+
 st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 
 st.markdown("""
@@ -126,7 +142,7 @@ def render_all_matches(df_all):
                 "主队排名", "客队排名",
                 "主力比分", "备选比分", "第三比分", "预测结果",
                 "模型主胜", "模型和局", "模型客胜",
-                "主胜", "和局", "客胜", "平局概率", "不平局", "强信号", "市场大小球"
+                "主胜", "和局", "客胜", "平局概率", "不平局", "强信号", "真实大小球"
             ]].copy()
             # V5.25: Tab1 强制真实盘口（无数据则显示 —）
             try:
@@ -157,13 +173,16 @@ def render_all_matches(df_all):
                         pass
                     # 彻底干掉百分比兜底，没有真实赔率就返回 —
                     return "—"
-                df["市场大小球"] = df.apply(_get_real_ou, axis=1)
+                df["真实大小球"] = df.apply(_get_real_ou, axis=1)
             except Exception:
                 pass
             # V5.29: 确保 display_df 拿到最新的真实盘口
-            if "市场大小球" in display_df.columns and "市场大小球" in df.columns:
-                display_df["市场大小球"] = df["市场大小球"].values
+            if "真实大小球" in display_df.columns and "真实大小球" in df.columns:
+                display_df["真实大小球"] = df["真实大小球"].values
             display_df = display_df.rename(columns={"预测结果": "模型判断"})
+            # V5.30: 合并最终方向和真实亚盘
+            if "最终方向" in display_df.columns and "真实亚盘" in display_df.columns:
+                display_df["最终方向"] = display_df.apply(lambda r: _merge_dir_ah(r["最终方向"], r["真实亚盘"]), axis=1)
             # V5.11: Tab1「市场判断」→ TSA 让球盘方向（只读缓存，无则 fallback 1X2）
             _tab1_tsa_map = {}
             try:
@@ -243,7 +262,7 @@ def render_all_matches(df_all):
                         st.dataframe(
                             core_df[[
                                 "时间", "联赛", "主队", "客队", "主力比分", "备选比分",
-                                "第三比分", "预测结果", "市场判断", "市场大小球", "主胜", "和局", "客胜"
+                                "第三比分", "预测结果", "市场判断", "真实大小球", "主胜", "和局", "客胜"
                             ]].rename(columns={"预测结果": "模型判断"}),
                             use_container_width=True, hide_index=True
                         )
@@ -379,6 +398,9 @@ def render_high_confidence(df_all):
                          "预测结果","最终方向", "主力比分", "备选比分", "第三比分", "真实大小球", "真实亚盘"]
                 _avail = [c for c in _want if c in _high.columns]
                 _show = _high[_avail].copy()
+                # V5.30: 高置信清单合并方向和亚盘
+                if "最终方向" in _show.columns and "真实亚盘" in _show.columns:
+                    _show["最终方向"] = _show.apply(lambda r: _merge_dir_ah(r["最终方向"], r["真实亚盘"]), axis=1)
                 _show = _show.rename(columns={"联赛等级": "等级", "_pd": "平局%", "_gap": "市场差", "_ou_str": "大小球强度%", "预测结果": "模型判断"})
                 if "平局%" in _show.columns: _show["平局%"] = _show["平局%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
                 if "市场差" in _show.columns: _show["市场差"] = _show["市场差"].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
@@ -487,7 +509,7 @@ with tab2:
         core_only_df = df_all[df_all["event_id"].isin(st.session_state.core_matches)].copy()
         if not core_only_df.empty:
             st.markdown("### 🎯 当前核心比赛（来自 Tab1）")
-            show_cols = ["时间", "联赛", "主队", "客队", "主力比分", "备选比分", "预测结果", "模型主胜", "模型和局", "模型客胜", "市场判断", "市场大小球", "主胜", "和局", "客胜"]
+            show_cols = ["时间", "联赛", "主队", "客队", "主力比分", "备选比分", "预测结果", "模型主胜", "模型和局", "模型客胜", "市场判断", "真实大小球", "主胜", "和局", "客胜"]
             show_cols = [c for c in show_cols if c in core_only_df.columns]
             st.dataframe(core_only_df[show_cols], use_container_width=True, hide_index=True)
 
@@ -1126,7 +1148,7 @@ with tab2:
                         rec_rows.append({"场次": i, "比赛": md["比赛"], "联赛": md["联赛"], "等级": md.get("等级", "B"), "时间": md["时间"],
                                          "event_id": md["event_id"], "模型判断": best_opt[0], "模型概率": f"{best_opt[1]*100:.1f}%",
                                          "下注建议": md.get("bet_advice", "—"),
-                                         "调整后方向": adj_name, "调整后概率": f"{adj_prob*100:.1f}%",
+                                         "调整后方向": _merge_dir_ah(adj_name, _tsa_ah_str), "调整后概率": f"{adj_prob*100:.1f}%",
                                          "亚盘": mc.get("ah_line", "—"), "亚盘判断": mc.get("ah_note", "—"),
                                          "市场方向": md.get("市场判断", "—"),
                                          "市场差": round(md.get("市场差", 0), 1),
@@ -1177,7 +1199,7 @@ with tab2:
                             _z_show = _z[[c for c in ["时间", "联赛", "联赛等级", "主队", "客队",
                                 "预测结果", "模型主胜", "模型和局", "模型客胜",
                                 "市场判断", "主胜", "和局", "客胜",
-                                "市场大小球",
+                                "真实大小球",
                                 "主力比分", "备选比分", "第三比分"] if c in _z.columns]].copy()
                             _z_show = _z_show.rename(columns={"预测结果": "模型判断", "联赛等级": "等级"})
                             st.dataframe(_z_show, use_container_width=True, hide_index=True)
