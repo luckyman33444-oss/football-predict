@@ -823,31 +823,33 @@ with tab2:
                                     _is_over = None
                             if _is_over is None:
                                 _is_over = adj_pred["over25"] >= 0.5
-                            # V5.38: 强制按真实方向与 TSA 大小球分配比分，彻底告别模型干扰
-                            # V5.41: 补齐因替换丢失的变量
-                            _adj_dir_now = adj_best[0] if adj_best else "—"
-                            _tsa_o = tsa_odds_map.get(eid) or {}
-                            _ro = _tsa_o.get("real_over25")
-                            _ru = _tsa_o.get("real_under25")
-                            _is_over = None
-                            if _ro and _ru:
-                                try: _is_over = float(_ro) < float(_ru)
-                                except: _is_over = None
-                            if _is_over is None:
-                                _is_over = adj_pred["over25"] >= 0.5 if adj_pred else False
+                            # V5.43: 强制按真实方向与 TSA 大小球分配比分，并修正深盘比分
                             _b = []
+                            _tsa_ah = str(_tsa_ah_t2.get("real_ah_line", ""))
+                            try:
+                                _ah_val = float(_tsa_ah)
+                            except:
+                                _ah_val = 0.0
+                            is_deep = abs(_ah_val) >= 1.5
+                            
                             if _is_over:
-                                if _adj_dir_now == "主胜": _b = [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
-                                elif _adj_dir_now == "客胜": _b = [(1,2,0.5), (1,3,0.3), (0,3,0.2)]
+                                if _adj_dir_now == "主胜":
+                                    _b = [(3,0,0.5), (3,1,0.3), (2,0,0.2)] if is_deep else [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
+                                elif _adj_dir_now == "客胜":
+                                    _b = [(0,3,0.5), (1,3,0.3), (0,2,0.2)] if is_deep else [(1,2,0.5), (1,3,0.3), (0,3,0.2)]
                                 else: _b = [(1,1,0.5), (2,2,0.3), (3,3,0.2)]
                             else:
-                                if _adj_dir_now == "主胜": _b = [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
-                                elif _adj_dir_now == "客胜": _b = [(0,1,0.5), (0,2,0.3), (1,1,0.2)]
+                                if _adj_dir_now == "主胜":
+                                    _b = [(2,0,0.5), (1,0,0.3), (1,1,0.2)] if is_deep else [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
+                                elif _adj_dir_now == "客胜":
+                                    _b = [(0,2,0.5), (0,1,0.3), (1,1,0.2)] if is_deep else [(0,1,0.5), (0,2,0.3), (1,1,0.2)]
                                 else: _b = [(0,0,0.5), (1,1,0.3), (2,2,0.2)]
                             
                             adj_scores = _b
                             adj_main_score = f"{adj_scores[0][0]}-{adj_scores[0][1]}" if adj_scores else "—"
                             adj_alt_score = f"{adj_scores[1][0]}-{adj_scores[1][1]}" if len(adj_scores) > 1 else "—"
+                            adj_main_prob = adj_scores[0][2] if adj_scores else 0
+                            adj_alt_prob = adj_scores[1][2] if len(adj_scores) > 1 else 0
                             adj_main_prob = adj_scores[0][2] if adj_scores else 0
                             adj_alt_prob = adj_scores[1][2] if len(adj_scores) > 1 else 0
                             adj_main_prob = adj_scores[0][2] if adj_scores else 0
