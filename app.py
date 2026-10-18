@@ -652,12 +652,27 @@ with tab2:
                                 _is_over = adj_pred["over25"] >= 0.5
                             # V5.13: 比分选池按调整后方向（主胜→main池，客胜→away池，和局→不分）
                             _adj_dir_now = adj_best[0] if adj_best else "—"
-                            if _is_over:
+
+                            _draw_b = [s for s in adj_pred["top_scores"] if s[0] == s[1]]
+
+                            if not _draw_b: _draw_b = [(1, 1, 0.1), (0, 0, 0.05), (2, 2, 0.05)]
+
+                            if _adj_dir_now == "和局":
+
+                                _b = _draw_b
+
+                            elif _is_over:
+
                                 _b = adj_pred.get("main_over") if _adj_dir_now == "主胜" else (adj_pred.get("away_over") if _adj_dir_now == "客胜" else adj_pred["over_scores"])
-                                if not _b: _b = adj_pred["over_scores"]  # fallback
+
+                                if not _b: _b = adj_pred["over_scores"]
+
                             else:
+
                                 _b = adj_pred.get("main_under") if _adj_dir_now == "主胜" else (adj_pred.get("away_under") if _adj_dir_now == "客胜" else adj_pred["under_scores"])
-                                if not _b: _b = adj_pred["under_scores"]  # fallback
+
+                                if not _b: _b = adj_pred["under_scores"]
+
                             _m = list(_b[:3]); _e = {(s[0], s[1]) for s in _m}
                             for _h, _a in [(1,1),(1,0),(2,1),(0,1),(0,0),(2,0),(1,2),(2,2)]:
                                 if (_h, _a) not in _e: _m.append((_h, _a, 0.0))
