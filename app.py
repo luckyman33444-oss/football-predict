@@ -990,7 +990,7 @@ with tab2:
                         _conf = "🔒 高" if _gap > 35 else ("✅ 中" if _gap >= 20 else "⚠️ 低")
                         ah_rows.append({
                             "场次": i, "比赛": md["比赛"],
-                            "模型亚盘": mc["ah_line"], "模型判断": mc["ah_note"],
+                            # V5.33: 彻底删除模型假亚盘，只保留真实市场方向
                             "市场方向": _mkt_side, "市场差": round(_gap, 1), "亚盘置信": _conf,
                             "大小球方向": md["大小球方向"],
                             "比分倾向": mc["score_dir"],
