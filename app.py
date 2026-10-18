@@ -6,6 +6,56 @@ import os, json
 from data import CST
 from engine import *
 
+def _sync_scores_tsa(df):
+    """用 TSA 真实大小球强制纠偏比分"""
+    import pandas as pd
+    _tsa_map = load_tsa_mapping()
+    
+    def _get_scores(row):
+        eid = row.get("event_id")
+        _dir = row.get("预测结果", "—")
+        if not eid or _dir not in ("主胜", "客胜", "和局"):
+            return row.get("主力比分", "—"), row.get("备选比分", "—")
+        
+        mid = _tsa_map.get(int(eid))
+        if not mid: return row.get("主力比分", "—"), row.get("备选比分", "—")
+        
+        try:
+            _d = parse_tsa_odds_summary(fetch_or_load_tsa_odds(mid))
+            _lines = _d.get("real_ou_lines", {})
+            if not _lines: return row.get("主力比分", "—"), row.get("备选比分", "—")
+            
+            valid_lines = []
+            for k, v in _lines.items():
+                try: valid_lines.append((float(k), v["over"], v["under"]))
+                except: pass
+            valid_lines.sort()
+            if not valid_lines: return row.get("主力比分", "—"), row.get("备选比分", "—")
+            
+            best = next((vl for vl in valid_lines if vl[0] == 2.5), valid_lines[0])
+            _, ov, un = best
+            _is_over = ov < un  # 赔率低的一方是庄家看好的方向
+            
+            if _is_over:
+                if _dir == "主胜": return "2-1", "3-1"
+                if _dir == "客胜": return "1-2", "1-3"
+                if _dir == "和局": return "1-1", "2-2"
+            else:
+                if _dir == "主胜": return "1-0", "2-0"
+                if _dir == "客胜": return "0-1", "0-2"
+                if _dir == "和局": return "0-0", "1-1"
+        except Exception:
+            pass
+        return row.get("主力比分", "—"), row.get("备选比分", "—")
+        
+    if df.empty: return df
+    # 批量应用
+    scores = df.apply(_get_scores, axis=1)
+    df["主力比分"] = [s[0] for s in scores]
+    df["备选比分"] = [s[1] for s in scores]
+    return df
+
+
 def _merge_dir_ah(dir_str, ah_str):
     if not ah_str or ah_str == "—" or not dir_str: return dir_str
     try:
@@ -448,6 +498,9 @@ parsed = []
 if all_preds:
     parsed = [parse_prediction(p) for p in all_preds]
     df_all = pd.DataFrame(parsed)
+    # V5.31: 强制用 TSA 真实大小球纠偏比分
+    if not df_all.empty:
+        df_all = _sync_scores_tsa(df_all)
 else: df_all = pd.DataFrame()
 
 # ========== Tab 1 ==========
