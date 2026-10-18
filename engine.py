@@ -206,6 +206,7 @@ def predict_full_dc(xg_h, xg_a, rho=-0.05):
         ou_text = f"大2.5 {p_over_25 * 100:.1f}%"
     else:
         ou_text = f"小2.5 {p_under_25 * 100:.1f}%"
+        ou_lines = {}  # V5.35: 补上空字典防止 NameError
 
     return {"over_scores": over_scores, "under_scores": under_scores, "top_scores": top,
             "main_over": main_over, "main_under": main_under,
