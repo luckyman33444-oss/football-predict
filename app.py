@@ -609,29 +609,24 @@ with tab2:
                 end_window_auto = now.replace(hour=23, minute=59, second=59, microsecond=0)
                 other_df = other_df_all[other_df_all["kickoff_dt"] <= end_window_auto].copy()
                 def calc_conf(row):
-                    # 2026-10-16 简化：回测证明 _conf 排序 ≈ 市场差排序（差异<1pp）
+                    # V5.42: 回测证明，纯市场差选场最强，S/A+大球加分是负优化，已彻底拔除
                     _ph = row.get("_prob_home") or 0
                     _pa = row.get("_prob_away") or 0
                     _gap = abs(_ph - _pa)
-                    if _gap < 15:
-                        return -1
-                    # V5.17: 最终方向必须明确是主客和，且不和市场冲突
+                    
+                    # 1. 基础门槛
+                    if _gap < 15: return -1
                     _a_dir = row.get("预测结果", "—")
-                    # V5.19: 最终方向的核心市场概率必须 >= 50%，防止出现「反向」
+                    if _a_dir not in ("主胜", "客胜", "和局"): return -1
+                    
+                    # 2. 市场方向必须一致，且核心概率大于 50%
                     if _a_dir == "主胜" and _ph < 50: return -1
                     if _a_dir == "客胜" and _pa < 50: return -1
-                    if _a_dir not in ("主胜", "客胜", "和局"):
-                        return -1
                     if _a_dir == "主胜" and _ph < _pa: return -1
                     if _a_dir == "客胜" and _ph >= _pa: return -1
                     
-                    # V5.13: 加入 TSA 回测验证的最优组合（大小球≥65 + S/A）
-                    # V5.13: 加入 TSA 回测验证的最优组合（大小球≥65 + S/A）
-                    _ou = row.get("_prob_over_pct") or 0
-                    _ou_str = max(_ou, 100 - _ou)
-                    _grade = row.get("联赛等级", "B")
-                    _bonus = 50 if (_ou_str >= 65 and _grade in ("S", "A")) else 0
-                    return _gap + _bonus
+                    # 3. 直接按市场差排序
+                    return _gap
                 core_df["_conf"] = core_df.apply(calc_conf, axis=1) if not core_df.empty else pd.Series(dtype=float)
                 other_df["_conf"] = other_df.apply(calc_conf, axis=1) if not other_df.empty else pd.Series(dtype=float)
                 if not core_df.empty: core_df = core_df[core_df["_conf"] >= 0]
