@@ -938,16 +938,19 @@ with tab2:
                                                "比分2": _sc[i][1], "角色": role})
                     st.dataframe(pd.DataFrame(rows_for_table), use_container_width=True, hide_index=True)
                     bet_rows = []
-                    if best_idx is not None:
-                        st.markdown(f"**策略：第 {best_idx+1} 场做主胆（每场 2 个比分，共 8 注）**")
+                    if len(matches3) < 3:
+                        st.warning(f"⚠️ 当前只有 **{len(matches3)}** 场符合严苛条件，不足 3 场无法生成比分串。")
                     else:
-                        st.markdown("**三场无明显主胆，每场选 2 个比分（共 8 注）**")
-                    n = 1
-                    for a in _sc[0]:
-                        for b in _sc[1]:
-                            for c in _sc[2]:
-                                bet_rows.append({"注单": f"注{n}", "第1场": a, "第2场": b, "第3场": c}); n += 1
-                    st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
+                        if best_idx is not None:
+                            st.markdown(f"**策略：第 {best_idx+1} 场做主胆（每场 2 个比分，共 8 注）**")
+                        else:
+                            st.markdown("**三场无明显主胆，每场选 2 个比分（共 8 注）**")
+                        n = 1
+                        for a in _sc[0]:
+                            for b in _sc[1]:
+                                for c in _sc[2]:
+                                    bet_rows.append({"注单": f"注{n}", "第1场": a, "第2场": b, "第3场": c}); n += 1
+                        st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     st.divider()
                     # V5.12: 盾 —— 3 场里最稳的 1 场
                     st.subheader("🛡️ 盾：保护比分串的兼容盘口（1X2 / 亚盘 / 大小球）")
