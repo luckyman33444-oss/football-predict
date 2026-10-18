@@ -995,26 +995,9 @@ def fetch_actual_results(date_str):
     except Exception:
         from_dt = date_str; to_dt = date_str
     try:
-        r = requests.get(f"{BSD_BASE}/events/", headers=BSD_HEADERS, params={"date_from": from_dt, "date_to": to_dt, "limit": 500}, timeout=25)
-        if r.status_code == 200:
-            data = r.json()
-            results = data.get("results", []) if isinstance(data, dict) else []
-            for ev in results:
-                eid = ev.get("id")
-                if not eid: continue
-                home_score = ev.get("home_score"); away_score = ev.get("away_score")
-                if home_score is None and "score" in ev:
-                    score = ev.get("score")
-                    if isinstance(score, list) and len(score) >= 2: home_score, away_score = score[0], score[1]
-                    elif isinstance(score, dict):
-                        ft = score.get("ft")
-                        if isinstance(ft, list) and len(ft) >= 2: home_score, away_score = ft[0], ft[1]
-                        else: home_score = score.get("home"); away_score = score.get("away")
-                if home_score is None or away_score is None: continue
-                try: actual[eid] = {"home": int(home_score), "away": int(away_score)}
-                except: continue
-        elif r.status_code == 401: errors.append("events 接口 401")
-        else: errors.append(f"events 接口返回 {r.status_code}")
+        # V5.13: 复用 fetch_or_load_bz_events（带分页 + 落盘缓存）
+        actual = fetch_or_load_bz_events(from_dt, to_dt)
+        if not isinstance(actual, dict): actual = {}
     except Exception as e: errors.append(f"events 请求异常：{e}")
     if not actual:
         try:
