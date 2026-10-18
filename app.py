@@ -634,7 +634,8 @@ with tab2:
                     return _gap + _bonus
                 core_df["_conf"] = core_df.apply(calc_conf, axis=1) if not core_df.empty else pd.Series(dtype=float)
                 other_df["_conf"] = other_df.apply(calc_conf, axis=1) if not other_df.empty else pd.Series(dtype=float)
-                if not core_df.empty: core_df = core_df[core_df["_conf"] >= 0]
+                # V5.63: 用户手动选的核心，哪怕打出负分也强制保留，绝不擅自删除
+                # if not core_df.empty: core_df = core_df[core_df["_conf"] >= 0]
                 if not other_df.empty: other_df = other_df[other_df["_conf"] >= 0]
                 n_core_in_window = len(core_df)
                 if n_core_in_window >= 3:
@@ -645,7 +646,7 @@ with tab2:
                     if len(other_df) >= need:
                         fill = other_df.sort_values("_conf", ascending=False).head(need)
                         selected = pd.concat([core_df, fill])
-                        note = f"✅ 核心比赛 {n_core_in_window} 场 + 自动补充 {len(fill)} 场"
+                        note = f"📌 您的核心 {n_core_in_window} 场 + 自动补充 {len(fill)} 场（补足3场）"
                     else:
                         fill = other_df.sort_values("_conf", ascending=False)
                         selected = pd.concat([core_df, fill])
