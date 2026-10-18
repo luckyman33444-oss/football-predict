@@ -151,7 +151,7 @@ def render_all_matches(df_all):
                     if _po is not None:
                         return f"大2.5 {_po}%" if _po >= 50 else f"小2.5 {100-_po}%"
                     return "—"
-                df["大小球"] = df.apply(_get_real_ou, axis=1)
+                df["市场大小球"] = df.apply(_get_real_ou, axis=1)
             except Exception:
                 pass
             display_df = display_df.rename(columns={"预测结果": "模型判断"})
