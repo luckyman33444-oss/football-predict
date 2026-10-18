@@ -830,7 +830,8 @@ with tab2:
                                 _is_over = adj_pred["over25"] >= 0.5
                             # V5.43: 强制按真实方向与 TSA 大小球分配比分，并修正深盘比分
                             _b = []
-                            _tsa_ah = str(_tsa_ah_t2.get("real_ah_line", ""))
+                            _tsa_ah_t2 = tsa_odds_map.get(eid) or {}
+                            _tsa_ah = str(_tsa_ah_t2.get("real_ah_line", "0"))
                             try:
                                 _ah_val = float(_tsa_ah)
                             except:
