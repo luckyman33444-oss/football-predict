@@ -163,6 +163,9 @@ def render_all_matches(df_all):
                 df["市场大小球"] = df.apply(_get_real_ou, axis=1)
             except Exception:
                 pass
+            # V5.29: 确保 display_df 拿到最新的真实盘口
+            if "市场大小球" in display_df.columns and "市场大小球" in df.columns:
+                display_df["市场大小球"] = df["市场大小球"].values
             display_df = display_df.rename(columns={"预测结果": "模型判断"})
             # V5.11: Tab1「市场判断」→ TSA 让球盘方向（只读缓存，无则 fallback 1X2）
             _tab1_tsa_map = {}
