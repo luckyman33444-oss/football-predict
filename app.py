@@ -446,15 +446,13 @@ with tab2:
                     _gap = abs(_ph - _pa)
                     if _gap < 15:
                         return -1
-                    # V5.16: 过滤跨维度（原推荐不是主客和）及方向分歧的场次
-                    _m_dir = row.get("预测结果", "—")
+                    # V5.17: 最终方向必须明确是主客和，且不和市场冲突
                     _a_dir = row.get("调整后方向", "—")
-                    # 1. 只接受主客和维度
-                    if _m_dir not in ("主胜", "客胜", "和局") or _a_dir not in ("主胜", "客胜", "和局"):
+                    if _a_dir not in ("主胜", "客胜", "和局"):
                         return -1
-                    # 2. 排除模型和调整后方向相反的（市场冲突）
-                    if _m_dir != "—" and _a_dir != "—" and _m_dir != _a_dir:
-                        return -1
+                    if _a_dir == "主胜" and _ph < _pa: return -1
+                    if _a_dir == "客胜" and _ph >= _pa: return -1
+                    
                     # V5.13: 加入 TSA 回测验证的最优组合（大小球≥65 + S/A）
                     # V5.13: 加入 TSA 回测验证的最优组合（大小球≥65 + S/A）
                     _ou = row.get("_prob_over_pct") or 0
