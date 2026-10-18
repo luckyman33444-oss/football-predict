@@ -646,6 +646,14 @@ with tab2:
                     _trust = ["西甲", "英超", "土超", "法甲", "丹超", "葡超"]
                     _caution = ["沙特联", "Liga Portugal 2", "日职联", "巴甲", "美职联", "哥伦比亚甲"]
                     
+                    # V5.71: 球队信任度权重（提款机加分，神经刀扣分）
+                    _trust_teams = ["巴塞罗那", "阿森纳", "曼城", "皇家马德里", "国际米兰", "巴黎圣日耳曼", "博卡青年", "马德里竞技", "弗拉门戈", "凯尔特人", "波尔图"]
+                    _trap_teams = ["毕尔巴鄂竞技", "西汉姆联", "河床", "国际迈阿密", "帕纳辛奈科斯", "奈梅亨", "洛杉矶FC", "福塔莱萨", "光州FC", "卡诺支柱"]
+                    _t1 = str(row.get("主队", ""))
+                    _t2 = str(row.get("客队", ""))
+                    if _t1 in _trust_teams or _t2 in _trust_teams: _bonus += 30
+                    elif _t1 in _trap_teams or _t2 in _trap_teams: _bonus -= 40
+                    
                     _bonus = 0
                     if _league in _trust: _bonus = 20
                     elif _league in _caution: _bonus = -25
