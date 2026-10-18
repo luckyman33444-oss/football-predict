@@ -119,19 +119,8 @@ def render_all_matches(df_all):
             df["主队排名"] = df.apply(lambda r: _rank_for(r["联赛"], r["主队"]), axis=1)
             df["客队排名"] = df.apply(lambda r: _rank_for(r["联赛"], r["客队"]), axis=1)
             # 最终方向：xG 缺失 或 与市场矛盾时跟市场
-            def _final_dir(r):
-                _xg_h = r.get("_xg_h"); _xg_a = r.get("_xg_a")
-                _ph = r.get("_prob_home") or 0; _pa = r.get("_prob_away") or 0
-                _model = r.get("预测结果", "—")
-                _mkt = "主胜" if _ph >= _pa else "客胜"
-                if pd.isna(_xg_h) or pd.isna(_xg_a): return _mkt
-                try:
-                    _xs = "主" if float(_xg_h) >= float(_xg_a) else "客"
-                except Exception:
-                    return _mkt
-                _ms = "主" if _ph >= _pa else "客"
-                return _mkt if _xs != _ms else _model
-            df["最终方向"] = df.apply(_final_dir, axis=1)
+            # V5.14: 最终方向已由 engine.py 统一计算，直接复用
+            df["最终方向"] = df["预测结果"]
             display_df = df[[
                 "时间", "联赛", "联赛等级", "状态", "主队", "客队",
                 "主队排名", "客队排名",

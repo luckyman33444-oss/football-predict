@@ -949,6 +949,18 @@ def parse_prediction(p):
     prob_home = mr.get("prob_home") or 0
     prob_draw = mr.get("prob_draw") or 0
     prob_away = mr.get("prob_away") or 0
+    # V5.14: 提前计算最终方向（原 app.py _final_dir 逻辑）
+    _mkt = "主胜" if prob_home >= prob_away else "客胜"
+    if xg_h is None or xg_a is None:
+        _final_dir = _mkt
+    else:
+        try:
+            _xs = "主" if float(xg_h) >= float(xg_a) else "客"
+            _ms = "主" if prob_home >= prob_away else "客"
+            _final_dir = _mkt if _xs != _ms else (pred["best_result"] if pred else "—")
+        except Exception:
+            _final_dir = _mkt
+
     prob_over25_raw = ou.get("prob_over_25")
     if prob_over25_raw is not None:
         try: p_over = float(prob_over25_raw)
@@ -967,7 +979,7 @@ def parse_prediction(p):
         # V5.6 A+: 模型前3 ∪ 全局8池（选边法）
         # V5.14: 比分选池按模型方向（主胜/客胜/和局）过滤，解决方向与比分矛盾
 
-        _m_dir = pred["best_result"]
+        _m_dir = _final_dir
 
         _pool_over = pred["over_scores"]
 
@@ -1014,7 +1026,7 @@ def parse_prediction(p):
     h1 = pred["h1"] if pred else "—"
     h2 = pred["h2"] if pred else "—"
     if pred:
-        model_result = pred["best_result"]
+        model_result = _final_dir  # 统一返回修正后的方向
     else:
         model_result = "—"
     status_map = {"finished": "已结束", "notstarted": "未开始", "upcoming": "未开始", "live": "进行中", "inprogress": "进行中", "postponed": "延期", "canceled": "取消"}
