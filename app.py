@@ -1030,10 +1030,12 @@ with tab2:
                             _best = max(_cands, key=lambda x: x[0])
                             _shield_candidates.append((_best[0], _md, _best[1], _best[2], _best[3], _best[4]))
                         else:
-                            # fallback
-                            _top = max(_opts, key=lambda x: x[1])
-                            _src = _top[3] if len(_top) > 3 else "imp"
-                            _shield_candidates.append((_top[1], _md, _top[0], _top[2], _src, "无兼容TSA盘口，用模型最优"))
+                            # fallback: 无兼容 TSA 盘口，用模型最优
+                            _opts = _md.get("opts") or []
+                            if _opts:
+                                _top = max(_opts, key=lambda x: x[1])
+                                _src = _top[3] if len(_top) > 3 else "imp"
+                                _shield_candidates.append((_top[1], _md, _top[0], _top[2], _src, "无兼容TSA盘口，用模型最优"))
 
                     # 3) 选出 3 场中最稳的那个
                     if _shield_candidates:
