@@ -1001,20 +1001,25 @@ def fetch_actual_results(date_str):
     except Exception as e: errors.append(f"events 请求异常：{e}")
     if not actual:
         try:
-            r = requests.get(f"{BSD_BASE}/predictions/", headers=BSD_HEADERS, params={"date_from": from_dt, "date_to": to_dt, "limit": 500}, timeout=25)
-            if r.status_code == 200:
-                data = r.json()
-                results = data.get("results", []) if isinstance(data, dict) else []
-                for p in results:
-                    ev = p.get("event", {}) if isinstance(p.get("event"), dict) else {}
-                    eid = ev.get("id")
-                    if not eid: continue
-                    home_score = ev.get("home_score"); away_score = ev.get("away_score")
-                    if home_score is None or away_score is None: continue
-                    try: actual[eid] = {"home": int(home_score), "away": int(away_score)}
-                    except: continue
-            else: errors.append(f"predictions 兜底接口返回 {r.status_code}")
-        except Exception as e: errors.append(f"predictions 兜底请求异常：{e}")
+            # V5.15: predictions 兜底改用带分页的 fetch_predictions_range
+            preds = fetch_predictions_range(from_dt, to_dt)
+            for p in preds:
+                ev = p.get("event", {}) if isinstance(p.get("event"),dict) else {}
+                eid = ev.get("id")
+                if not eid: continue
+                h = ev.get("home_score"); a = ev.get("away_score")
+                if h is None and "score" in ev:
+                    score = ev.get("score")
+                    if isinstance(score, list) and len(score) >= 2: h, a = score[0], score[1]
+                    elif isinstance(score, dict):
+                        ft = score.get("ft")
+                        if isinstance(ft, list) and len(ft) >= 2: h, a = ft[0], ft[1]
+                        else: h, a = score.get("home"), score.get("away")
+                if h is None or a is None: continue
+                try: actual[eid] = {"home": int(h), "away": int(a)}
+                except: continue
+        except Exception as e:
+            errors.append(f"predictions 兜底请求异常：{e}")
     return actual, errors
 
 def judge_prediction_hit(pred_label, actual_result):
