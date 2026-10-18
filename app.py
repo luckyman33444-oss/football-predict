@@ -413,24 +413,29 @@ def render_high_confidence(df_all):
                 _high_tsa_map = {}
             _high_tsa_cache = {}
             def _get_tsa_ou(eid):
-                if eid in _high_tsa_cache: return _high_tsa_cache[eid]
-                try: _mid = _high_tsa_map.get(int(eid)) if eid else None
+                if not eid: return "—"
+                try: _mid = _high_tsa_map.get(int(eid))
                 except Exception: _mid = None
-                if not _mid:
-                    _high_tsa_cache[eid] = "—"; return "—"
+                if not _mid: return "—"
                 try:
                     _raw = fetch_or_load_tsa_odds(_mid)
                     _d = parse_tsa_odds_summary(_raw) if _raw else {}
-                except Exception:
-                    _d = {}
-                _ov = _d.get("real_over25"); _un = _d.get("real_under25")
-                _r = "—"
-                if _ov and _un:
-                    try:
-                        _r = f"大2.5 {_ov}" if float(_ov) <= float(_un) else f"小2.5 {_un}"
-                    except Exception:
-                        _r = "—"
-                _high_tsa_cache[eid] = _r; return _r
+                except Exception: return "—"
+                _lines = _d.get("real_ou_lines", {})
+                if _lines:
+                    valid_lines = []
+                    for k, v in _lines.items():
+                        try: valid_lines.append((float(k), v["over"], v["under"]))
+                        except: pass
+                    valid_lines.sort()
+                    if valid_lines:
+                        best = next((vl for vl in valid_lines if vl[0] == 2.5), valid_lines[0])
+                        lf, ov, un = best
+                        _inv = (1/ov) + (1/un)
+                        _po = (1/ov)/_inv
+                        _pu = (1/un)/_inv
+                        return f"{lf:g}球 | 大{ov}({_po*100:.0f}%) / 小{un}({_pu*100:.0f}%)"
+                return "—"
             def _get_tsa_ah(eid):
                 try: _mid = _high_tsa_map.get(int(eid)) if eid else None
                 except Exception: _mid = None
