@@ -816,6 +816,7 @@ with tab2:
                         if adj_pred:
                             best_name, best_prob = pick_best_result(adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
                             adj_best = (best_name, best_prob)
+                            _adj_dir_now = adj_best[0] if adj_best else "—"
                             # V5.6 A+: 模型前3 ∪ 全局8池（与 backtest_one 同步）
                             # V5.11: 大小球选边切 TSA 真实盘口（赔率低=概率高），无 TSA 时 fallback 模型
                             _tsa_ou = tsa_odds_map.get(eid) or {}
@@ -844,8 +845,8 @@ with tab2:
                             is_deep = abs(_ah_val) >= 1.5
                             
                             if _is_over:
-                                _adj_dir_now = adj_best[0] if adj_best else "—"
-                                _adj_dir_now = adj_best[0] if adj_best else "—"
+                                # (已移至上方统一定义)
+                                # (已移至上方统一定义)
                                 if _adj_dir_now == "主胜":
                                     _b = [(3,0,0.5), (3,1,0.3), (2,0,0.2)] if is_deep else [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
                                 elif _adj_dir_now == "客胜":
