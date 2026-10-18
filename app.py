@@ -144,10 +144,21 @@ def render_all_matches(df_all):
                                 except: pass
                             valid_lines.sort()
                             if valid_lines:
+                                # 优先取 2.5 盘口
                                 best = next((vl for vl in valid_lines if vl[0] == 2.5), valid_lines[0])
                                 lf, ov, un = best
-                                return f"{lf:g}球 大{ov}/小{un}"
-                    # 彻底干掉 Bz 的百分比兜底，没有真实赔率就返回 —
+                                # V5.26: 赔率反推隐含概率（去水）
+                                try:
+                                    _inv_sum = (1 / ov) + (1 / un)
+                                    _p_over = (1 / ov) / _inv_sum
+                                    _p_under = (1 / un) / _inv_sum
+                                    return f"{lf:g}球 | 大{ov}({_p_over*100:.0f}%) / 小{un}({_p_under*100:.0f}%)"
+                                except Exception:
+                                    return f"{lf:g}球 大{ov}/小{un}"
+                    # 如果没真实赔率，退回 Bz 市场概率
+                    _po = r.get("_prob_over_pct")
+                    if _po is not None:
+                        return f"大2.5 {_po}%" if _po >= 50 else f"小2.5 {100-_po}%"
                     return "—"
                 df["市场大小球"] = df.apply(_get_real_ou, axis=1)
             except Exception:
