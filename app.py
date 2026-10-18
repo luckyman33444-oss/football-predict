@@ -1197,25 +1197,35 @@ with tab2:
 
                     # 3) 选出 3 场中最稳的那个
                     if _shield_candidates:
-                        # V5.22: 优先选赔率 >= 1.50 的盘口（拒绝蚊子肉），再按概率排序
+                        # 优先选赔率 >= 1.50 的盘口（拒绝蚊子肉），再按概率排序
                         _group_good = [x for x in _shield_candidates if x[3] >= 1.50]
                         _group_bad = [x for x in _shield_candidates if x[3] < 1.50]
                         if _group_good:
                             _shield_candidates = _group_good
                         else:
                             _shield_candidates = _group_bad
-
+                        
                         _shield_candidates.sort(key=lambda x: -x[0])
-                        _bs, _bmd, _rec, _bo, _bsrc, _reason = _shield_candidates[0]
-                        _src_txt = {"TSA": "真实TSA", "Bz": "真实Bz"}.get(_bsrc, "隐含")
-                        if _bs >= 0.80: _adv = "🟢🟢 重仓"
-                        elif _bs >= 0.70: _adv = "🟢 可下"
-                        else: _adv = "🟡 小注"
-                        st.success(f"**{_bmd['比赛']}**  →  **{_rec}**  ｜  {_adv}")
-                        if not _group_good:
-                            st.warning(f"⚠️ 所有兼容盘口赔率均低于 1.50。若剑买 8 元，盾需下注 {8/(_bo-1):.1f} 元才能完全保本。")
-                        else:
-                            st.caption(f"等级 **{_bmd.get('等级', 'B')}**  ｜  隐含概率 **{_bs*100:.1f}%**  ｜  赔率 **{fmt_odds(_bo)}** ({_src_txt})  ｜  {_reason}")
+                        _top3 = _shield_candidates[:3]
+                        
+                        for _idx, _cand in enumerate(_top3, 1):
+                            _bs, _bmd, _rec, _bo, _bsrc, _reason = _cand
+                            _src_txt = {"TSA": "真实TSA", "Bz": "真实Bz"}.get(_bsrc, "隐含")
+                            
+                            if _bs >= 0.80: _adv = "🟢🟢 重仓"
+                            elif _bs >= 0.70: _adv = "🟢 可下"
+                            elif _bs >= 0.60: _adv = "🟡 小注"
+                            else: _adv = "🔴 不推"
+                            
+                            _icon = "🥇" if _idx == 1 else ("🥈" if _idx == 2 else "🥉")
+                            _box = st.success if _idx == 1 else (st.info if _idx == 2 else st.warning)
+                            
+                            _box(f"{_icon} **{_bmd['比赛']}**  →  **{_rec}**  ｜  {_adv}")
+                            if not _group_good:
+                                _cost = 8 / (_bo - 1) if _bo > 1 else 999
+                                st.caption(f"隐含概率 **{_bs*100:.1f}%** ｜ 赔率 **{fmt_odds(_bo)}** ({_src_txt}) ｜ ⚠️ 赔率低于1.50，若剑买8元，盾需下注 {_cost:.1f} 元保本")
+                            else:
+                                st.caption(f"等级 **{_bmd.get('等级', 'B')}** ｜ 隐含概率 **{_bs*100:.1f}%** ｜ 赔率 **{fmt_odds(_bo)}** ({_src_txt}) ｜ {_reason}")
                     else:
                         st.info("3 场均无兼容 TSA 盘口，无法生成盾。")
                     today_str_save = datetime.now(CST).strftime("%Y-%m-%d")
