@@ -593,11 +593,11 @@ with tab2:
         enable_lineup_info = st.checkbox("👥 显示首发阵容 + 伤停", value=True, key="lineup_switch")
         enable_market_info = st.checkbox("📊 显示盘口走势", value=True, key="market_switch")
         enable_handicap = st.checkbox("📏 显示三档盘口线", value=True, key="handicap_switch")
-        enable_weight_adjust = st.checkbox("🎛️ 启用阵容/伤病权重调整", value=True, key="weight_switch")
-        enable_motivation = st.checkbox("🏆 启用联赛战意修正", value=True, key="motivation_switch")
         enable_dc = st.checkbox("🔬 启用 Dixon-Coles 低比分修正", value=True, key="dc_switch")
-        enable_blend = st.checkbox("🤝 启用盘口融合", value=True, key="blend_switch")
-        enable_cap_home = st.checkbox("🔒 启用主胜概率封顶", value=False, key="cap_home_switch")
+        enable_weight_adjust = False
+        enable_motivation = False
+        enable_blend = False
+        enable_cap_home = False
     with col2:
         if st.button("🗑️ 清空核心", key="clear_core"):
             st.session_state.core_matches = []; st.success("已清空。"); st.rerun()
