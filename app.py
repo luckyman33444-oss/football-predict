@@ -1128,7 +1128,11 @@ with tab5:
     st.subheader("📊 赛后复盘（上传 Excel）")
     st.caption("上传早上下载的 Excel，系统自动读回预测，拉取实际比分。")
     # V5.14: 支持选择历史存档
-    _recs = sorted([f for f in os.listdir("data/recs") if f.endswith(".xlsx")], reverse=True) if os.path.exists("data/recs") else []
+    # V5.14: 智能过滤，只取今天之前的存档（防止点 Tab2 后马上复盘了今天的未开赛比赛）
+    _today_str = datetime.now(CST).strftime("%Y-%m-%d")
+    _all_recs = [f for f in os.listdir("data/recs") if f.endswith(".xlsx")] if os.path.exists("data/recs") else []
+    _past_recs = [f for f in _all_recs if f.replace(".xlsx", "") < _today_str]
+    _recs = sorted(_past_recs, reverse=True)
     _opts = ["⚡ 一键复盘最新存档", "手动上传"] + [f.replace(".xlsx", "") for f in _recs]
     _sel = st.selectbox("选择复盘数据源", _opts, key="sel_rec")
     if _sel == "⚡ 一键复盘最新存档":
