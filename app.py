@@ -133,14 +133,20 @@ def render_all_matches(df_all):
                 _tsa_map = load_tsa_mapping()
                 def _get_real_ou(r):
                     eid = r.get("event_id")
-                    # 优先 TSA 真实赔率
                     mid = _tsa_map.get(int(eid)) if eid else None
                     if mid:
                         _d = parse_tsa_odds_summary(fetch_or_load_tsa_odds(mid))
-                        if _d.get("real_over25") and _d.get("real_under25"):
-                            ro, ru = float(_d["real_over25"]), float(_d["real_under25"])
-                            return f"大2.5 {ro}" if ro < ru else f"小2.5 {ru}"
-                    # 次选 Bz 市场概率（真实市场）
+                        _lines = _d.get("real_ou_lines", {})
+                        if _lines:
+                            valid_lines = []
+                            for k, v in _lines.items():
+                                try: valid_lines.append((float(k), v["over"], v["under"]))
+                                except: pass
+                            valid_lines.sort()
+                            if valid_lines:
+                                best = next((vl for vl in valid_lines if vl[0] == 2.5), valid_lines[0])
+                                lf, ov, un = best
+                                return f"{lf:g}球 大{ov}/小{un}"
                     _po = r.get("_prob_over_pct")
                     if _po is not None:
                         return f"大2.5 {_po}%" if _po >= 50 else f"小2.5 {100-_po}%"

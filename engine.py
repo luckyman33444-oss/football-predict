@@ -525,11 +525,20 @@ def parse_tsa_odds_summary(odds_data, prefer="Bet365"):
         out["real_d"] = _f(mo.get("draw", {}).get("last_seen"))
         out["real_a"] = _f(mo.get("away", {}).get("last_seen"))
 
-    # 大小球 2.5
+    # 大小球：多线全抓（1.5, 2.5, 3.5, 等）
     tg = m.get("total_goals", {})
-    if "2.5" in tg:
-        out["real_over25"] = _f(tg["2.5"].get("over", {}).get("last_seen"))
-        out["real_under25"] = _f(tg["2.5"].get("under", {}).get("last_seen"))
+    ou_lines = {}
+    for line in tg.keys():
+        ov = _f(tg[line].get("over", {}).get("last_seen"))
+        un = _f(tg[line].get("under", {}).get("last_seen"))
+        if ov and un:
+            ou_lines[str(line)] = {"over": ov, "under": un}
+    if ou_lines:
+        out["real_ou_lines"] = ou_lines
+        # 保留兼容旧逻辑的 2.5 字段
+        if "2.5" in ou_lines:
+            out["real_over25"] = ou_lines["2.5"]["over"]
+            out["real_under25"] = ou_lines["2.5"]["under"]
 
     # 亚盘：取第一条（主线）
     ah_home = m.get("asian_handicap", {}).get("home", {})
