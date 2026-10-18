@@ -133,32 +133,29 @@ def render_all_matches(df_all):
                 _tsa_map = load_tsa_mapping()
                 def _get_real_ou(r):
                     eid = r.get("event_id")
-                    mid = _tsa_map.get(int(eid)) if eid else None
-                    if mid:
-                        _d = parse_tsa_odds_summary(fetch_or_load_tsa_odds(mid))
-                        _lines = _d.get("real_ou_lines", {})
-                        if _lines:
-                            valid_lines = []
-                            for k, v in _lines.items():
-                                try: valid_lines.append((float(k), v["over"], v["under"]))
-                                except: pass
-                            valid_lines.sort()
-                            if valid_lines:
-                                # 优先取 2.5 盘口
-                                best = next((vl for vl in valid_lines if vl[0] == 2.5), valid_lines[0])
-                                lf, ov, un = best
-                                # V5.26: 赔率反推隐含概率（去水）
-                                try:
-                                    _inv_sum = (1 / ov) + (1 / un)
-                                    _p_over = (1 / ov) / _inv_sum
-                                    _p_under = (1 / un) / _inv_sum
-                                    return f"{lf:g}球 | 大{ov}({_p_over*100:.0f}%) / 小{un}({_p_under*100:.0f}%)"
-                                except Exception:
-                                    return f"{lf:g}球 大{ov}/小{un}"
-                    # 如果没真实赔率，退回 Bz 市场概率
-                    _po = r.get("_prob_over_pct")
-                    if _po is not None:
-                        return f"大2.5 {_po}%" if _po >= 50 else f"小2.5 {100-_po}%"
+                    if not eid: return "—"
+                    try:
+                        _tm = load_tsa_mapping()
+                        mid = _tm.get(int(eid))
+                        if mid:
+                            _d = parse_tsa_odds_summary(fetch_or_load_tsa_odds(mid))
+                            _lines = _d.get("real_ou_lines", {})
+                            if _lines:
+                                valid_lines = []
+                                for k, v in _lines.items():
+                                    try: valid_lines.append((float(k), v["over"], v["under"]))
+                                    except: pass
+                                valid_lines.sort()
+                                if valid_lines:
+                                    best = next((vl for vl in valid_lines if vl[0] == 2.5), valid_lines[0])
+                                    lf, ov, un = best
+                                    _inv = (1/ov) + (1/un)
+                                    _po = (1/ov)/_inv
+                                    _pu = (1/un)/_inv
+                                    return f"{lf:g}球 | 大{ov}({_po*100:.0f}%) / 小{un}({_pu*100:.0f}%)"
+                    except Exception as e:
+                        pass
+                    # 彻底干掉百分比兜底，没有真实赔率就返回 —
                     return "—"
                 df["市场大小球"] = df.apply(_get_real_ou, axis=1)
             except Exception:
