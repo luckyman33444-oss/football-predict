@@ -447,7 +447,7 @@ with tab2:
                     if _gap < 15:
                         return -1
                     # V5.17: 最终方向必须明确是主客和，且不和市场冲突
-                    _a_dir = row.get("调整后方向", "—")
+                    _a_dir = row.get("最终方向", "—")
                     if _a_dir not in ("主胜", "客胜", "和局"):
                         return -1
                     if _a_dir == "主胜" and _ph < _pa: return -1
