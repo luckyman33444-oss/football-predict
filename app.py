@@ -907,12 +907,17 @@ with tab2:
                         }
                         # V5.11: 大小球方向切 TSA 真实盘口，无 TSA 时 fallback 模型
                         _tsa_ou_601 = tsa_odds_map.get(eid) or {}
-                        _ro601, _ru601 = _tsa_ou_601.get("real_over25"), _tsa_ou_601.get("real_under25")
+                        _ou_lines_601 = _tsa_ou_601.get("real_ou_lines", {})
                         _ou_dir_601 = "—"
-                        if _ro601 and _ru601:
-                            try:
-                                _ou_dir_601 = "大2.5" if float(_ro601) < float(_ru601) else "小2.5"
-                            except: pass
+                        if _ou_lines_601:
+                            _valid_601 = []
+                            for k, v in _ou_lines_601.items():
+                                try: _valid_601.append((float(k), v["over"], v["under"]))
+                                except: pass
+                            if _valid_601:
+                                _best_601 = min(_valid_601, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
+                                _lf, _ov, _un = _best_601
+                                _ou_dir_601 = f"大{_lf:g}" if float(_ov) < float(_un) else f"小{_lf:g}"
                         if _ou_dir_601 == "—":
                             _po = row.get("_prob_over_pct")
                             if _po is not None:
