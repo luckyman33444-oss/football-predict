@@ -819,13 +819,18 @@ with tab2:
                             # V5.6 A+: 模型前3 ∪ 全局8池（与 backtest_one 同步）
                             # V5.11: 大小球选边切 TSA 真实盘口（赔率低=概率高），无 TSA 时 fallback 模型
                             _tsa_ou = tsa_odds_map.get(eid) or {}
-                            _ro, _ru = _tsa_ou.get("real_over25"), _tsa_ou.get("real_under25")
+                            _ou_lines = _tsa_ou.get("real_ou_lines", {})
                             _is_over = None
-                            if _ro and _ru:
-                                try:
-                                    _is_over = float(_ro) < float(_ru)
-                                except (TypeError, ValueError):
-                                    _is_over = None
+                            if _ou_lines:
+                                valid_lines = []
+                                for k, v in _ou_lines.items():
+                                    try: valid_lines.append((float(k), v["over"], v["under"]))
+                                    except: pass
+                                if valid_lines:
+                                    # V5.56: 动态计算，选出真实主盘口
+                                    best = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
+                                    lf, ov, un = best
+                                    _is_over = float(ov) < float(un)
                             if _is_over is None:
                                 _is_over = adj_pred["over25"] >= 0.5
                             # V5.43: 强制按真实方向与 TSA 大小球分配比分，并修正深盘比分
