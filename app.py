@@ -335,7 +335,21 @@ def render_high_confidence(df_all):
                 if "平局%" in _show.columns: _show["平局%"] = _show["平局%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
                 if "市场差" in _show.columns: _show["市场差"] = _show["市场差"].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
                 if "大小球强度%" in _show.columns: _show["大小球强度%"] = _show["大小球强度%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
-                st.dataframe(_show, use_container_width=True, hide_index=True)
+                # V5.20: 加入核心勾选框
+                if "event_id" in _high.columns:
+                    _show.insert(0, "加入核心", _high["event_id"].isin(st.session_state.core_matches).values)
+                    _edited_high = st.data_editor(
+                        _show, use_container_width=True, hide_index=True,
+                        column_config={"加入核心": st.column_config.CheckboxColumn("加入核心", default=False)},
+                        key="editor_high"
+                    )
+                    if st.button("💾 保存核心选择", type="primary", key="save_core_high"):
+                        selected_event_ids = _high.loc[_edited_high["加入核心"].values, "event_id"].dropna().astype(int).tolist()
+                        st.session_state.core_matches = selected_event_ids
+                        st.success(f"已保存 {len(selected_event_ids)} 场核心比赛。")
+                        st.rerun()
+                else:
+                    st.dataframe(_show, use_container_width=True, hide_index=True)
 
                 _buf = io.BytesIO()
                 with pd.ExcelWriter(_buf, engine="openpyxl") as _w:
