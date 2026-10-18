@@ -1258,6 +1258,25 @@ with tab5:
                                 with c3: st.metric("调整后命中", f"{ar*100:.1f}%", f"{ah}/{len(ag)}" if ag else "无")
                                 with c4: st.metric("原推荐 ROI", roi_str, roi_delta)
                                 with c5: st.metric("比分串（3场）", _combo_str)
+
+                                # V5.14: 累计复盘历史记录
+                                _hist_path = "data/review_history.csv"
+                                os.makedirs("data", exist_ok=True)
+                                _new_hist_row = {"日期": date_str, "推荐场次": total,
+                                    "原推荐命中率": f"{wr*100:.1f}%", "调整后命中率": f"{ar*100:.1f}%",
+                                    "ROI": roi_str, "比分串": _combo_str,
+                                    "复盘时间": datetime.now(CST).strftime("%Y-%m-%d %H:%M")}
+                                _hist_df = pd.DataFrame([_new_hist_row])
+                                if os.path.exists(_hist_path):
+                                    try:
+                                        _old_hist = pd.read_csv(_hist_path)
+                                        _old_hist = _old_hist[_old_hist["日期"] != date_str]
+                                        _hist_df = pd.concat([_old_hist, _hist_df], ignore_index=True)
+                                    except Exception: pass
+                                _hist_df.to_csv(_hist_path, index=False, encoding="utf-8-sig")
+                                
+                                with st.expander("📈 历史累计复盘", expanded=False):
+                                    st.dataframe(_hist_df.sort_values("日期", ascending=False), use_container_width=True, hide_index=True)
                                 if wg and ag:
                                     delta = ar - wr
                                     if delta > 0.02: st.success(f"✅ **调整让命中率提升 {delta*100:+.1f}%**")
