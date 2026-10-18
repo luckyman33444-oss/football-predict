@@ -167,7 +167,7 @@ def render_all_matches(df_all):
         sel_leagues = st.multiselect("筛选联赛（不选则显示全部）", all_leagues, default=[], key="lg1")
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
-        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.11：市场亚盘 + 市场差/大小球强度筛选")
+        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.67：市场亚盘 + 市场差/大小球强度筛选")
         if not df.empty:
             df = df.copy()
             df["第三比分"] = df["_scores_list"].apply(lambda x: x[2][0] if isinstance(x, list) and len(x) > 2 else "—")
@@ -512,7 +512,7 @@ def render_high_confidence(df_all):
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v5.11（全中文 + 亚洲盘 + 市场强度筛选）")
+st.title("⚽ 足球预测 v5.67（全中文 + 亚洲盘 + 市场强度筛选）")
 tab1, tab2, tab4, tab5 = st.tabs(["[T1] 今日预测", "[T2] 3串1核心", "[T3] 搜索队名", "[T4] 赛后复盘"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
@@ -984,7 +984,7 @@ with tab2:
                         st.error(f"🔴 **警示：以下 {len(f_matches)} 场为 F 级联赛**（回测命中率 <50%），下注请谨慎：")
                         for fm in f_matches: st.write(f"- {fm['比赛']}（{fm['联赛']}）")
                     st.subheader("🎯 模型对比 & 亚盘方向")
-                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/DC/融合/封顶 ｜ v5.11")
+                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/DC/融合/封顶 ｜ v5.67")
                     compare_rows = []
                     for i, md in enumerate(matches_data, 1):
                         mc = md.get("model_compare", {})
@@ -1697,4 +1697,4 @@ with tab5:
 
 # ========== Tab 6：历史回测 ==========
 # ========== Tab 7：高置信清单 ==========
-st.caption("⚠️ v5.11：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
+st.caption("⚠️ v5.67：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
