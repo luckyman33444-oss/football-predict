@@ -126,7 +126,7 @@ def render_all_matches(df_all):
                 "主队排名", "客队排名",
                 "主力比分", "备选比分", "第三比分", "预测结果",
                 "模型主胜", "模型和局", "模型客胜",
-                "主胜", "和局", "客胜", "平局概率", "不平局", "强信号", "大小球", "市场大小球", "亚盘"
+                "主胜", "和局", "客胜", "平局概率", "不平局", "强信号", "市场大小球"
             ]].copy()
             display_df = display_df.rename(columns={"预测结果": "模型判断"})
             # V5.11: Tab1「市场判断」→ TSA 让球盘方向（只读缓存，无则 fallback 1X2）
@@ -208,7 +208,7 @@ def render_all_matches(df_all):
                         st.dataframe(
                             core_df[[
                                 "时间", "联赛", "主队", "客队", "主力比分", "备选比分",
-                                "第三比分", "预测结果", "市场判断", "大小球", "市场大小球", "亚盘", "主胜", "和局", "客胜"
+                                "第三比分", "预测结果", "市场判断", "市场大小球", "主胜", "和局", "客胜"
                             ]].rename(columns={"预测结果": "模型判断"}),
                             use_container_width=True, hide_index=True
                         )
@@ -321,6 +321,19 @@ def render_high_confidence(df_all):
                     except Exception:
                         _r = "—"
                 _high_tsa_cache[eid] = _r; return _r
+            def _get_tsa_ah(eid):
+                try: _mid = _high_tsa_map.get(int(eid)) if eid else None
+                except Exception: _mid = None
+                if not _mid: return "—"
+                try:
+                    _raw = fetch_or_load_tsa_odds(_mid)
+                    _d = parse_tsa_odds_summary(_raw) if _raw else {}
+                except Exception: return "—"
+                _l = _d.get("real_ah_line"); _h = _d.get("real_ah_home"); _a = _d.get("real_ah_away")
+                if not (_l and _h and _a): return "—"
+                return f"{_l} ({_h}/{_a})"
+
+            _high["真实亚盘"] = _high["event_id"].apply(_get_tsa_ah)
             _high["真实大小球"] = _high["event_id"].apply(_get_tsa_ou)
             st.markdown(f"### {_sel_date}：**{_name}** 共 **{len(_high)}** 场")
 
@@ -328,7 +341,7 @@ def render_high_confidence(df_all):
                 st.info("当天没有符合条件的场次。")
             else:
                 _want = ["时间", "联赛", "联赛等级", "主队", "客队", "下注建议", "不平局", "强信号", "市场判断", "_pd", "_gap", "_ou_str",
-                         "预测结果", "最终方向", "主力比分", "备选比分", "第三比分", "大小球", "真实大小球", "亚盘"]
+                         "预测结果","最终方向", "主力比分", "备选比分", "第三比分", "真实大小球", "真实亚盘"]
                 _avail = [c for c in _want if c in _high.columns]
                 _show = _high[_avail].copy()
                 _show = _show.rename(columns={"联赛等级": "等级", "_pd": "平局%", "_gap": "市场差", "_ou_str": "大小球强度%", "预测结果": "模型判断"})
@@ -435,7 +448,7 @@ with tab2:
         core_only_df = df_all[df_all["event_id"].isin(st.session_state.core_matches)].copy()
         if not core_only_df.empty:
             st.markdown("### 🎯 当前核心比赛（来自 Tab1）")
-            show_cols = ["时间", "联赛", "主队", "客队", "主力比分", "备选比分", "预测结果", "模型主胜", "模型和局", "模型客胜", "市场判断", "大小球", "市场大小球", "亚盘", "主胜", "和局", "客胜"]
+            show_cols = ["时间", "联赛", "主队", "客队", "主力比分", "备选比分", "预测结果", "模型主胜", "模型和局", "模型客胜", "市场判断", "市场大小球", "主胜", "和局", "客胜"]
             show_cols = [c for c in show_cols if c in core_only_df.columns]
             st.dataframe(core_only_df[show_cols], use_container_width=True, hide_index=True)
 
@@ -1124,7 +1137,7 @@ with tab2:
                             _z_show = _z[[c for c in ["时间", "联赛", "联赛等级", "主队", "客队",
                                 "预测结果", "模型主胜", "模型和局", "模型客胜",
                                 "市场判断", "主胜", "和局", "客胜",
-                                "大小球", "市场大小球", "亚盘",
+                                "市场大小球",
                                 "主力比分", "备选比分", "第三比分"] if c in _z.columns]].copy()
                             _z_show = _z_show.rename(columns={"预测结果": "模型判断", "联赛等级": "等级"})
                             st.dataframe(_z_show, use_container_width=True, hide_index=True)
