@@ -128,6 +128,26 @@ def render_all_matches(df_all):
                 "模型主胜", "模型和局", "模型客胜",
                 "主胜", "和局", "客胜", "平局概率", "不平局", "强信号", "市场大小球"
             ]].copy()
+            # V5.25: Tab1 强制真实盘口（无数据则显示 —）
+            try:
+                _tsa_map = load_tsa_mapping()
+                def _get_real_ou(r):
+                    eid = r.get("event_id")
+                    # 优先 TSA 真实赔率
+                    mid = _tsa_map.get(int(eid)) if eid else None
+                    if mid:
+                        _d = parse_tsa_odds_summary(fetch_or_load_tsa_odds(mid))
+                        if _d.get("real_over25") and _d.get("real_under25"):
+                            ro, ru = float(_d["real_over25"]), float(_d["real_under25"])
+                            return f"大2.5 {ro}" if ro < ru else f"小2.5 {ru}"
+                    # 次选 Bz 市场概率（真实市场）
+                    _po = r.get("_prob_over_pct")
+                    if _po is not None:
+                        return f"大2.5 {_po}%" if _po >= 50 else f"小2.5 {100-_po}%"
+                    return "—"
+                df["大小球"] = df.apply(_get_real_ou, axis=1)
+            except Exception:
+                pass
             display_df = display_df.rename(columns={"预测结果": "模型判断"})
             # V5.11: Tab1「市场判断」→ TSA 让球盘方向（只读缓存，无则 fallback 1X2）
             _tab1_tsa_map = {}
@@ -757,19 +777,15 @@ with tab2:
                         # V5.11: 大小球方向切 TSA 真实盘口，无 TSA 时 fallback 模型
                         _tsa_ou_601 = tsa_odds_map.get(eid) or {}
                         _ro601, _ru601 = _tsa_ou_601.get("real_over25"), _tsa_ou_601.get("real_under25")
-                        _ou_dir_601 = None
+                        _ou_dir_601 = "—"
                         if _ro601 and _ru601:
                             try:
-                                _ou_dir_601 = "大球" if float(_ro601) < float(_ru601) else "小球"
-                            except (TypeError, ValueError):
-                                _ou_dir_601 = None
-                        if _ou_dir_601 is None and adj_pred:
-                            _ou_dir_601 = "大球" if adj_pred["over25"] >= 0.5 else "小球"
-                        if _ou_dir_601 is None:
-                            _ou_dir_601 = row.get("大小球") or "—"
-                        # V5.20: 核心概率低于 50% 直接放弃，防止出现反向
-                        if adj_best and adj_best[1] < 0.50:
-                            continue
+                                _ou_dir_601 = "大2.5" if float(_ro601) < float(_ru601) else "小2.5"
+                            except: pass
+                        if _ou_dir_601 == "—":
+                            _po = row.get("_prob_over_pct")
+                            if _po is not None:
+                                _ou_dir_601 = "大2.5" if _po >= 50 else "小2.5"
                         matches_data.append({
                             "event_id": eid, "比赛": f"{row['主队']} vs {row['客队']}",
                             "时间": row["时间"], "联赛": row["联赛"], "等级": grade,
