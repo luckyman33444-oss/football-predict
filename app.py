@@ -828,35 +828,22 @@ with tab2:
                                     _is_over = None
                             if _is_over is None:
                                 _is_over = adj_pred["over25"] >= 0.5
-                            # V5.13: 比分选池按调整后方向（主胜→main池，客胜→away池，和局→不分）
-                            _adj_dir_now = adj_best[0] if adj_best else "—"
-
-                            _draw_b = [s for s in adj_pred["top_scores"] if s[0] == s[1]]
-
-                            if not _draw_b: _draw_b = [(1, 1, 0.1), (0, 0, 0.05), (2, 2, 0.05)]
-
-                            if _adj_dir_now == "和局":
-
-                                _b = _draw_b
-
-                            elif _is_over:
-
-                                _b = adj_pred.get("main_over") if _adj_dir_now == "主胜" else (adj_pred.get("away_over") if _adj_dir_now == "客胜" else adj_pred["over_scores"])
-
-                                if not _b: _b = adj_pred["over_scores"]
-
+                            # V5.38: 强制按真实方向与 TSA 大小球分配比分，彻底告别模型干扰
+                            _b = []
+                            if _is_over:
+                                if _adj_dir_now == "主胜": _b = [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
+                                elif _adj_dir_now == "客胜": _b = [(1,2,0.5), (1,3,0.3), (0,3,0.2)]
+                                else: _b = [(1,1,0.5), (2,2,0.3), (3,3,0.2)]
                             else:
-
-                                _b = adj_pred.get("main_under") if _adj_dir_now == "主胜" else (adj_pred.get("away_under") if _adj_dir_now == "客胜" else adj_pred["under_scores"])
-
-                                if not _b: _b = adj_pred["under_scores"]
-
-                            _m = list(_b[:3]); _e = {(s[0], s[1]) for s in _m}
-                            for _h, _a in [(1,1),(1,0),(2,1),(0,1),(0,0),(2,0),(1,2),(2,2)]:
-                                if (_h, _a) not in _e: _m.append((_h, _a, 0.0))
-                            adj_scores = _m
+                                if _adj_dir_now == "主胜": _b = [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
+                                elif _adj_dir_now == "客胜": _b = [(0,1,0.5), (0,2,0.3), (1,1,0.2)]
+                                else: _b = [(0,0,0.5), (1,1,0.3), (2,2,0.2)]
+                            
+                            adj_scores = _b
                             adj_main_score = f"{adj_scores[0][0]}-{adj_scores[0][1]}" if adj_scores else "—"
                             adj_alt_score = f"{adj_scores[1][0]}-{adj_scores[1][1]}" if len(adj_scores) > 1 else "—"
+                            adj_main_prob = adj_scores[0][2] if adj_scores else 0
+                            adj_alt_prob = adj_scores[1][2] if len(adj_scores) > 1 else 0
                             adj_main_prob = adj_scores[0][2] if adj_scores else 0
                             adj_alt_prob = adj_scores[1][2] if len(adj_scores) > 1 else 0
                         else:
