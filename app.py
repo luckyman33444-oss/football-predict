@@ -829,6 +829,17 @@ with tab2:
                             if _is_over is None:
                                 _is_over = adj_pred["over25"] >= 0.5
                             # V5.38: 强制按真实方向与 TSA 大小球分配比分，彻底告别模型干扰
+                            # V5.41: 补齐因替换丢失的变量
+                            _adj_dir_now = adj_best[0] if adj_best else "—"
+                            _tsa_o = tsa_odds_map.get(eid) or {}
+                            _ro = _tsa_o.get("real_over25")
+                            _ru = _tsa_o.get("real_under25")
+                            _is_over = None
+                            if _ro and _ru:
+                                try: _is_over = float(_ro) < float(_ru)
+                                except: _is_over = None
+                            if _is_over is None:
+                                _is_over = adj_pred["over25"] >= 0.5 if adj_pred else False
                             _b = []
                             if _is_over:
                                 if _adj_dir_now == "主胜": _b = [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
