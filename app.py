@@ -526,6 +526,25 @@ parsed = []
 if all_preds:
     parsed = [parse_prediction(p) for p in all_preds]
     df_all = pd.DataFrame(parsed)
+
+# V5.66: 全系统球队 DNA 最顶层干预
+_over_dna = ["瓦杜兹", "博多闪耀", "伯尔尼年轻人", "浦和红钻", "苏黎世", "巴塞罗那", "锡永", "图恩", "卡托维兹", "阿贾克斯", "新英格兰革命", "哥伦布机员", "布莱克本", "西汉姆联", "绍森德联", "诺维奇", "塔姆沃思", "克卢日大学", "波特兰伐木者", "辛辛那提FC"]
+_under_dna = ["埃克塞特城", "圣洛伦索", "里斯特拉", "皮特什蒂阿尔杰什", "维拉诺瓦", "底特律城", "布拉德福德", "圣格奥尔基塞普西", "河流联", "普罗夫迪夫火车头", "东京绿茵", "飓风", "贝尔格拉诺", "巴拉克中央", "代格福什", "庞特普雷塔", "塔尔萨FC", "奥克兰根", "库奥皮奥", "百万富翁"]
+
+def _apply_team_dna(row):
+    _t1 = str(row.get("主队", ""))
+    _t2 = str(row.get("客队", ""))
+    if _t1 in _over_dna or _t2 in _over_dna:
+        row["主力比分"] = "3-1"
+        row["备选比分"] = "2-2"
+    elif _t1 in _under_dna or _t2 in _under_dna:
+        row["主力比分"] = "0-0"
+        row["备选比分"] = "1-0"
+    return row
+
+if not df_all.empty:
+    df_all = df_all.apply(_apply_team_dna, axis=1)
+
     # V5.31: 强制用 TSA 真实大小球纠偏比分
     if not df_all.empty:
         df_all = _sync_scores_tsa(df_all)
