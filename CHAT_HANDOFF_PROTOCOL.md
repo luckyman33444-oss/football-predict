@@ -56,8 +56,8 @@
 |---|---|---|
 | run_bt.py | 回测 → 生成 detail.csv | python run_bt.py 2026-07-01 2026-10-03 |
 | make_report.py | detail.csv → report_v58.csv 汇总 | python make_report.py |
-| summary_all.py | 详细统计（打印屏幕，不写文件）| python summary_all.py |
-| run_all.sh | 一键：回测 + 报告 + 归档到 _history/ | bash run_all.sh [起] [止] |
+| summary_all.py | (已废弃，改看 report_v58.csv) | - |
+| run_all.sh | (已废弃，由 AI 直接跑 run_bt) | - |
 | check_health.py | 语法 + 导入 + 关键函数 + detail.csv 字段检查 | python check_health.py |
 
 ### 产物（自动生成，勿手改）
