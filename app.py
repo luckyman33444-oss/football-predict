@@ -1230,7 +1230,7 @@ with tab2:
                                          "event_id": md["event_id"], "模型判断": best_opt[0], "模型概率": f"{best_opt[1]*100:.1f}%",
                                          "下注建议": md.get("bet_advice", "—"),
                                          "调整后方向": _merge_dir_ah(adj_name, _tsa_ah_str), "调整后概率": f"{adj_prob*100:.1f}%",
-                                         "亚盘": mc.get("ah_line", "—"), "亚盘判断": mc.get("ah_note", "—"),
+                                         
                                          "市场方向": md.get("市场判断", "—"),
                                          "市场差": round(md.get("市场差", 0), 1),
                                          "亚盘置信": ("🔒 高" if md.get("市场差", 0) > 35 else ("✅ 中" if md.get("市场差", 0) >= 20 else "⚠️ 低")),
@@ -1377,7 +1377,7 @@ with tab5:
                     if len(rec_df) > 0:
                         show_cols = [c for c in ["场次", "比赛", "联赛", "等级", "时间", "模型判断", "模型概率",
               "市场方向", "大小球方向", "真实亚盘", "真实大小球", "真实1X2", "主队排名", "客队排名",
-              "调整后方向", "调整后概率", "亚盘", "调整后比分1", "调整后比分2", "赔率",
+              "调整后方向", "调整后概率", "真实亚盘", "调整后比分1", "调整后比分2", "赔率",
               "比分1", "比分2", "角色", "方向一致", "下注建议"] if c in rec_df.columns]
                         st.dataframe(rec_df[show_cols], use_container_width=True, hide_index=True)
                 if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
