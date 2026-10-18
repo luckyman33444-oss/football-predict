@@ -922,45 +922,88 @@ with tab2:
                     st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     st.divider()
                     # V5.12: 盾 —— 3 场里最稳的 1 场
-                    st.subheader("🛡️ 盾：TSA 真实让球盘（3 场里最稳的 1 场）")
-                    _shield = []
-                    for _md in matches3:
+                    st.subheader("🛡️ 盾：保护比分串的兼容盘口（1X2 / 亚盘 / 大小球）")
+                    # 1) 辅助函数：解析比分
+                    def _parse_s(s):
+                        if not s or s == "—": return None
+                        try:
+                            p = str(s).split("-")
+                            if len(p) != 2: return None
+                            return int(p[0]), int(p[1])
+                        except: return None
+                    
+                    # 2) 遍历 3 场，寻找兼容盘口
+                    _shield_candidates = []
+                    for _i, _md in enumerate(matches3):
+                        _scores = _sc[_i] if _i < len(_sc) else []
+                        _valid_scores = [_parse_s(s) for s in _scores if _parse_s(s)]
+                        if not _valid_scores: continue
                         _eid = _md.get("event_id")
                         _t = tsa_odds_map.get(_eid) or {}
-                        _ln = _t.get("real_ah_line"); _h = _t.get("real_ah_home"); _a = _t.get("real_ah_away")
-                        if _ln is not None and _h is not None and _a is not None:
-                            try:
-                                _fl, _fh, _fa = float(_ln), float(_h), float(_a)
-                                _inv = 1/_fh + 1/_fa
-                                _p_h = (1/_fh)/_inv; _p_a = (1/_fa)/_inv
-                                if _p_h >= _p_a:
-                                    _side = "主赢盘"; _bp = _p_h; _bo = _fh
-                                else:
-                                    _side = "客赢盘"; _bp = _p_a; _bo = _fa
-                                if _fl < 0: _rec = f"主让{abs(_fl):g}·{_side}"
-                                elif _fl > 0: _rec = f"客让{_fl:g}·{_side}"
-                                else: _rec = f"平手·{_side}"
-                                _shield.append((_bp, _md, _rec, _bp, _bo, "TSA"))
-                            except (TypeError, ValueError, ZeroDivisionError):
-                                pass
+                        _cands = []
+                        if _t:
+                            # 1X2
+                            _rh = _t.get("real_h"); _rd = _t.get("real_d"); _ra = _t.get("real_a")
+                            if _rh and _rd and _ra:
+                                try:
+                                    _inv = 1/float(_rh) + 1/float(_rd) + 1/float(_ra)
+                                    if all(sh > sa for sh, sa in _valid_scores):
+                                        _p = (1/float(_rh)) / _inv
+                                        _cands.append((_p, "主胜 (1X2)", float(_rh), "TSA", "比分均为主胜"))
+                                    if all(sh < sa for sh, sa in _valid_scores):
+                                        _p = (1/float(_ra)) / _inv
+                                        _cands.append((_p, "客胜 (1X2)", float(_ra), "TSA", "比分均为客胜"))
+                                except: pass
+                            # AH
+                            _ln = _t.get("real_ah_line"); _ah_h = _t.get("real_ah_home"); _ah_a = _t.get("real_ah_away")
+                            if _ln is not None and _ah_h and _ah_a:
+                                try:
+                                    _fl = float(_ln)
+                                    _inv = 1/float(_ah_h) + 1/float(_ah_a)
+                                    if all(sh - sa + _fl > 0.01 for sh, sa in _valid_scores):
+                                        _p = (1/float(_ah_h)) / _inv
+                                        _r = f"主让{abs(_fl):g}·主赢盘" if _fl < 0 else (f"客让{_fl:g}·主赢盘" if _fl > 0 else "平手·主赢盘")
+                                        _cands.append((_p, _r, float(_ah_h), "TSA", "比分均主队赢盘"))
+                                    if all(sh - sa + _fl < -0.01 for sh, sa in _valid_scores):
+                                        _p = (1/float(_ah_a)) / _inv
+                                        _r = f"主让{abs(_fl):g}·客赢盘" if _fl < 0 else (f"客让{_fl:g}·客赢盘" if _fl > 0 else "平手·客赢盘")
+                                        _cands.append((_p, _r, float(_ah_a), "TSA", "比分均客队赢盘"))
+                                except: pass
+                            # OU 2.5
+                            _ro = _t.get("real_over25"); _ru = _t.get("real_under25")
+                            if _ro and _ru:
+                                try:
+                                    _inv = 1/float(_ro) + 1/float(_ru)
+                                    if all(sh + sa >= 3 for sh, sa in _valid_scores):
+                                        _p = (1/float(_ro)) / _inv
+                                        _cands.append((_p, "大2.5", float(_ro), "TSA", "比分均为大球"))
+                                    if all(sh + sa <= 2 for sh, sa in _valid_scores):
+                                        _p = (1/float(_ru)) / _inv
+                                        _cands.append((_p, "小2.5", float(_ru), "TSA", "比分均为小球"))
+                                except: pass
+                        if _cands:
+                            _best = max(_cands, key=lambda x: x[0])
+                            _shield_candidates.append((_best[0], _md, _best[1], _best[2], _best[3], _best[4]))
                         else:
-                            # fallback: 无 TSA → 用模型最优
+                            # fallback
                             _opts = _md.get("opts") or []
                             if _opts:
                                 _top = max(_opts, key=lambda x: x[1])
                                 _src = _top[3] if len(_top) > 3 else "imp"
-                                _shield.append((_top[1], _md, _top[0], _top[1], _top[2], _src))
-                    if _shield:
-                        _shield.sort(key=lambda x: -x[0])
-                        _bs, _bmd, _rec, _bp, _bo, _bsrc = _shield[0]
+                                _shield_candidates.append((_top[1], _md, _top[0], _top[2], _src, "无兼容TSA盘口，用模型最优"))
+                    
+                    # 3) 选出 3 场中最稳的那个
+                    if _shield_candidates:
+                        _shield_candidates.sort(key=lambda x: -x[0])
+                        _bs, _bmd, _rec, _bo, _bsrc, _reason = _shield_candidates[0]
                         _src_txt = {"TSA": "真实TSA", "Bz": "真实Bz"}.get(_bsrc, "隐含")
-                        if _bp >= 0.60: _adv = "🟢🟢 重仓"
-                        elif _bp >= 0.55: _adv = "🟢 可下"
+                        if _bs >= 0.80: _adv = "🟢🟢 重仓"
+                        elif _bs >= 0.70: _adv = "🟢 可下"
                         else: _adv = "🟡 小注"
                         st.success(f"**{_bmd['比赛']}**  →  **{_rec}**  ｜  {_adv}")
-                        st.caption(f"等级 **{_bmd.get('等级', 'B')}**  ｜  市场隐含概率 **{_bp*100:.1f}%**  ｜  赔率 **{fmt_odds(_bo)}** ({_src_txt})")
+                        st.caption(f"等级 **{_bmd.get('等级', 'B')}**  ｜  隐含概率 **{_bs*100:.1f}%**  ｜  赔率 **{fmt_odds(_bo)}** ({_src_txt})  ｜  {_reason}")
                     else:
-                        st.info("3 场均无 TSA 让球盘，无法生成盾。")
+                        st.info("3 场均无兼容 TSA 盘口，无法生成盾。")
                     st.divider()
                     today_str_save = datetime.now(CST).strftime("%Y-%m-%d")
                     now_time = now.strftime("%H:%M")
