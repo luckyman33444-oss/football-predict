@@ -903,8 +903,8 @@ def judge_direction_agreement(orig_pick, adj_pick):
     ou_picks = ("大球(2.5+)", "小球(2.5-)")
     if orig_pick in result_picks and adj_pick in result_picks: return "⚠️ 反向"
     if orig_pick in ou_picks and adj_pick in ou_picks: return "⚠️ 反向"
-    if orig_pick in result_picks and adj_pick in ou_picks: return "⚠️ 换维度"
-    if orig_pick in ou_picks and adj_pick in result_picks: return "⚠️ 换维度"
+    if orig_pick in result_picks and adj_pick in ou_picks: return "➖ 中性"
+    if orig_pick in ou_picks and adj_pick in result_picks: return "➖ 中性"
     return "—"
 
 @st.cache_data(ttl=600, show_spinner=False)

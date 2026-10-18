@@ -448,6 +448,11 @@ with tab2:
                         return -1
                     # V5.17: 最终方向必须明确是主客和，且不和市场冲突
                     _a_dir = row.get("预测结果", "—")
+                    # V5.19: 调整后核心概率低于 50% 直接踢出，防止出现「反向」
+                    _adj_prob = row.get("调整后概率", 0)
+                    try:
+                        if float(_adj_prob) < 50: return -1
+                    except: pass
                     if _a_dir not in ("主胜", "客胜", "和局"):
                         return -1
                     if _a_dir == "主胜" and _ph < _pa: return -1
@@ -906,7 +911,8 @@ with tab2:
                         else: st.success("✅ 模型推荐与市场走势一致，无冲突")
                         direction_mismatch = [r for r in info_rows if "方向一致" in r and "⚠️" in r.get("方向一致", "")]
                         if direction_mismatch:
-                            st.warning(f"⚠️ 发现 **{len(direction_mismatch)}** 场原推荐与调整后方向不一致：")
+                            # V5.19: 黄条静音
+                            pass
                             for d in direction_mismatch: st.write(f"- **{d['比赛']}**：原推荐 {d['原推荐']}，调整后 {d['调整后推荐']}")
                         st.divider()
                     st.subheader("🎲 比分串（3串1，基于调整后推荐）")
