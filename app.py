@@ -446,6 +446,10 @@ with tab2:
                     _gap = abs(_ph - _pa)
                     if _gap < 15:
                         return -1
+                    # V5.15: 模型与市场方向冲突的场次直接踢出
+                    _m_dir = row.get("预测结果", "—")
+                    if _m_dir == "主胜" and _ph < _pa: return -1
+                    if _m_dir == "客胜" and _ph >= _pa: return -1
                     # V5.13: 加入 TSA 回测验证的最优组合（大小球≥65 + S/A）
                     _ou = row.get("_prob_over_pct") or 0
                     _ou_str = max(_ou, 100 - _ou)
@@ -960,10 +964,10 @@ with tab2:
                             if _rh and _rd and _ra:
                                 try:
                                     _inv = 1/float(_rh) + 1/float(_rd) + 1/float(_ra)
-                                    if all(sh > sa for sh, sa in _valid_scores):
+                                    if all(sh > sa for sh, sa in _valid_scores) and float(_rh) >= 1.50:
                                         _p = (1/float(_rh)) / _inv
                                         _cands.append((_p, "主胜 (1X2)", float(_rh), "TSA", "比分均为主胜"))
-                                    if all(sh < sa for sh, sa in _valid_scores):
+                                    if all(sh < sa for sh, sa in _valid_scores) and float(_ra) >= 1.50:
                                         _p = (1/float(_ra)) / _inv
                                         _cands.append((_p, "客胜 (1X2)", float(_ra), "TSA", "比分均为客胜"))
                                 except: pass
@@ -973,11 +977,11 @@ with tab2:
                                 try:
                                     _fl = float(_ln)
                                     _inv = 1/float(_ah_h) + 1/float(_ah_a)
-                                    if all(sh - sa + _fl > 0.01 for sh, sa in _valid_scores):
+                                    if all(sh - sa + _fl > 0.01 for sh, sa in _valid_scores) and float(_ah_h) >= 1.50:
                                         _p = (1/float(_ah_h)) / _inv
                                         _r = f"主让{abs(_fl):g}·主赢盘" if _fl < 0 else (f"客让{_fl:g}·主赢盘" if _fl > 0 else "平手·主赢盘")
                                         _cands.append((_p, _r, float(_ah_h), "TSA", "比分均主队赢盘"))
-                                    if all(sh - sa + _fl < -0.01 for sh, sa in _valid_scores):
+                                    if all(sh - sa + _fl < -0.01 for sh, sa in _valid_scores) and float(_ah_a) >= 1.50:
                                         _p = (1/float(_ah_a)) / _inv
                                         _r = f"主让{abs(_fl):g}·客赢盘" if _fl < 0 else (f"客让{_fl:g}·客赢盘" if _fl > 0 else "平手·客赢盘")
                                         _cands.append((_p, _r, float(_ah_a), "TSA", "比分均客队赢盘"))
@@ -987,10 +991,10 @@ with tab2:
                             if _ro and _ru:
                                 try:
                                     _inv = 1/float(_ro) + 1/float(_ru)
-                                    if all(sh + sa >= 3 for sh, sa in _valid_scores):
+                                    if all(sh + sa >= 3 for sh, sa in _valid_scores) and float(_ro) >= 1.50:
                                         _p = (1/float(_ro)) / _inv
                                         _cands.append((_p, "大2.5", float(_ro), "TSA", "比分均为大球"))
-                                    if all(sh + sa <= 2 for sh, sa in _valid_scores):
+                                    if all(sh + sa <= 2 for sh, sa in _valid_scores) and float(_ru) >= 1.50:
                                         _p = (1/float(_ru)) / _inv
                                         _cands.append((_p, "小2.5", float(_ru), "TSA", "比分均为小球"))
                                 except: pass
