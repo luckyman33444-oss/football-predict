@@ -740,6 +740,9 @@ with tab2:
                             _ou_dir_601 = "大球" if adj_pred["over25"] >= 0.5 else "小球"
                         if _ou_dir_601 is None:
                             _ou_dir_601 = row.get("大小球") or "—"
+                        # V5.20: 核心概率低于 50% 直接放弃，防止出现反向
+                        if adj_best and adj_best[1] < 0.50:
+                            continue
                         matches_data.append({
                             "event_id": eid, "比赛": f"{row['主队']} vs {row['客队']}",
                             "时间": row["时间"], "联赛": row["联赛"], "等级": grade,
@@ -1025,7 +1028,7 @@ with tab2:
                         if _bs >= 0.80: _adv = "🟢🟢 重仓"
                         elif _bs >= 0.70: _adv = "🟢 可下"
                         if _bo < 1.50:
-                            st.info("ℹ️ 兼容盘口赔率低于1.50，系统已过滤（防蚊子肉）。")
+                            st.warning("🛡️ **今日无合适防守盘口（赔率均低于 1.50）。**\n\n**建议**：防守成本过高，系统判定不建议保本下注。如果一定要玩，请控制剑的仓位，纯当娱乐。")
                         else:
                             st.caption(f"等级 **{_bmd.get('等级', 'B')}**  ｜  隐含概率 **{_bs*100:.1f}%**  ｜  赔率 **{fmt_odds(_bo)}** ({_src_txt})  ｜  {_reason}")
                     else:
