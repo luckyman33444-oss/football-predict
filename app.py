@@ -448,7 +448,12 @@ with tab2:
                     _gap = abs(_ph - _pa)
                     if _gap < 15:
                         return -1
-                    return _gap
+                    # V5.13: 加入 TSA 回测验证的最优组合（大小球≥65 + S/A）
+                    _ou = row.get("_prob_over_pct") or 0
+                    _ou_str = max(_ou, 100 - _ou)
+                    _grade = row.get("联赛等级", "B")
+                    _bonus = 50 if (_ou_str >= 65 and _grade in ("S", "A")) else 0
+                    return _gap + _bonus
                 core_df["_conf"] = core_df.apply(calc_conf, axis=1) if not core_df.empty else pd.Series(dtype=float)
                 other_df["_conf"] = other_df.apply(calc_conf, axis=1) if not other_df.empty else pd.Series(dtype=float)
                 if not core_df.empty: core_df = core_df[core_df["_conf"] >= 0]
