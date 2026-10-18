@@ -432,9 +432,13 @@ else: df_all = pd.DataFrame()
 # V5.12: 页面级 TSA 缓存（乙→丙，每天一次；Tab1/Tab2 共用）
 #   首次：建 mapping + 拉当天所有场次赔率并存盘；当日重开：0 配额
 _tsa_today_key = datetime.now(CST).strftime("%Y-%m-%d")
-if st.session_state.get("_tsa_cache_built_for") != _tsa_today_key:
+if st.session_state.get("_tsa_cache_built_v28") != _tsa_today_key:
     try:
-        _rows_tsa = build_mapping_for_dates(_tsa_today_key, _tsa_today_key, save=True) or []
+        from datetime import timedelta
+        _d_prev = (datetime.now(CST) - timedelta(days=1)).strftime("%Y-%m-%d")
+        _d_next = (datetime.now(CST) + timedelta(days=1)).strftime("%Y-%m-%d")
+        # V5.28: 覆盖前后3天，确保跨时区比赛也能匹配
+        _rows_tsa = build_mapping_for_dates(_d_prev, _d_next, save=True) or []
         _map_tsa = {int(r["bz_event_id"]): r["tsa_match_id"] for r in _rows_tsa}
         _hist_tsa = load_tsa_mapping() or {}
         for _k, _v in _hist_tsa.items():
