@@ -1396,39 +1396,38 @@ with tab5:
     # V5.14: 支持选择历史存档
     # V5.14: 智能过滤，只取今天之前的存档（防止点 Tab2 后马上复盘了今天的未开赛比赛）
     # V5.86: Tab4 终极正则提取日期，兼容所有格式与时间戳
+    # V5.90: 修复路径校验报错，强制类型转换
+    _today_str = datetime.now(CST).strftime("%Y-%m-%d")
     _all_recs = []
     for _d in ["data/recs", "output"]:
         if os.path.exists(_d):
             for _f in os.listdir(_d):
                 if _f.endswith(".xlsx"):
                     _name = _f.replace(".xlsx", "")
-                    # 正则提取连续的数字或带横杠的日期
                     _match = re.search(r"(\d{4}-\d{2}-\d{2}|\d{8})", _name)
                     if _match:
                         _d_raw = _match.group(0).replace("-", "")
                         _date_std = f"{_d_raw[:4]}-{_d_raw[4:6]}-{_d_raw[6:]}"
-                        _today_str = datetime.now(CST).strftime("%Y-%m-%d")
                         if _date_std <= _today_str:
-                            # 如果名字里没有标准日期（比如 推荐_20261019_1600），我们在展示时加上日期方便选
                             _display_name = _name if _date_std in _name else f"{_date_std} ({_name})"
-                            _all_recs.append((_date_std, _display_name, os.path.join(_d, _f)))
+                            _all_recs.append((_date_std, _display_name, str(os.path.join(_d, _f))))
     
     _recs = sorted(_all_recs, key=lambda x: (x[0], x[1]), reverse=True)
     _opts = ["⚡ 一键复盘最新存档", "手动上传"] + [x[1] for x in _recs]
     _sel = st.selectbox("选择复盘数据源", _opts, key="sel_rec")
+    uploaded_file = None
     if _sel == "⚡ 一键复盘最新存档":
-        if _recs:
-            _path = _recs[0][2]
-            uploaded_file = open(_path, "rb")
+        if _recs and os.path.exists(_recs[0][2]):
+            uploaded_file = open(_recs[0][2], "rb")
             st.success(f"已自动加载最新存档：**{_recs[0][1]}**")
         else:
-            uploaded_file = None
             st.warning("本地没有推荐存档，请先手动上传或去 Tab2 生成推荐。")
     elif _sel == "手动上传":
         uploaded_file = st.file_uploader("选择 Excel", type=["xlsx"], key="upload_review")
     else:
         _match_path = next((x[2] for x in _recs if x[1] == _sel), None)
-        uploaded_file = open(_match_path, "rb") if _match_path and os.path.exists(_match_path) else None
+        if _match_path and os.path.exists(_match_path):
+            uploaded_file = open(_match_path, "rb")
         _path = _match if _match else f"data/recs/{_sel}.xlsx"
         uploaded_file = open(_path, "rb") if os.path.exists(_path) else None
         uploaded_file = open(_path, "rb") if os.path.exists(_path) else None
