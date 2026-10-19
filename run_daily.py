@@ -139,6 +139,7 @@ def generate_daily():
             main_s, alt_s = "0-0", "1-0"
             
         output_rows.append({
+            "event_id": int(row["event_id"]),
             "场次": len(output_rows) + 1,
             "推荐等级": "⭐优质" if row["_score"] >= 20 else "⚠️补位",
             "联赛": row["联赛"],
