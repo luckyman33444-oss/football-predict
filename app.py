@@ -1465,6 +1465,7 @@ with tab5:
               "市场方向", "大小球方向", "真实亚盘", "真实大小球", "真实1X2", "主队排名", "客队排名",
               "调整后方向", "调整后概率", "真实亚盘", "调整后比分1", "调整后比分2", "赔率",
               "比分1", "比分2", "角色", "方向一致", "下注建议"] if c in rec_df.columns]
+                        rec_df = rec_df.loc[:, ~rec_df.columns.duplicated()]  # 自动去除重复的列名
                         st.dataframe(rec_df[show_cols], use_container_width=True, hide_index=True)
                 if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
                     all_mask = (full_meta["预测结果"].notna() &
