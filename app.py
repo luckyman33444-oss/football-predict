@@ -1395,23 +1395,37 @@ with tab5:
     # V5.14: 支持选择历史存档
     # V5.14: 智能过滤，只取今天之前的存档（防止点 Tab2 后马上复盘了今天的未开赛比赛）
     _today_str = datetime.now(CST).strftime("%Y-%m-%d")
-    _all_recs = [f for f in os.listdir("data/recs") if f.endswith(".xlsx")] if os.path.exists("data/recs") else []
-    _past_recs = [f for f in _all_recs if f.replace(".xlsx", "") < _today_str]
-    _recs = sorted(_past_recs, reverse=True)
-    _opts = ["⚡ 一键复盘最新存档", "手动上传"] + [f.replace(".xlsx", "") for f in _recs]
+    _all_recs = []
+    for _d in ["data/recs", "output"]:
+        if os.path.exists(_d):
+            for _f in os.listdir(_d):
+                if _f.endswith(".xlsx"):
+                    _name = _f.replace(".xlsx", "")
+                    # 兼容云端 Actions 的 推荐_20261019.xlsx 格式
+                    if "推荐_" in _name:
+                        try:
+                            _d_raw = _name.split("_")[1]
+                            _name = f"{_d_raw[:4]}-{_d_raw[4:6]}-{_d_raw[6:]}"
+                        except: pass
+                    _all_recs.append((_name, os.path.join(_d, _f)))
+    _past_recs = [x for x in _all_recs if x[0] < _today_str]
+    _recs = sorted(_past_recs, key=lambda x: x[0], reverse=True)
+    _opts = ["⚡ 一键复盘最新存档", "手动上传"] + [x[0] for x in _recs]
     _sel = st.selectbox("选择复盘数据源", _opts, key="sel_rec")
     if _sel == "⚡ 一键复盘最新存档":
         if _recs:
-            _path = f"data/recs/{_recs[0]}"
+            _path = _recs[0][1]
             uploaded_file = open(_path, "rb")
-            st.success(f"已自动加载最新存档：**{_recs[0].replace('.xlsx', '')}**")
+            st.success(f"已自动加载最新存档：**{_recs[0][0]}**")
         else:
             uploaded_file = None
             st.warning("本地没有推荐存档，请先手动上传或去 Tab2 生成推荐。")
     elif _sel == "手动上传":
         uploaded_file = st.file_uploader("选择 Excel", type=["xlsx"], key="upload_review")
     else:
-        _path = f"data/recs/{_sel}.xlsx"
+        _match = next((x[1] for x in _recs if x[0] == _sel), None)
+        _path = _match if _match else f"data/recs/{_sel}.xlsx"
+        uploaded_file = open(_path, "rb") if os.path.exists(_path) else None
         uploaded_file = open(_path, "rb") if os.path.exists(_path) else None
     if uploaded_file is None: st.info("💡 请先上传 Excel 或选择历史推荐。")
     else:
