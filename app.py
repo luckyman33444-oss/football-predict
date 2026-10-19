@@ -1428,9 +1428,6 @@ with tab5:
         _match_path = next((x[2] for x in _recs if x[1] == _sel), None)
         if _match_path and os.path.exists(_match_path):
             uploaded_file = open(_match_path, "rb")
-        _path = _match if _match else f"data/recs/{_sel}.xlsx"
-        uploaded_file = open(_path, "rb") if os.path.exists(_path) else None
-        uploaded_file = open(_path, "rb") if os.path.exists(_path) else None
     if uploaded_file is None: st.info("💡 请先上传 Excel 或选择历史推荐。")
     else:
         try:
