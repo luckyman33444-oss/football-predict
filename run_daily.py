@@ -195,14 +195,14 @@ def generate_daily():
     # 路径 1: Codespace 的 output/ 文件夹
     os.makedirs("output", exist_ok=True)
     path1 = os.path.join("output", filename)
-    df_out.to_excel(path1, index=False)
+    df_out.to_excel(path1, index=False, sheet_name="基本信息")
     print(f"\n🎯 推荐报表已保存至云端: {path1}")
 
     # 路径 2: Windows 桌面
     if platform.system() == "Windows":
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", filename)
         try:
-            df_out.to_excel(desktop_path, index=False)
+            df_out.to_excel(desktop_path, index=False, sheet_name="基本信息")
             print(f"🎯 推荐报表已保存至桌面: {desktop_path}")
         except Exception as e:
             print(f"⚠️ 桌面保存失败: {e}")
