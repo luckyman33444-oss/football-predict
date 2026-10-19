@@ -153,7 +153,7 @@ def generate_daily():
         })
         
     # 4. 双路径保存
-    filename = f"推荐_{today_str.replace('-', '')}.xlsx"
+    filename = f"推荐_{today_str.replace('-', '')}_{datetime.now(CST).strftime('%H%M')}.xlsx"
     df_out = pd.DataFrame(output_rows)
     
     # 路径 1: Codespace 的 output/ 文件夹
