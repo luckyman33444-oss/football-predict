@@ -1441,7 +1441,11 @@ with tab5:
                 full_meta = full_meta.rename(columns={"推荐方向": "模型判断", "推荐概率": "模型概率"})
                 info_cols = ["存档时间", "推荐场次", "当天全部预测场次", "核心比赛"]
                 if all(c in full_meta.columns for c in info_cols):
-                    info_row = full_meta.iloc[0]
+                    # V5.95: 防止空 Excel 越界崩溃
+                    if full_meta.empty:
+                        info_row = pd.Series({"存档时间": datetime.now(CST).strftime("%Y-%m-%d"), "推荐场次": 0, "当天全部预测场次": 0, "核心比赛": "否"})
+                    else:
+                        info_row = full_meta.iloc[0]
                     c1, c2, c3, c4 = st.columns(4)
                     with c1: st.metric("存档时间", str(info_row.get("存档时间", "—")))
                     with c2: st.metric("推荐场次", str(info_row.get("推荐场次", "—")))
