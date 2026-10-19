@@ -138,19 +138,54 @@ def generate_daily():
         elif t1 in _under_dna or t2 in _under_dna:
             main_s, alt_s = "0-0", "1-0"
             
+        # 计算命中率占位
+        _p = row.get("_prob_home", 0) or 0
+        _pa = row.get("_prob_away", 0) or 0
+        _gap = abs(_p - _pa)
+        _mkt = "主胜" if _p >= _pa else "客胜"
+
         output_rows.append({
-            "event_id": int(row["event_id"]),
+            "存档时间": f"{today_str} 16:00",
+            "推荐场次": len(top3),
+            "当天全部预测场次": len(df),
+            "核心比赛": "否",
             "场次": len(output_rows) + 1,
-            "推荐等级": "⭐优质" if row["_score"] >= 20 else "⚠️补位",
-            "联赛": row["联赛"],
-            "时间": row["时间"],
             "比赛": f"{row['主队']} vs {row['客队']}",
-            "市场差": f"{abs((row['_prob_home'] or 0) - (row['_prob_away'] or 0)):.1f}",
-            "最终方向": direction,
-            "真实亚盘": ah_str,
-            "真实大小球": ou_str,
+            "联赛": row["联赛"],
+            "等级": row.get("联赛等级", "B"),
+            "时间": row["时间"],
+            "event_id": int(row["event_id"]),
+            "模型判断": direction,
+            "模型概率": "—",
+            "下注建议": "🟢 可下" if row["_score"] > 20 else "🟡 小注",
+            "调整后方向": direction,
+            "调整后概率": "—",
+            "市场方向": _mkt,
+            "市场差": round(_gap, 1),
+            "亚盘置信": "🔒 高" if _gap > 35 else "✅ 中",
+            "调整后比分1": main_s,
+            "调整后比分2": alt_s,
+            "赔率": "—",
+            "大小球方向": "—",
             "比分1": main_s,
             "比分2": alt_s,
+            "盘口走势": "—",
+            "方向一致": "✅ 同向",
+            "角色": "主胆" if len(output_rows) == 0 else "拖",
+            "主队排名": "—",
+            "客队排名": "—",
+            "真实亚盘": ah_str,
+            "真实大小球": ou_str,
+            "真实1X2": "—",
+            "状态": "未开始",
+            "预测结果": direction,
+            "大小球": "—",
+            "主胜": _p,
+            "和局": row.get("_prob_draw", 0),
+            "客胜": _pa,
+            "主力比分": main_s,
+            "备选比分": alt_s,
+            "第三比分": "—"
         })
         
     # 4. 双路径保存
