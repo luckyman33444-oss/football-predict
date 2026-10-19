@@ -1408,7 +1408,7 @@ with tab5:
                         _d_raw = _match.group(0).replace("-", "")
                         _date_std = f"{_d_raw[:4]}-{_d_raw[4:6]}-{_d_raw[6:]}"
                         _today_str = datetime.now(CST).strftime("%Y-%m-%d")
-                        if _date_std < _today_str:
+                        if _date_std <= _today_str:
                             # 如果名字里没有标准日期（比如 推荐_20261019_1600），我们在展示时加上日期方便选
                             _display_name = _name if _date_std in _name else f"{_date_std} ({_name})"
                             _all_recs.append((_date_std, _display_name, os.path.join(_d, _f)))
