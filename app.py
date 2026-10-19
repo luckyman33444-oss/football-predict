@@ -1,3 +1,4 @@
+import re
 import pandas as pd, streamlit as st
 from datetime import date, datetime, timedelta
 import io
@@ -1394,36 +1395,39 @@ with tab5:
     st.caption("上传早上下载的 Excel，系统自动读回预测，拉取实际比分。")
     # V5.14: 支持选择历史存档
     # V5.14: 智能过滤，只取今天之前的存档（防止点 Tab2 后马上复盘了今天的未开赛比赛）
-    _today_str = datetime.now(CST).strftime("%Y-%m-%d")
+    # V5.86: Tab4 终极正则提取日期，兼容所有格式与时间戳
     _all_recs = []
     for _d in ["data/recs", "output"]:
         if os.path.exists(_d):
             for _f in os.listdir(_d):
                 if _f.endswith(".xlsx"):
                     _name = _f.replace(".xlsx", "")
-                    # 兼容云端 Actions 的 推荐_20261019.xlsx 格式
-                    if "推荐_" in _name:
-                        try:
-                            _d_raw = _name.split("_")[1]
-                            _name = f"{_d_raw[:4]}-{_d_raw[4:6]}-{_d_raw[6:]}"
-                        except: pass
-                    _all_recs.append((_name, os.path.join(_d, _f)))
-    _past_recs = [x for x in _all_recs if x[0] < _today_str]
-    _recs = sorted(_past_recs, key=lambda x: x[0], reverse=True)
-    _opts = ["⚡ 一键复盘最新存档", "手动上传"] + [x[0] for x in _recs]
+                    # 正则提取连续的数字或带横杠的日期
+                    _match = re.search(r"(\d{4}-\d{2}-\d{2}|\d{8})", _name)
+                    if _match:
+                        _d_raw = _match.group(0).replace("-", "")
+                        _date_std = f"{_d_raw[:4]}-{_d_raw[4:6]}-{_d_raw[6:]}"
+                        if _date_std < _today_str:
+                            # 如果名字里没有标准日期（比如 推荐_20261019_1600），我们在展示时加上日期方便选
+                            _display_name = _name if _date_std in _name else f"{_date_std} ({_name})"
+                            _all_recs.append((_date_std, _display_name, os.path.join(_d, _f)))
+    
+    _recs = sorted(_all_recs, key=lambda x: (x[0], x[1]), reverse=True)
+    _opts = ["⚡ 一键复盘最新存档", "手动上传"] + [x[1] for x in _recs]
     _sel = st.selectbox("选择复盘数据源", _opts, key="sel_rec")
     if _sel == "⚡ 一键复盘最新存档":
         if _recs:
-            _path = _recs[0][1]
+            _path = _recs[0][2]
             uploaded_file = open(_path, "rb")
-            st.success(f"已自动加载最新存档：**{_recs[0][0]}**")
+            st.success(f"已自动加载最新存档：**{_recs[0][1]}**")
         else:
             uploaded_file = None
             st.warning("本地没有推荐存档，请先手动上传或去 Tab2 生成推荐。")
     elif _sel == "手动上传":
         uploaded_file = st.file_uploader("选择 Excel", type=["xlsx"], key="upload_review")
     else:
-        _match = next((x[1] for x in _recs if x[0] == _sel), None)
+        _match_path = next((x[2] for x in _recs if x[1] == _sel), None)
+        uploaded_file = open(_match_path, "rb") if _match_path and os.path.exists(_match_path) else None
         _path = _match if _match else f"data/recs/{_sel}.xlsx"
         uploaded_file = open(_path, "rb") if os.path.exists(_path) else None
         uploaded_file = open(_path, "rb") if os.path.exists(_path) else None
