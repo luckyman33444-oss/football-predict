@@ -201,3 +201,42 @@
 - 新建 `data/league_weights.json` 和 `data/team_dna.json`。
 - 将提款机、毒药联赛、大球/小球 DNA 全部存在 JSON 中。
 - `app.py` 启动时动态读取 JSON，将逻辑解耦。这样未来更新只需要改 JSON 文件，无需修改任何 Python 代码。
+
+
+---
+
+## 十三、V5.80 全自动化工程（2026-10-19）
+
+### 1. 背景
+此前系统依赖用户手动打开 Streamlit 网页点击生成。为实现“睡醒直接拿报表”，开发了本地脚本 + 云端定时任务的双轨自动化方案。
+
+### 2. 本地一键生成：`run_daily.py`
+- **功能**：一键跑完今日未开赛比赛，输出 Excel 报表。
+- **内置逻辑**：
+  - 黄金选场公式（市场差 + 联赛权重 + 球队信任度/神经刀过滤）。
+  - 真实盘口读取（TSA）与深盘比分池强制干预。
+  - 球队 DNA 强制干预（大球狂魔、蛋蛋队）。
+  - 不足 3 场时自动降级补位（标注 ⚠️补位）。
+- **双路径保存**：自动存到 `output/` 目录；若在 Windows 环境运行，还会自动存到桌面。
+- **用法**：`python run_daily.py`
+
+### 3. 云端定时任务：GitHub Actions
+- **配置文件**：`.github/workflows/daily_run.yml`
+- **触发**：每天北京时间 16:00（UTC 08:00）自动运行，也支持手动触发。
+- **流程**：云端拉起 Python 环境 → 安装依赖 → 运行 `run_daily.py` → 将新生成的 Excel 自动 commit 并 push 到 `output/` 目录。
+- **Secrets 配置**：需要 `BSD_TOKEN` 和 `THESTATSAPI_KEY`。
+
+### 4. Tab4 跨目录兼容读取
+- **痛点**：本地保存文件名为 `2026-10-19.xlsx`，云端 Actions 保存为 `推荐_20261019.xlsx`，格式不同会导致复盘读取失败。
+- **修复**：`app.py` 的 Tab4 读取逻辑升级为同时扫描 `data/recs/` 和 `output/` 目录，并自动将 `推荐_20261019` 格式翻译为标准日期 `2026-10-19` 后再进行日期排序与过滤。
+
+### 5. 安全预警（必做）
+用户曾在截图对话中暴露了 `BSD_TOKEN` 和 `THESTATSAPI_KEY` 的完整值。
+**接手者务必：**
+1. 去 TheStatsAPI 和 Bzzoiro 后台重置这两个 Key。
+2. 更新 GitHub 仓库 `Settings -> Secrets and variables -> Actions` 中的值。
+3. 更新本地开发环境（Codespaces）的环境变量。
+
+### 6. 日常使用流程（闭环）
+- **平时**：无需打开 Codespace。每天 16:00 系统自动跑完，去 GitHub 仓库的 `output/` 下载最新 Excel 即可。
+- **复盘**：打开 Streamlit → Tab4 → 选择「⚡ 一键复盘最新存档」→ 自动加载云端生成的推荐并比对赛果。
