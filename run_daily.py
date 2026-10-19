@@ -190,7 +190,7 @@ def generate_daily():
         
     # 4. 双路径保存
     filename = f"推荐_{today_str.replace('-', '')}_{datetime.now(CST).strftime('%H%M')}.xlsx"
-    df_out = pd.DataFrame(output_rows)
+    df_out = pd.DataFrame(output_rows, columns=['存档时间', '推荐场次', '当天全部预测场次', '核心比赛', '场次', '比赛', '联赛', '等级', '时间', 'event_id', '模型判断', '模型概率', '下注建议', '调整后方向', '调整后概率', '市场方向', '市场差', '亚盘置信', '调整后比分1', '调整后比分2', '赔率', '大小球方向', '比分1', '比分2', '盘口走势', '方向一致', '角色', '主队排名', '客队排名', '真实亚盘', '真实大小球', '真实1X2', '状态', '预测结果', '大小球', '主胜', '和局', '客胜', '主力比分', '备选比分', '第三比分'])
     
     # 路径 1: Codespace 的 output/ 文件夹
     os.makedirs("output", exist_ok=True)
