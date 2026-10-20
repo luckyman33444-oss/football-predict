@@ -587,8 +587,8 @@ with tab1:
 # ========== Tab 2 ==========
 with tab2:
     now = datetime.now(CST)
-    _end_window = now.replace(hour=23, minute=59, second=59, microsecond=0)
-    st.caption(f"⏰ 当前北京时间 **{now.strftime('%H:%M')}** ｜ 查询窗口 **{now.strftime('%H:%M')} ～ {_end_window.strftime('%H:%M')}**（当天剩余）")
+    _end_window = now + timedelta(hours=24)
+    st.caption(f"⏰ 当前北京时间 **{now.strftime('%H:%M')}** ｜ 查询窗口 **{now.strftime('%H:%M')} ～ {_end_window.strftime('%H:%M')}**（未来24小时）")
     col1, col2 = st.columns([3, 1])
     with col1:
         enable_lineup_info = st.checkbox("👥 显示首发阵容 + 伤停", value=True, key="lineup_switch")
@@ -626,7 +626,7 @@ with tab2:
                 core_ids = set(st.session_state.core_matches)
                 core_df = notstarted_all[notstarted_all["event_id"].isin(core_ids)].copy()
                 other_df_all = notstarted_all[~notstarted_all["event_id"].isin(core_ids)].copy()
-                end_window_auto = now.replace(hour=23, minute=59, second=59, microsecond=0)
+                end_window_auto = now + timedelta(hours=24)
                 other_df = other_df_all[other_df_all["kickoff_dt"] <= end_window_auto].copy()
                 def calc_conf(row):
                     # V5.44: 引入联赛历史胜率微调，提款机加分，毒药降级
