@@ -2,7 +2,7 @@
 import pandas as pd
 import os
 import platform
-from datetime import datetime
+from datetime import datetime, timedelta
 from engine import (
     fetch_all_predictions, parse_prediction, load_tsa_mapping, 
     fetch_or_load_tsa_odds, parse_tsa_odds_summary
@@ -11,6 +11,7 @@ from data import CST
 
 def generate_daily():
     today_str = datetime.now(CST).strftime("%Y-%m-%d")
+    tomorrow_str = (datetime.now(CST) + timedelta(days=1)).strftime("%Y-%m-%d")
     print(f"⏳ [{today_str}] 开始获取比赛数据...")
     
     # 1. 获取数据
@@ -24,7 +25,7 @@ def generate_daily():
     if df.empty: return
     
     # 过滤今天未开始的比赛
-    df = df[(df["event_date"] == today_str) & (df["状态"] == "未开始")].copy()
+    df = df[(df["event_date"].isin([today_str, tomorrow_str])) & (df["状态"] == "未开始")].copy()
     print(f"✅ 获取到 {len(df)} 场未开始的比赛")
     
     # 2. 计算选场分数
