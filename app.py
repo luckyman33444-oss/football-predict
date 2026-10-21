@@ -1551,6 +1551,11 @@ with tab5:
                             odds_str = str(m.get("赔率", "—"))
                             try: odds_val = float(odds_str) if odds_str not in ("—", "nan", "") else None
                             except: odds_val = None
+
+                            if review_rows == []:
+                                st.write("🔍 诊断：API返回的前3场赛果是：", list(actual_results.values())[:3])
+                                st.write("🔍 诊断：当前Excel里的event_id是：", eid, " | 比赛：", m["比赛"])
+
                             if not actual:
                                 review_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "模型判断": rec_dir,
                                                     "模型概率": m.get("模型概率", "—"), "调整后方向": adj_dir,
@@ -1562,6 +1567,7 @@ with tab5:
                                                     "比分1命中": "—", "比分2命中": "—", "方向对但比分错": "—",
                                                     "真实亚盘命中": "—", "真实大小球命中": "—",
                                                     "_odds_val": odds_val})
+                                continue
                                 continue
                             actual_str = f"{actual['home']}-{actual['away']}"
                             win_hit, _ = judge_prediction_hit(rec_dir, actual)
