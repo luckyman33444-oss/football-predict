@@ -1531,7 +1531,22 @@ with tab5:
                             eid = m.get("event_id")
                             try: eid = int(eid)
                             except: continue
-                            actual = actual_results.get(eid)
+                            # 先用 ID 找，兼容 int 和 str
+                            actual = actual_results.get(eid) or actual_results.get(str(eid))
+                            
+                            # 如果 ID 找不到，用队名暴力匹配兜底
+                            if not actual:
+                                _m_str = str(m.get("比赛", ""))
+                                if " vs " in _m_str:
+                                    _t1 = _m_str.split(" vs ")[0].strip()
+                                    _t2 = _m_str.split(" vs ")[1].strip()
+                                    for _v in actual_results.values():
+                                        _h_name = str(_v.get("home_team", _v.get("home", ""))).strip()
+                                        _a_name = str(_v.get("away_team", _v.get("away", ""))).strip()
+                                        # 只要主队客队名字互相包含，就算匹配成功
+                                        if (_t1 in _h_name or _h_name in _t1) and (_t2 in _a_name or _a_name in _t2):
+                                            actual = _v
+                                            break
                             rec_dir = str(m.get("模型判断", "")); adj_dir = str(m.get("调整后方向", "—"))
                             odds_str = str(m.get("赔率", "—"))
                             try: odds_val = float(odds_str) if odds_str not in ("—", "nan", "") else None
