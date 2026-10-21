@@ -150,6 +150,7 @@ section[data-testid="stSidebar"] {
 .stRadio > div { color: #bf00ff; }
 </style>
 """, unsafe_allow_html=True)
+
 def render_all_matches(df_all):
     if df_all.empty: st.warning("没有获取到预测数据。")
     else:
@@ -172,7 +173,6 @@ def render_all_matches(df_all):
         if not df.empty:
             df = df.copy()
             df["第三比分"] = df["_scores_list"].apply(lambda x: x[2][0] if isinstance(x, list) and len(x) > 2 else "—")
-            # D2: 平局概率 + 高置信
             df["平局概率"] = df["市场和局_pct"].apply(lambda x: f"{x:.1f}%" if x is not None and x != "—" else "—")
             df["高置信"] = df["高置信"].fillna("—") if "高置信" in df.columns else "—"
             df["不平局"] = df["高置信"]
@@ -189,7 +189,6 @@ def render_all_matches(df_all):
                 if isinstance(r.get("市场和局_pct"), (int, float)) and r["市场和局_pct"] < 22: t.append("和局低")
                 return "＋".join(t) if t else "—"
             df["强信号"] = df.apply(_tag, axis=1)
-            # 积分榜排名（ESPN，按联赛缓存）
             _CN2CODE = {cn: code for code, cn in ESPN_LEAGUES.items()}
             _std_cache2 = {}
             def _rank_for(lg, tm):
@@ -202,10 +201,7 @@ def render_all_matches(df_all):
                 return _i.get("rank") if _i else None
             df["主队排名"] = df.apply(lambda r: _rank_for(r["联赛"], r["主队"]), axis=1)
             df["客队排名"] = df.apply(lambda r: _rank_for(r["联赛"], r["客队"]), axis=1)
-            # 最终方向：xG 缺失 或 与市场矛盾时跟市场
-            # V5.14: 最终方向已由 engine.py 统一计算，直接复用
             df["最终方向"] = df["预测结果"]
-            # V5.32: 防止因为取不到列导致 KeyError 崩溃
             if "真实大小球" not in df.columns:
                 if "大小球" in df.columns:
                     df["真实大小球"] = df["大小球"]
@@ -218,7 +214,6 @@ def render_all_matches(df_all):
                 "模型主胜", "模型和局", "模型客胜",
                 "主胜", "和局", "客胜", "平局概率", "不平局", "强信号", "真实大小球"
             ]].copy()
-            # V5.25: Tab1 强制真实盘口（无数据则显示 —）
             try:
                 _tsa_map = load_tsa_mapping()
                 def _get_real_ou(r):
@@ -245,19 +240,15 @@ def render_all_matches(df_all):
                                     return f"{lf:g}球 | 大{ov}({_po*100:.0f}%) / 小{un}({_pu*100:.0f}%)"
                     except Exception as e:
                         pass
-                    # 彻底干掉百分比兜底，没有真实赔率就返回 —
                     return "—"
                 df["真实大小球"] = df.apply(_get_real_ou, axis=1)
             except Exception:
                 pass
-            # V5.29: 确保 display_df 拿到最新的真实盘口
             if "真实大小球" in display_df.columns and "真实大小球" in df.columns:
                 display_df["真实大小球"] = df["真实大小球"].values
             display_df = display_df.rename(columns={"预测结果": "模型判断"})
-            # V5.30: 合并最终方向和真实亚盘
             if "最终方向" in display_df.columns and "真实亚盘" in display_df.columns:
                 display_df["最终方向"] = display_df.apply(lambda r: _merge_dir_ah(r["最终方向"], r["真实亚盘"]), axis=1)
-            # V5.11: Tab1「市场判断」→ TSA 让球盘方向（只读缓存，无则 fallback 1X2）
             _tab1_tsa_map = {}
             try:
                 _tab1_tsa_map = load_tsa_mapping()
@@ -287,7 +278,6 @@ def render_all_matches(df_all):
                     _fl = float(_ln); _fh = float(_h); _fa = float(_a)
                 except Exception:
                     _tab1_tsa_cache[_eid] = None; return None
-                # V5.12: 平赔不判边（|Δ|<0.02 → 均势）
                 _diff = _fh - _fa
                 if abs(_diff) < 0.02: _side = "均势"
                 elif _diff < 0: _side = "主赢"
@@ -302,8 +292,6 @@ def render_all_matches(df_all):
             if "市场判断" in df.columns:
                 display_df.insert(display_df.columns.get_loc("模型判断") + 1, "市场判断", _mkt_final)
                 display_df.insert(display_df.columns.get_loc("市场判断") + 1, "最终方向", df["最终方向"].values)
-
-                # V5.14: 标记市场让球方向与最终方向冲突
                 def _mkt_warn(row):
                     _m = str(row.get("市场判断", ""))
                     _f = str(row.get("最终方向", ""))
@@ -372,7 +360,6 @@ def render_high_confidence(df_all):
             _df["_mk"] = _df["市场判断"].astype(str).str.strip()
             _df["_gap"] = (_df["_ph"] - _df["_pa"]).abs()
             _df["_ou_str"] = _df["_po"].apply(lambda x: max(x, 100 - x))
-            # V5.12: 补 3 列（与 Tab1 主表口径一致）
             _df["不平局"] = _df["_pd"].apply(lambda x: "⭐⭐⭐" if pd.notna(x) and x < 20 else ("⭐⭐" if pd.notna(x) and x < 22 else ("⭐" if pd.notna(x) and x < 25 else "—")))
             def _tag_hc(r):
                 t = []
@@ -387,10 +374,9 @@ def render_high_confidence(df_all):
             _m_high22 = (_df["_pd"] < 22) & _df["_mk"].isin(["主胜", "客胜"])
             _m_high25 = (_df["_pd"] < 25) & _df["_mk"].isin(["主胜", "客胜"])
             _m_ou60 = _df["_ou_str"] >= 60
-            # V5.12: 大小球≥65 加 S/A 过滤（TSA 回测 71.7% → 74.3%）
             _grade_ou65 = _df["联赛等级"] if "联赛等级" in _df.columns else pd.Series(["?"]*len(_df), index=_df.index)
             _m_ou65 = (_df["_ou_str"] >= 65) & _grade_ou65.isin(["S", "A"])
-            _m_ou65_naive = _df["_ou_str"] >= 65  # 无 S/A 过滤的旧版（备用）
+            _m_ou65_naive = _df["_ou_str"] >= 65
             _m_gap35 = _df["_gap"] >= 35
             _m_gap45 = _df["_gap"] >= 45
             _m_gap55 = _df["_gap"] >= 55
@@ -418,13 +404,11 @@ def render_high_confidence(df_all):
                 return _mkt if _xs != _ms else _mdl
             _high["最终方向"] = _high.apply(_high_fd, axis=1)
             _high = _high.sort_values("_gap", ascending=False)
-            # 2026-10-17 Cloud 上 data/ 不存在 → 先建当天映射
             try:
                 _today_map = datetime.now(CST).strftime("%Y-%m-%d")
                 build_mapping_for_dates(_today_map, _today_map, save=True)
             except Exception:
                 pass
-            # 2026-10-17 拉 TSA 真实大小球（T-3 延迟）
             try:
                 _high_tsa_map = load_tsa_mapping()
             except Exception:
@@ -477,14 +461,12 @@ def render_high_confidence(df_all):
                          "预测结果","最终方向", "主力比分", "备选比分", "第三比分", "真实大小球", "真实亚盘"]
                 _avail = [c for c in _want if c in _high.columns]
                 _show = _high[_avail].copy()
-                # V5.30: 高置信清单合并方向和亚盘
                 if "最终方向" in _show.columns and "真实亚盘" in _show.columns:
                     _show["最终方向"] = _show.apply(lambda r: _merge_dir_ah(r["最终方向"], r["真实亚盘"]), axis=1)
                 _show = _show.rename(columns={"联赛等级": "等级", "_pd": "平局%", "_gap": "市场差", "_ou_str": "大小球强度%", "预测结果": "模型判断"})
                 if "平局%" in _show.columns: _show["平局%"] = _show["平局%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
                 if "市场差" in _show.columns: _show["市场差"] = _show["市场差"].apply(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
                 if "大小球强度%" in _show.columns: _show["大小球强度%"] = _show["大小球强度%"].apply(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
-                # V5.20: 加入核心勾选框
                 if "event_id" in _high.columns:
                     _show.insert(0, "加入核心", _high["event_id"].isin(st.session_state.core_matches).values)
                     _edited_high = st.data_editor(
@@ -527,8 +509,9 @@ parsed = []
 if all_preds:
     parsed = [parse_prediction(p) for p in all_preds]
     df_all = pd.DataFrame(parsed)
+else:
+    df_all = pd.DataFrame()
 
-# V5.66: 全系统球队 DNA 最顶层干预
 _over_dna = ["瓦杜兹", "博多闪耀", "伯尔尼年轻人", "浦和红钻", "苏黎世", "巴塞罗那", "锡永", "图恩", "卡托维兹", "阿贾克斯", "新英格兰革命", "哥伦布机员", "布莱克本", "西汉姆联", "绍森德联", "诺维奇", "塔姆沃思", "克卢日大学", "波特兰伐木者", "辛辛那提FC"]
 _under_dna = ["埃克塞特城", "圣洛伦索", "里斯特拉", "皮特什蒂阿尔杰什", "维拉诺瓦", "底特律城", "布拉德福德", "圣格奥尔基塞普西", "河流联", "普罗夫迪夫火车头", "东京绿茵", "飓风", "贝尔格拉诺", "巴拉克中央", "代格福什", "庞特普雷塔", "塔尔萨FC", "奥克兰根", "库奥皮奥", "百万富翁"]
 
@@ -545,22 +528,16 @@ def _apply_team_dna(row):
 
 if not df_all.empty:
     df_all = df_all.apply(_apply_team_dna, axis=1)
-
-    # V5.31: 强制用 TSA 真实大小球纠偏比分
     if not df_all.empty:
         df_all = _sync_scores_tsa(df_all)
 else: df_all = pd.DataFrame()
 
-# ========== Tab 1 ==========
-# V5.12: 页面级 TSA 缓存（乙→丙，每天一次；Tab1/Tab2 共用）
-#   首次：建 mapping + 拉当天所有场次赔率并存盘；当日重开：0 配额
 _tsa_today_key = datetime.now(CST).strftime("%Y-%m-%d")
 if st.session_state.get("_tsa_cache_built_v28") != _tsa_today_key:
     try:
         from datetime import timedelta
         _d_prev = (datetime.now(CST) - timedelta(days=1)).strftime("%Y-%m-%d")
         _d_next = (datetime.now(CST) + timedelta(days=1)).strftime("%Y-%m-%d")
-        # V5.28: 覆盖前后3天，确保跨时区比赛也能匹配
         _rows_tsa = build_mapping_for_dates(_d_prev, _d_next, save=True) or []
         _map_tsa = {int(r["bz_event_id"]): r["tsa_match_id"] for r in _rows_tsa}
         _hist_tsa = load_tsa_mapping() or {}
@@ -577,6 +554,7 @@ if st.session_state.get("_tsa_cache_built_v28") != _tsa_today_key:
         st.session_state["_tsa_cache_built_for"] = _tsa_today_key
     except Exception:
         pass
+
 with tab1:
     mode = st.radio("显示模式", ["全部场次", "高置信清单"], horizontal=True, key="tab1_mode")
     if mode == "高置信清单":
@@ -584,7 +562,6 @@ with tab1:
     else:
         render_all_matches(df_all)
 
-# ========== Tab 2 ==========
 with tab2:
     now = datetime.now(CST)
     _end_window = now + timedelta(hours=24)
@@ -629,7 +606,6 @@ with tab2:
                 end_window_auto = now + timedelta(hours=24)
                 other_df = other_df_all[other_df_all["kickoff_dt"] <= end_window_auto].copy()
                 def calc_conf(row):
-                    # V5.44: 引入联赛历史胜率微调，提款机加分，毒药降级
                     _ph = row.get("_prob_home") or 0
                     _pa = row.get("_prob_away") or 0
                     _gap = abs(_ph - _pa)
@@ -642,14 +618,13 @@ with tab2:
                     if _a_dir == "主胜" and _ph < _pa: return -1
                     if _a_dir == "客胜" and _ph >= _pa: return -1
                     
-                    # 联赛权重调节（样本量小，仅做辅助微调，不做绝对黑名单）
                     _league = str(row.get("联赛", ""))
                     _trust = ["西甲", "英超", "土超", "法甲", "丹超", "葡超"]
                     _caution = ["沙特联", "Liga Portugal 2", "日职联", "巴甲", "美职联", "哥伦比亚甲"]
                     
-                    # V5.71: 球队信任度权重（提款机加分，神经刀扣分）
                     _trust_teams = ["巴塞罗那", "阿森纳", "曼城", "皇家马德里", "国际米兰", "巴黎圣日耳曼", "博卡青年", "马德里竞技", "弗拉门戈", "凯尔特人", "波尔图"]
                     _trap_teams = ["毕尔巴鄂竞技", "西汉姆联", "河床", "国际迈阿密", "帕纳辛奈科斯", "奈梅亨", "洛杉矶FC", "福塔莱萨", "光州FC", "卡诺支柱"]
+                    
                     _bonus = 0
                     if _league in _trust: _bonus += 20
                     elif _league in _caution: _bonus -= 25
@@ -662,8 +637,7 @@ with tab2:
                     return _gap + _bonus
                 core_df["_conf"] = core_df.apply(calc_conf, axis=1) if not core_df.empty else pd.Series(dtype=float)
                 other_df["_conf"] = other_df.apply(calc_conf, axis=1) if not other_df.empty else pd.Series(dtype=float)
-                # V5.63: 用户手动选的核心，哪怕打出负分也强制保留，绝不擅自删除
-                # if not core_df.empty: core_df = core_df[core_df["_conf"] >= 0]
+                
                 if not other_df.empty: other_df = other_df[other_df["_conf"] >= 0]
                 n_core_in_window = len(core_df)
                 if n_core_in_window >= 3:
@@ -727,7 +701,6 @@ with tab2:
                         opts = []
                         hw_real = o.get("home_win"); dr_real = o.get("draw"); aw_real = o.get("away_win")
                         over_real = o.get("over_25_goals"); under_real = o.get("under_25_goals")
-                        # V5.12: 备选串大小球切 TSA 真实赔率（有则用，无则 fallback 模型）
                         _tsa_ou_t2 = tsa_odds_map.get(eid) or {}
                         _ro_t2 = _tsa_ou_t2.get("real_over25"); _ru_t2 = _tsa_ou_t2.get("real_under25")
                         _p_over = row["_prob_over_pct"] / 100 if row["_prob_over_pct"] else 0
@@ -764,7 +737,6 @@ with tab2:
                         if enable_motivation:
                             league_name_en = row.get("联赛", "")
                             total_teams = 0; home_rank = None; away_rank = None
-                            # 1. 先试 API-Football
                             _api_id = None
                             for _ec, _aid in FOOTBALL_API_LEAGUE_IDS.items():
                                 if ESPN_LEAGUES.get(_ec) == league_name_en:
@@ -781,7 +753,6 @@ with tab2:
                                     total_teams = len(_std)
                                     home_rank = _hi.get("rank") if _hi else None
                                     away_rank = _ai.get("rank") if _ai else None
-                            # 2. API-Football 没排名 → 试 ESPN
                             if not home_rank and not away_rank:
                                 for _ec, _cn in ESPN_LEAGUES.items():
                                     if _cn == league_name_en:
@@ -797,7 +768,6 @@ with tab2:
                                             away_rank = _ai.get("rank") if _ai else None
                                         break
                             _home_rank_out = home_rank; _away_rank_out = away_rank
-                            # 3. 有排名 → 调 xG
                             if home_rank or away_rank:
                                 home_tier = judge_motivation_tier(home_rank, total_teams, 0, 0)
                                 away_tier = judge_motivation_tier(away_rank, total_teams, 0, 0)
@@ -812,7 +782,6 @@ with tab2:
                         else:
                             rho = 0
                         adj_pred = predict_full_dc(final_xg_h, final_xg_a, rho=rho)
-                        # 2026-10-17 修复：xG 缺失时模型无信息 → 用市场概率覆盖（避免稀释市场信号）
                         _xg_ok = (not pd.isna(row.get("_xg_h"))) and (not pd.isna(row.get("_xg_a")))
                         _xg_mkt_conflict = False
                         if _xg_ok:
@@ -846,8 +815,6 @@ with tab2:
                             best_name, best_prob = pick_best_result(adj_pred["hw"], adj_pred["d"], adj_pred["aw"])
                             adj_best = (best_name, best_prob)
                             _adj_dir_now = adj_best[0] if adj_best else "—"
-                            # V5.6 A+: 模型前3 ∪ 全局8池（与 backtest_one 同步）
-                            # V5.11: 大小球选边切 TSA 真实盘口（赔率低=概率高），无 TSA 时 fallback 模型
                             _tsa_ou = tsa_odds_map.get(eid) or {}
                             _ou_lines = _tsa_ou.get("real_ou_lines", {})
                             _is_over = None
@@ -857,20 +824,15 @@ with tab2:
                                     try: valid_lines.append((float(k), v["over"], v["under"]))
                                     except: pass
                                 if valid_lines:
-                                    # V5.56: 动态计算，选出真实主盘口
                                     best = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
                                     lf, ov, un = best
                                     _is_over = float(ov) < float(un)
                             if _is_over is None:
                                 _is_over = adj_pred["over25"] >= 0.5
-                            # V5.64: 球队基因干预库（基于4769场真实数据）
                             _t1 = str(row.get("主队", ""))
                             _t2 = str(row.get("客队", ""))
-                            _over_dna = ["瓦杜兹", "博多闪耀", "伯尔尼年轻人", "浦和红钻", "苏黎世", "巴塞罗那", "锡永", "图恩", "卡托维兹", "阿贾克斯", "新英格兰革命", "哥伦布机员", "布莱克本", "西汉姆联", "绍森德联", "诺维奇", "塔姆沃思", "克卢日大学", "波特兰伐木者", "辛辛那提FC"]
-                            _under_dna = ["埃克塞特城", "圣洛伦索", "里斯特拉", "皮特什蒂阿尔杰什", "维拉诺瓦", "底特律城", "布拉德福德", "圣格奥尔基塞普西", "河流联", "普罗夫迪夫火车头", "东京绿茵", "飓风", "贝尔格拉诺", "巴拉克中央", "代格福什", "庞特普雷塔", "塔尔萨FC", "奥克兰根", "库奥皮奥", "百万富翁"]
                             is_over_dna = (_t1 in _over_dna or _t2 in _over_dna)
                             is_under_dna = (_t1 in _under_dna or _t2 in _under_dna)
-                            # V5.43: 强制按真实方向与 TSA 大小球分配比分，并修正深盘比分
                             _b = []
                             _tsa_ah_t2 = tsa_odds_map.get(eid) or {}
                             _tsa_ah = str(_tsa_ah_t2.get("real_ah_line", "0"))
@@ -881,17 +843,13 @@ with tab2:
                             is_deep = abs(_ah_val) >= 1.5
                             
                             if _is_over:
-                                # 基因干预：大球狂魔
                                 if is_over_dna: _b = [(3,1,0.5), (2,2,0.3), (3,2,0.2)]
-                                # (已移至上方统一定义)
-                                # (已移至上方统一定义)
                                 if _adj_dir_now == "主胜":
                                     _b = [(3,0,0.5), (3,1,0.3), (2,0,0.2)] if is_deep else [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
                                 elif _adj_dir_now == "客胜":
                                     _b = [(0,3,0.5), (1,3,0.3), (0,2,0.2)] if is_deep else [(1,2,0.5), (1,3,0.3), (0,3,0.2)]
                                 else: _b = [(1,1,0.5), (2,2,0.3), (3,3,0.2)]
                             else:
-                                # 基因干预：蛋蛋队
                                 if is_under_dna: _b = [(0,0,0.5), (1,0,0.3), (0,1,0.2)]
                                 if _adj_dir_now == "主胜":
                                     _b = [(2,0,0.5), (1,0,0.3), (1,1,0.2)] if is_deep else [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
@@ -904,10 +862,6 @@ with tab2:
                             adj_alt_score = f"{adj_scores[1][0]}-{adj_scores[1][1]}" if len(adj_scores) > 1 else "—"
                             adj_main_prob = adj_scores[0][2] if adj_scores else 0
                             adj_alt_prob = adj_scores[1][2] if len(adj_scores) > 1 else 0
-                            adj_main_prob = adj_scores[0][2] if adj_scores else 0
-                            adj_alt_prob = adj_scores[1][2] if len(adj_scores) > 1 else 0
-                            adj_main_prob = adj_scores[0][2] if adj_scores else 0
-                            adj_alt_prob = adj_scores[1][2] if len(adj_scores) > 1 else 0
                         else:
                             adj_best = ("—", 0); adj_main_score = "—"; adj_alt_score = "—"; adj_main_prob = 0; adj_alt_prob = 0
                         full_reason = inj_reason
@@ -916,7 +870,6 @@ with tab2:
                         if blend_info: full_reason += " ｜ 盘口融合: " + blend_info
                         if cap_info: full_reason += " ｜ " + cap_info
                         direction_agreement = judge_direction_agreement(opts[0][0], adj_best[0])
-                        # 2026-10-16 丙：反向时跟市场（回测 33 场，模型仅 9.1%）
                         if "反向" in direction_agreement:
                             adj_best = (opts[0][0], opts[0][1])
                             direction_agreement = "⚠️ 反向·跟市场"
@@ -945,7 +898,6 @@ with tab2:
                             "final_xg_h": final_xg_h, "final_xg_a": final_xg_a, "adj_pred": adj_pred,
                             "ah_line": ah_line, "ah_note": ah_note, "score_dir": score_dir,
                         }
-                        # V5.11: 大小球方向切 TSA 真实盘口，无 TSA 时 fallback 模型
                         _tsa_ou_601 = tsa_odds_map.get(eid) or {}
                         _ou_lines_601 = _tsa_ou_601.get("real_ou_lines", {})
                         _ou_dir_601 = "—"
@@ -1041,7 +993,6 @@ with tab2:
                         mc = md.get("model_compare", {})
                         if not mc: continue
                         _mkt_h = mc.get("_mkt_h", 0); _mkt_a = mc.get("_mkt_a", 0)
-                        # V5.12: 市场方向改真实让球后胜负（TSA优先），无 TSA fallback 1X2
                         _tsa_ah_t2 = tsa_odds_map.get(md.get("event_id")) or {}
                         _ah_l = _tsa_ah_t2.get("real_ah_line")
                         _ah_h = _tsa_ah_t2.get("real_ah_home")
@@ -1061,7 +1012,6 @@ with tab2:
                         _conf = "🔒 高" if _gap > 35 else ("✅ 中" if _gap >= 20 else "⚠️ 低")
                         ah_rows.append({
                             "场次": i, "比赛": md["比赛"],
-                            # V5.33: 彻底删除模型假亚盘，只保留真实市场方向
                             "市场方向": _mkt_side, "市场差": round(_gap, 1), "亚盘置信": _conf,
                             "大小球方向": md["大小球方向"],
                             "比分倾向": mc["score_dir"],
@@ -1131,7 +1081,6 @@ with tab2:
                         else: st.success("✅ 模型推荐与市场走势一致，无冲突")
                         direction_mismatch = [r for r in info_rows if "方向一致" in r and "⚠️" in r.get("方向一致", "")]
                         if direction_mismatch:
-                            # V5.19: 黄条静音
                             pass
                             for d in direction_mismatch: st.write(f"- **{d['比赛']}**：原推荐 {d['原推荐']}，调整后 {d['调整后推荐']}")
                         st.divider()
@@ -1164,7 +1113,6 @@ with tab2:
                             st.markdown(f"**策略：第 {best_idx+1} 场做主胆（每场 2 个比分，共 8 注）**")
                         else:
                             st.markdown("**三场无明显主胆，每场选 2 个比分（共 8 注）**")
-                        # V5.23: 生成带队名和联赛的表头 (使用 .get 防 KeyError)
                         _h1 = f"{matches3[0].get('联赛', '')} | {matches3[0].get('比赛', '')}"
                         _h2 = f"{matches3[1].get('联赛', '')} | {matches3[1].get('比赛', '')}"
                         _h3 = f"{matches3[2].get('联赛', '')} | {matches3[2].get('比赛', '')}"
@@ -1176,9 +1124,7 @@ with tab2:
                                     bet_rows.append({"注单": f"注{n}", _h1: a, _h2: b, _h3: c}); n += 1
                         st.dataframe(pd.DataFrame(bet_rows), use_container_width=True, hide_index=True)
                     st.divider()
-                    # V5.12: 盾 —— 3 场里最稳的 1 场
                     st.subheader("🛡️ 盾：保护比分串的兼容盘口（1X2 / 亚盘 / 大小球）")
-                    # 1) 辅助函数：解析比分
                     def _parse_s(s):
                         if not s or s == "—": return None
                         try:
@@ -1187,7 +1133,6 @@ with tab2:
                             return int(p[0]), int(p[1])
                         except: return None
                     
-                    # 2) 遍历 3 场，寻找兼容盘口
                     _shield_candidates = []
                     for _i, _md in enumerate(matches3):
                         _scores = _sc[_i] if _i < len(_sc) else []
@@ -1197,7 +1142,6 @@ with tab2:
                         _t = tsa_odds_map.get(_eid) or {}
                         _cands = []
                         if _t:
-                            # 1X2
                             _rh = _t.get("real_h"); _rd = _t.get("real_d"); _ra = _t.get("real_a")
                             if _rh and _rd and _ra:
                                 try:
@@ -1209,7 +1153,6 @@ with tab2:
                                         _p = (1/float(_ra)) / _inv
                                         _cands.append((_p, "客胜 (1X2)", float(_ra), "TSA", "比分均为客胜"))
                                 except: pass
-                            # AH
                             _ln = _t.get("real_ah_line"); _ah_h = _t.get("real_ah_home"); _ah_a = _t.get("real_ah_away")
                             if _ln is not None and _ah_h and _ah_a:
                                 try:
@@ -1224,7 +1167,6 @@ with tab2:
                                         _r = f"主让{abs(_fl):g}·客赢盘" if _fl < 0 else (f"客让{_fl:g}·客赢盘" if _fl > 0 else "平手·客赢盘")
                                         _cands.append((_p, _r, float(_ah_a), "TSA", "比分均客队赢盘"))
                                 except: pass
-                            # OU 2.5
                             _ro = _t.get("real_over25"); _ru = _t.get("real_under25")
                             if _ro and _ru:
                                 try:
@@ -1240,17 +1182,13 @@ with tab2:
                             _best = max(_cands, key=lambda x: x[0])
                             _shield_candidates.append((_best[0], _md, _best[1], _best[2], _best[3], _best[4]))
                         else:
-                            # fallback: 无兼容 TSA 盘口，用模型最优
                             _opts = _md.get("opts") or []
                             if _opts:
                                 _top = max(_opts, key=lambda x: x[1])
                                 _src = _top[3] if len(_top) > 3 else "imp"
                                 _shield_candidates.append((_top[1], _md, _top[0], _top[2], _src, "无兼容TSA盘口，用模型最优"))
 
-                    # 3) 选出 3 场中最稳的那个
                     if _shield_candidates:
-                        # 优先选赔率 >= 1.50 的盘口（拒绝蚊子肉），再按概率排序
-                        # V5.61: 强制过滤概率低于 60% 的垃圾盘口
                         _shield_candidates = [x for x in _shield_candidates if x[0] >= 0.60]
                         if not _shield_candidates:
                             st.warning("🛡️ **今日无合适防守盘口**：所有兼容盘口概率均低于 60%。建议放弃盾。")
@@ -1328,7 +1266,7 @@ with tab2:
                                           "赔率": "—", "大小球方向": "—", "比分1": "—", "比分2": "—", "盘口走势": "—", "角色": "—"})
                     for r in all_today_rows: meta_combined.append(r)
                     excel_data = build_excel(bet_rows,
-                        [],  # 稳健串+备选串已删
+                        [],
                         info_rows if info_rows else None, None, meta_rows=meta_combined)
                     st.divider()
                     st.subheader("⭐ 今日值得重注（差≥55 或 概率≥75%）")
@@ -1360,12 +1298,11 @@ with tab2:
                         file_name=f"推荐_{datetime.now(CST).strftime('%Y%m%d_%H%M')}.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_all_excel", type="primary")
 
-                    # V5.14: 自动保存推荐 Excel 到本地，供 Tab5 自动复盘
                     os.makedirs("data/recs", exist_ok=True)
                     with open(f"data/recs/{today_str_save}.xlsx", "wb") as _f:
                         _f.write(excel_data)
 
-# ========== Tab 4 ==========
+# ========== Tab 4：搜索队名 ==========
 with tab4:
     st.caption("搜索队名，可加入核心")
     query = st.text_input("搜索队名", value="", placeholder="例如：曼城、利物浦、Arsenal", key="search_query")
@@ -1393,10 +1330,6 @@ with tab4:
 with tab5:
     st.subheader("📊 赛后复盘（上传 Excel）")
     st.caption("上传早上下载的 Excel，系统自动读回预测，拉取实际比分。")
-    # V5.14: 支持选择历史存档
-    # V5.14: 智能过滤，只取今天之前的存档（防止点 Tab2 后马上复盘了今天的未开赛比赛）
-    # V5.86: Tab4 终极正则提取日期，兼容所有格式与时间戳
-    # V5.90: 修复路径校验报错，强制类型转换
     _today_str = datetime.now(CST).strftime("%Y-%m-%d")
     _all_recs = []
     for _d in ["data/recs", "output"]:
@@ -1428,78 +1361,70 @@ with tab5:
         _match_path = next((x[2] for x in _recs if x[1] == _sel), None)
         if _match_path and os.path.exists(_match_path):
             uploaded_file = open(_match_path, "rb")
-    if uploaded_file is None: st.info("💡 请先上传 Excel 或选择历史推荐。")
+            
+    if uploaded_file is None: 
+        st.info("💡 请先上传 Excel 或选择历史推荐。")
     else:
         try:
             xl = pd.ExcelFile(uploaded_file)
             sheet_names = xl.sheet_names
             st.success(f"✅ 已加载，包含 {len(sheet_names)} 个 sheet")
             rec_df = None; all_today_df = None; date_str = None
-            if "基本信息" in sheet_names:
-                full_meta = pd.read_excel(uploaded_file, sheet_name="基本信息")
-                # 兼容旧名（推荐方向/推荐概率 → 模型判断/模型概率）
-                full_meta = full_meta.rename(columns={"推荐方向": "模型判断", "推荐概率": "模型概率"})
-                info_cols = ["存档时间", "推荐场次", "当天全部预测场次", "核心比赛"]
-                if all(c in full_meta.columns for c in info_cols):
-                    # V5.95: 防止空 Excel 越界崩溃
-                    if full_meta.empty:
-                        info_row = pd.Series({"存档时间": datetime.now(CST).strftime("%Y-%m-%d"), "推荐场次": 0, "当天全部预测场次": 0, "核心比赛": "否"})
-                    else:
-                        info_row = full_meta.iloc[0]
-                    c1, c2, c3, c4 = st.columns(4)
-                    with c1: st.metric("存档时间", str(info_row.get("存档时间", "—")))
-                    with c2: st.metric("推荐场次", str(info_row.get("推荐场次", "—")))
-                    with c3: st.metric("当天全部预测", str(info_row.get("当天全部预测场次", "—")))
-                    with c4: st.metric("核心比赛", str(info_row.get("核心比赛", "—")))
-                    try: date_str = str(info_row["存档时间"]).split()[0]
-                    except: pass
-                if "模型判断" in full_meta.columns:
-                    rec_mask = (full_meta["模型判断"].notna() &
-                                (full_meta["模型判断"].astype(str).str.strip() != "—") &
-                                (full_meta["模型判断"].astype(str).str.strip() != "") &
-                                (full_meta["模型判断"].astype(str).str.strip() != "nan"))
-                    rec_df = full_meta[rec_mask].copy()
-                    st.markdown(f"### 🎯 推荐比赛 **{len(rec_df)} 场**")
-                    if len(rec_df) > 0:
-                        show_cols = [c for c in ["场次", "比赛", "联赛", "等级", "时间", "模型判断", "模型概率",
+            
+            target_sheet = "基本信息" if "基本信息" in sheet_names else sheet_names[0]
+            full_meta = pd.read_excel(uploaded_file, sheet_name=target_sheet)
+            
+            full_meta = full_meta.rename(columns={"推荐方向": "模型判断", "推荐概率": "模型概率", "大小球": "大小球方向"})
+            
+            info_cols = ["存档时间", "推荐场次", "当天全部预测场次", "核心比赛"]
+            if all(c in full_meta.columns for c in info_cols) and not full_meta.empty:
+                info_row = full_meta.iloc[0]
+                c1, c2, c3, c4 = st.columns(4)
+                with c1: st.metric("存档时间", str(info_row.get("存档时间", "—")))
+                with c2: st.metric("推荐场次", str(info_row.get("推荐场次", "—")))
+                with c3: st.metric("当天全部预测", str(info_row.get("当天全部预测场次", "—")))
+                with c4: st.metric("核心比赛", str(info_row.get("核心比赛", "—")))
+                try: date_str = str(info_row["存档时间"]).split()[0]
+                except: pass
+                
+            if not date_str:
+                date_str = _sel.split(" ")[0] if "-" in _sel else datetime.now(CST).strftime("%Y-%m-%d")
+                st.info(f"⚠️ 未在表格中找到明确日期，自动使用：{date_str}")
+
+            if "模型判断" in full_meta.columns:
+                rec_mask = (full_meta["模型判断"].notna() & 
+                            (full_meta["模型判断"].astype(str).str.strip() != "—") & 
+                            (full_meta["模型判断"].astype(str).str.strip() != "") & 
+                            (full_meta["模型判断"].astype(str).str.strip() != "nan"))
+                rec_df = full_meta[rec_mask].copy()
+                st.markdown(f"### 🎯 推荐比赛 **{len(rec_df)} 场**")
+                if len(rec_df) > 0:
+                    show_cols = [c for c in ["场次", "比赛", "联赛", "等级", "时间", "模型判断", "模型概率",
               "市场方向", "大小球方向", "真实亚盘", "真实大小球", "真实1X2", "主队排名", "客队排名",
               "调整后方向", "调整后概率", "真实亚盘", "调整后比分1", "调整后比分2", "赔率",
               "比分1", "比分2", "角色", "方向一致", "下注建议"] if c in rec_df.columns]
-                        # 彻底解决重复列名问题：先对 show_cols 去重，再对切片后的 DataFrame 去重
-                        show_cols = list(dict.fromkeys(show_cols))
-                        df_to_show = rec_df[show_cols].loc[:, ~rec_df[show_cols].columns.duplicated()]
-                        st.dataframe(df_to_show, use_container_width=True, hide_index=True)
-                if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
-                    all_mask = (full_meta["预测结果"].notna() &
-                                (full_meta["预测结果"].astype(str).str.strip() != "—") &
-                                (full_meta["预测结果"].astype(str).str.strip() != "") &
-                                (full_meta["预测结果"].astype(str).str.strip() != "nan") &
-                                full_meta["event_id"].notna())
-                    all_today_df = full_meta[all_mask].copy()
-                    if rec_df is not None and len(rec_df) > 0 and "event_id" in rec_df.columns:
-                        rec_ids = set()
-                        for x in rec_df["event_id"].dropna():
-                            try: rec_ids.add(int(x))
-                            except: pass
-                        def is_in_rec(x):
-                            try: return int(x) in rec_ids
-                            except: return False
-                        all_today_df = all_today_df[~all_today_df["event_id"].apply(is_in_rec)]
-                    st.markdown(f"### 📋 当天其余预测 **{len(all_today_df)} 场**")
-                    if len(all_today_df) > 0:
-                        with st.expander("展开查看"):
-                            show2 = [c for c in ["比赛", "联赛", "等级", "时间", "预测结果", "大小球", "主胜", "和局", "客胜"] if c in all_today_df.columns]
-                            st.dataframe(all_today_df[show2], use_container_width=True, hide_index=True)
-            if not date_str:
-                st.warning("⚠️ 无法自动读取日期，请手动输入：")
-                date_str = st.text_input("日期（YYYY-MM-DD）", value=datetime.now(CST).strftime("%Y-%m-%d"), key="manual_date")
+                    show_cols = list(dict.fromkeys(show_cols))
+                    df_to_show = rec_df[show_cols].loc[:, ~rec_df[show_cols].columns.duplicated()]
+                    st.dataframe(df_to_show, use_container_width=True, hide_index=True)
+
+            if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
+                all_mask = (full_meta["预测结果"].notna() & (full_meta["预测结果"].astype(str).str.strip() != "—") & full_meta["event_id"].notna())
+                all_today_df = full_meta[all_mask].copy()
+                if rec_df is not None and len(rec_df) > 0 and "event_id" in rec_df.columns:
+                    rec_ids = set([int(x) for x in rec_df["event_id"].dropna() if str(x).isdigit()])
+                    all_today_df = all_today_df[~all_today_df["event_id"].apply(lambda x: int(x) in rec_ids if str(x).isdigit() else False)]
+                st.markdown(f"### 📋 当天其余预测 **{len(all_today_df)} 场**")
+                if len(all_today_df) > 0:
+                    with st.expander("展开查看"):
+                        st.dataframe(all_today_df[["比赛", "联赛", "时间", "预测结果"]], use_container_width=True, hide_index=True)
+
             st.markdown(f"### 📅 复盘日期：**{date_str}**")
             review_scope = st.radio("选择复盘范围", ["只复盘推荐比赛", "复盘当天全部预测", "两者都复盘"], horizontal=True, key="review_scope")
+            
             _auto_trigger = (_sel == "⚡ 一键复盘最新存档" and len(_recs) > 0)
             if st.button("🔍 开始复盘", type="primary", key="btn_review_upload") or _auto_trigger:
                 with st.spinner("正在拉取实际比分..."):
                     actual_results, fetch_errors = fetch_actual_results(date_str)
-                    # V5.96 修复：跨日拉取，解决欧冠等凌晨赛事因时差导致拉不到赛果的问题
                     try:
                         _dt = datetime.strptime(date_str, "%Y-%m-%d")
                         _prev = (_dt - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -1508,263 +1433,135 @@ with tab5:
                         _res_next, _ = fetch_actual_results(_next)
                         if _res_prev: actual_results.update(_res_prev)
                         if _res_next: actual_results.update(_res_next)
-                    except Exception:
-                        pass
-                    # 强制统一键类型为 int，防止字典取不到值
+                    except Exception: pass
+                    
                     _clean_res = {}
                     for _k, _v in actual_results.items():
-                        try:
-                            _clean_res[int(_k)] = _v
-                        except (ValueError, TypeError):
-                            pass
+                        try: _clean_res[int(_k)] = _v
+                        except: pass
                     actual_results = _clean_res
+
                 if fetch_errors:
                     with st.expander("⚠️ 数据拉取提示"):
                         for e in fetch_errors: st.write(f"- {e}")
-                if not actual_results: st.warning(f"暂时没有 {date_str} 的比赛结果数据。")
-                else:
-                    st.success(f"✅ 找到 {len(actual_results)} 场已完赛比赛")
-                    review_rows = []; all_rows = []
-                    if review_scope in ("只复盘推荐比赛", "两者都复盘") and rec_df is not None and len(rec_df) > 0:
-                        st.markdown("### 🎯 推荐比赛复盘")
-                        for _, m in rec_df.iterrows():
-                            eid = m.get("event_id")
-                            try: eid = int(eid)
-                            except: continue
-                            # 先用 ID 找，兼容 int 和 str
-                            actual = actual_results.get(eid) or actual_results.get(str(eid))
-                            
-                            # 如果 ID 找不到，用队名暴力匹配兜底
-                            if not actual:
-                                _m_str = str(m.get("比赛", ""))
-                                if " vs " in _m_str:
-                                    _t1 = _m_str.split(" vs ")[0].strip()
-                                    _t2 = _m_str.split(" vs ")[1].strip()
-                                    for _v in actual_results.values():
-                                        _h_name = str(_v.get("home_team", _v.get("home", ""))).strip()
-                                        _a_name = str(_v.get("away_team", _v.get("away", ""))).strip()
-                                        # 只要主队客队名字互相包含，就算匹配成功
-                                        if (_t1 in _h_name or _h_name in _t1) and (_t2 in _a_name or _a_name in _t2):
-                                            actual = _v
-                                            break
-                            rec_dir = str(m.get("模型判断", "")); adj_dir = str(m.get("调整后方向", "—"))
-                            odds_str = str(m.get("赔率", "—"))
-                            try: odds_val = float(odds_str) if odds_str not in ("—", "nan", "") else None
-                            except: odds_val = None
-
-                            if review_rows == []:
-                                st.write("🔍 诊断：API返回的前3场赛果是：", list(actual_results.values())[:3])
-                                st.write("🔍 诊断：当前Excel里的event_id是：", eid, " | 比赛：", m["比赛"])
-
-                            if not actual:
-                                review_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "模型判断": rec_dir,
-                                                    "模型概率": m.get("模型概率", "—"), "调整后方向": adj_dir,
-                                                    "调整后概率": m.get("调整后概率", "—"),
-                                                    "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
-                                                    "调整后比分": f"{m.get('调整后比分1', '—')} / {m.get('调整后比分2', '—')}",
-                                                    "赔率": odds_str, "实际比分": "未结束/无数据",
-                                                    "原推荐命中": "—", "调整后命中": "—",
-                                                    "比分1命中": "—", "比分2命中": "—", "方向对但比分错": "—",
-                                                    "真实亚盘命中": "—", "真实大小球命中": "—",
-                                                    "_odds_val": odds_val})
-                                continue
-                                continue
-                            actual_str = f"{actual['home']}-{actual['away']}"
-                            win_hit, _ = judge_prediction_hit(rec_dir, actual)
-                            if adj_dir and adj_dir != "—":
-                                adj_win_hit, _ = judge_prediction_hit(adj_dir, actual)
-                                adj_win_str = "✅" if adj_win_hit else "❌"
-                            else: adj_win_str = "—"
-                            win_str = "✅" if win_hit else "❌"
-                            # V5.13: 比分口径统一为调整后比分（跟比分串一致）
-                            score1_hit = judge_score_hit(m.get("调整后比分1", "—"), actual)
-                            score2_hit = judge_score_hit(m.get("调整后比分2", "—"), actual)
-                            # V5.13: 按推荐方向判亚盘（跟调整后方向一致）
-                            _real_ah_hit = judge_real_ah_hit_dir(m.get("真实亚盘", "—"), adj_dir, actual["home"], actual["away"])
-                            _real_ou_hit = judge_real_ou_hit(m.get("真实大小球", "—"), actual["home"], actual["away"])
-                            direction_but_wrong = "—"
-                            if score1_hit == "⚠️" or score2_hit == "⚠️": direction_but_wrong = "⚠️"
+                        
+                st.success(f"✅ 找到 {len(actual_results)} 场已完赛比赛")
+                review_rows = []
+                
+                if review_scope in ("只复盘推荐比赛", "两者都复盘") and rec_df is not None and len(rec_df) > 0:
+                    st.markdown("### 🎯 推荐比赛复盘")
+                    for _, m in rec_df.iterrows():
+                        eid = m.get("event_id")
+                        try: eid = int(eid)
+                        except: continue
+                        
+                        actual = actual_results.get(eid) or actual_results.get(str(eid))
+                        if not actual:
+                            _m_str = str(m.get("比赛", ""))
+                            if " vs " in _m_str:
+                                _t1 = _m_str.split(" vs ")[0].strip()
+                                _t2 = _m_str.split(" vs ")[1].strip()
+                                for _v in actual_results.values():
+                                    _h_name = str(_v.get("home_team", _v.get("home", ""))).strip()
+                                    _a_name = str(_v.get("away_team", _v.get("away", ""))).strip()
+                                    if (_t1 in _h_name or _h_name in _t1) and (_t2 in _a_name or _a_name in _t2):
+                                        actual = _v
+                                        break
+                        
+                        rec_dir = str(m.get("模型判断", "—"))
+                        adj_dir = str(m.get("调整后方向", "—"))
+                        odds_str = str(m.get("赔率", "—"))
+                        try: odds_val = float(odds_str) if odds_str not in ("—", "nan", "") else None
+                        except: odds_val = None
+                        
+                        if not actual:
                             review_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "模型判断": rec_dir,
                                                 "模型概率": m.get("模型概率", "—"), "调整后方向": adj_dir,
                                                 "调整后概率": m.get("调整后概率", "—"),
                                                 "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
                                                 "调整后比分": f"{m.get('调整后比分1', '—')} / {m.get('调整后比分2', '—')}",
-                                                "赔率": odds_str, "实际比分": actual_str,
-                                                "原推荐命中": win_str, "调整后命中": adj_win_str,
-                                                "比分1命中": score1_hit, "比分2命中": score2_hit,
-                                                "方向对但比分错": direction_but_wrong,
-                                                "真实亚盘命中": _real_ah_hit, "真实大小球命中": _real_ou_hit,
+                                                "赔率": odds_str, "实际比分": "未结束/无数据",
+                                                "原推荐命中": "—", "调整后命中": "—",
+                                                "比分1命中": "—", "比分2命中": "—", "方向对但比分错": "—",
+                                                "真实亚盘命中": "—", "真实大小球命中": "—",
                                                 "_odds_val": odds_val})
-                        if review_rows:
-                            rec_review_df = pd.DataFrame(review_rows)
-                            display_rec = rec_review_df.drop(columns=["_odds_val"], errors="ignore")
-                            st.dataframe(display_rec, use_container_width=True, hide_index=True)
-                            total = len([r for r in review_rows if r["实际比分"] != "未结束/无数据"])
-                            if total > 0:
-                                wg = [r for r in review_rows if r["原推荐命中"] in ("✅", "❌")]
-                                wh = len([r for r in wg if r["原推荐命中"] == "✅"]); wr = wh / len(wg) if wg else 0
-                                ag = [r for r in review_rows if r["调整后命中"] in ("✅", "❌")]
-                                ah = len([r for r in ag if r["调整后命中"] == "✅"]); ar = ah / len(ag) if ag else 0
-                                roi_pool = [r for r in wg if r.get("_odds_val")]
-                                if roi_pool:
-                                    profit = sum((r["_odds_val"] - 1) if r["原推荐命中"] == "✅" else -1.0 for r in roi_pool)
-                                    roi = profit / len(roi_pool) * 100
-                                    roi_str = f"{roi:+.1f}%"; roi_delta = f"{len(roi_pool)} 场有效赔率"
-                                else: roi_str = "—"; roi_delta = "无有效赔率"
-                                # V5.13: 比分串全中判定
-                                _valid_recs = [r for r in review_rows if r["实际比分"] != "未结束/无数据"]
-                                if len(_valid_recs) >= 3:
-                                    _all_hit = all((r.get("比分1命中") == "✅") or (r.get("比分2命中") == "✅") for r in _valid_recs[:3])
-                                    _combo_str = "✅ 全中" if _all_hit else "❌ 未全中"
-                                else:
-                                    _combo_str = f"仅 {len(_valid_recs)} 场完赛"
-                                c1, c2, c3, c4, c5 = st.columns(5)
-                                with c1: st.metric("推荐已完赛", f"{total} 场")
-                                with c2: st.metric("原推荐命中", f"{wr*100:.1f}%", f"{wh}/{len(wg)}" if wg else "无")
-                                with c3: st.metric("调整后命中", f"{ar*100:.1f}%", f"{ah}/{len(ag)}" if ag else "无")
-                                with c4: st.metric("原推荐 ROI", roi_str, roi_delta)
-                                with c5: st.metric("比分串（3场）", _combo_str)
-
-                                # V5.14: 累计复盘历史记录
-                                _hist_path = "data/review_history.csv"
-                                os.makedirs("data", exist_ok=True)
-                                _new_hist_row = {"日期": date_str, "推荐场次": total,
-                                    "原推荐命中率": f"{wr*100:.1f}%", "调整后命中率": f"{ar*100:.1f}%",
-                                    "ROI": roi_str, "比分串": _combo_str,
-                                    "复盘时间": datetime.now(CST).strftime("%Y-%m-%d %H:%M")}
-                                _hist_df = pd.DataFrame([_new_hist_row])
-                                if os.path.exists(_hist_path):
-                                    try:
-                                        _old_hist = pd.read_csv(_hist_path)
-                                        _old_hist = _old_hist[_old_hist["日期"] != date_str]
-                                        _hist_df = pd.concat([_old_hist, _hist_df], ignore_index=True)
-                                    except Exception: pass
-                                _hist_df.to_csv(_hist_path, index=False, encoding="utf-8-sig")
-                                
-                                with st.expander("📈 历史累计复盘", expanded=False):
-                                    st.dataframe(_hist_df.sort_values("日期", ascending=False), use_container_width=True, hide_index=True)
-                                if wg and ag:
-                                    delta = ar - wr
-                                    if delta > 0.02: st.success(f"✅ **调整让命中率提升 {delta*100:+.1f}%**")
-                                    elif delta < -0.02: st.warning(f"⚠️ **调整后反而变差 {delta*100:.1f}%**——考虑调低盘口融合权重")
-                                    else: st.info(f"➖ **调整前后基本持平**")
-                        st.markdown("### 📊 按置信度分档命中率")
-                        buckets = [("<55%", 0, 55), ("55-70%", 55, 70), ("70-85%", 70, 85), ("85%+", 85, 101)]
-                        valid_recs = []
-                        for r in review_rows:
-                            if r["原推荐命中"] not in ("✅", "❌"): continue
-                            prob_str = str(r.get("模型概率", "")).replace("%", "").strip()
-                            try: prob_val = float(prob_str)
-                            except Exception: continue
-                            valid_recs.append({"prob": prob_val, "hit": r["原推荐命中"] == "✅"})
-                        if not valid_recs: st.info("暂无已完赛的推荐比赛。")
-                        else:
-                            bucket_rows = []
-                            for label, lo, hi in buckets:
-                                in_bucket = [x for x in valid_recs if lo <= x["prob"] < hi]
-                                if not in_bucket:
-                                    bucket_rows.append({"模型置信度": label, "场次": 0, "理论命中率": "—", "实际命中率": "—", "偏差": "—"})
-                                    continue
-                                n = len(in_bucket)
-                                hits = sum(1 for x in in_bucket if x["hit"])
-                                actual = hits / n * 100
-                                theory = sum(x["prob"] for x in in_bucket) / n
-                                diff = actual - theory
-                                if abs(diff) <= 3: diff_str = f"{diff:+.1f}% ✅"
-                                elif abs(diff) <= 8: diff_str = f"{diff:+.1f}% ⚠️"
-                                else: diff_str = f"{diff:+.1f}% ❌"
-                                bucket_rows.append({"模型置信度": label, "场次": n, "理论命中率": f"{theory:.1f}%",
-                                                    "实际命中率": f"{actual:.1f}% ({hits}/{n})", "偏差": diff_str})
-                            st.dataframe(pd.DataFrame(bucket_rows), use_container_width=True, hide_index=True)
-                    if review_scope in ("复盘当天全部预测", "两者都复盘") and all_today_df is not None and len(all_today_df) > 0:
-                        st.markdown("### 📋 当天全部预测复盘")
-                        for _, m in all_today_df.iterrows():
-                            eid = m.get("event_id")
-                            try: eid = int(eid)
-                            except: continue
-                            actual = actual_results.get(eid)
-                            if not actual: continue
-                            actual_str = f"{actual['home']}-{actual['away']}"
-                            pred_result = str(m.get("预测结果", ""))
-                            if pred_result in ("主胜", "和局", "客胜"):
-                                win_hit, _ = judge_prediction_hit(pred_result, actual)
-                                win_str = "✅" if win_hit else "❌"
-                            else: win_str = "—"
-                            ou_dir = str(m.get("大小球", ""))
-                            import re as _re
-                            _m = _re.search(r"([大小])\s*([\d.]+)", ou_dir)
-                            if _m:
-                                _l = float(_m.group(2))
-                                _t = actual["home"] + actual["away"]
-                                _h = (_t > _l) if _m.group(1) == "大" else (_t < _l)
-                                ou_str = "✅" if _h else "❌"
-                            else:
-                                ou_str = "—"
-                            score1 = str(m.get("主力比分", "—")); score2 = str(m.get("备选比分", "—"))
-                            score3 = str(m.get("第三比分", "—"))
-                            score1_hit = judge_score_hit(score1, actual); score2_hit = judge_score_hit(score2, actual)
-                            score3_hit = judge_score_hit(score3, actual)
-                            _any3 = "✅" if (score1_hit == "✅" or score2_hit == "✅" or score3_hit == "✅") else "❌"
-                            all_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "预测结果": pred_result, "大小球": ou_dir,
-                                             "实际比分": actual_str, "主力比分": score1, "备选比分": score2, "第三比分": score3,
-                                             "胜负命中": win_str, "大小球命中": ou_str,
-                                             "比分1命中": score1_hit, "比分2命中": score2_hit, "比分3命中": score3_hit,
-                                             "比分前3命中": _any3})
-                        if all_rows:
-                            all_review_df = pd.DataFrame(all_rows)
-                            st.dataframe(all_review_df, use_container_width=True, hide_index=True)
-                            wg2 = [r for r in all_rows if r["胜负命中"] in ("✅", "❌")]
-                            wh2 = len([r for r in wg2 if r["胜负命中"] == "✅"]); wr2 = wh2 / len(wg2) if wg2 else 0
-                            og2 = [r for r in all_rows if r["大小球命中"] in ("✅", "❌")]
-                            oh2 = len([r for r in og2 if r["大小球命中"] == "✅"]); orr2 = oh2 / len(og2) if og2 else 0
-                            bg2 = [r for r in all_rows if r["比分前3命中"] in ("✅", "❌")]
-                            bh2 = len([r for r in bg2 if r["比分前3命中"] == "✅"]); br2 = bh2 / len(bg2) if bg2 else 0
+                            continue
+                            
+                        actual_str = f"{actual['home']}-{actual['away']}"
+                        win_hit, _ = judge_prediction_hit(rec_dir, actual)
+                        win_str = "✅" if win_hit else "❌"
+                        
+                        if adj_dir and adj_dir != "—":
+                            adj_win_hit, _ = judge_prediction_hit(adj_dir, actual)
+                            adj_win_str = "✅" if adj_win_hit else "❌"
+                        else: adj_win_str = "—"
+                        
+                        score1_hit = judge_score_hit(m.get("调整后比分1", "—"), actual)
+                        score2_hit = judge_score_hit(m.get("调整后比分2", "—"), actual)
+                        
+                        direction_but_wrong = "—"
+                        if score1_hit == "⚠️" or score2_hit == "⚠️": direction_but_wrong = "⚠️"
+                        
+                        review_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "模型判断": rec_dir,
+                                            "模型概率": m.get("模型概率", "—"), "调整后方向": adj_dir,
+                                            "调整后概率": m.get("调整后概率", "—"),
+                                            "预测比分": f"{m.get('比分1', '—')} / {m.get('比分2', '—')}",
+                                            "调整后比分": f"{m.get('调整后比分1', '—')} / {m.get('调整后比分2', '—')}",
+                                            "赔率": odds_str, "实际比分": actual_str,
+                                            "原推荐命中": win_str, "调整后命中": adj_win_str,
+                                            "比分1命中": score1_hit, "比分2命中": score2_hit,
+                                            "方向对但比分错": direction_but_wrong,
+                                            "真实亚盘命中": "—", "真实大小球命中": "—",
+                                            "_odds_val": odds_val})
+                            
+                    if review_rows:
+                        rec_review_df = pd.DataFrame(review_rows)
+                        st.dataframe(rec_review_df.drop(columns=["_odds_val"], errors="ignore"), use_container_width=True, hide_index=True)
+                        
+                        valid_recs = [r for r in review_rows if r["实际比分"] != "未结束/无数据"]
+                        if valid_recs:
                             c1, c2, c3, c4 = st.columns(4)
-                            with c1: st.metric("全部预测已完赛", f"{len(all_rows)} 场")
-                            with c2: st.metric("胜负命中", f"{wr2*100:.1f}%", f"{wh2}/{len(wg2)}" if wg2 else "无")
-                            with c3: st.metric("大小球命中", f"{orr2*100:.1f}%", f"{oh2}/{len(og2)}" if og2 else "无")
-                            with c4: st.metric("比分前3命中", f"{br2*100:.1f}%", f"{bh2}/{len(bg2)}" if bg2 else "无")
-                            st.markdown("### 📊 按联赛统计")
-                            ls = {}
-                            for r in all_rows:
-                                lg = r["联赛"]
-                                if lg not in ls: ls[lg] = {"t": 0, "wh": 0, "wt": 0, "oh": 0, "ot": 0}
-                                ls[lg]["t"] += 1
-                                if r["胜负命中"] in ("✅", "❌"):
-                                    ls[lg]["wt"] += 1
-                                    if r["胜负命中"] == "✅": ls[lg]["wh"] += 1
-                                if r["大小球命中"] in ("✅", "❌"):
-                                    ls[lg]["ot"] += 1
-                                    if r["大小球命中"] == "✅": ls[lg]["oh"] += 1
-                            l_rows = []
-                            for lg, s in sorted(ls.items()):
-                                w = s["wh"] / s["wt"] * 100 if s["wt"] else 0
-                                o = s["oh"] / s["ot"] * 100 if s["ot"] else 0
-                                l_rows.append({"联赛": lg, "场次": s["t"],
-                                               "胜负命中": f"{s['wh']}/{s['wt']} ({w:.0f}%)" if s["wt"] else "—",
-                                               "大小球命中": f"{s['oh']}/{s['ot']} ({o:.0f}%)" if s["ot"] else "—"})
-                            st.dataframe(pd.DataFrame(l_rows), use_container_width=True, hide_index=True)
-                    st.divider()
-                    dl_buffer = io.BytesIO()
-                    with pd.ExcelWriter(dl_buffer, engine='openpyxl') as w:
-                        wrote = False
-                        if review_scope in ("只复盘推荐比赛", "两者都复盘") and review_rows:
-                            rec_out = pd.DataFrame(review_rows).drop(columns=["_odds_val"], errors="ignore")
-                            rec_out.to_excel(w, sheet_name="推荐复盘", index=False)
-                            wrote = True
-                        if review_scope in ("复盘当天全部预测", "两者都复盘") and all_rows:
-                            pd.DataFrame(all_rows).to_excel(w, sheet_name="全部预测复盘", index=False)
-                            wrote = True
-                        if not wrote:
-                            pd.DataFrame({"说明": ["无数据"]}).to_excel(w, sheet_name="说明", index=False)
-                    st.download_button("📥 下载复盘报告 Excel", data=dl_buffer.getvalue(),
-                        file_name=f"复盘_{date_str}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_review_upload")
+                            with c1: st.metric("推荐已完赛", f"{len(valid_recs)} 场")
+                            wh = len([r for r in valid_recs if r["原推荐命中"] == "✅"])
+                            with c2: st.metric("原推荐命中", f"{wh/len(valid_recs)*100:.1f}%", f"{wh}/{len(valid_recs)}")
+                            ah = len([r for r in valid_recs if r["调整后命中"] == "✅"])
+                            with c3: st.metric("调整后命中", f"{ah/len(valid_recs)*100:.1f}%", f"{ah}/{len(valid_recs)}")
+                            with c4: st.info("部分比赛未开始，暂无命中率。")
+                        else:
+                            st.warning("⚠️ 当前所有推荐比赛都还未开始，暂无法计算命中率。")
+
+                if review_scope in ("复盘当天全部预测", "两者都复盘") and all_today_df is not None and len(all_today_df) > 0:
+                    st.markdown("### 📋 当天全部预测复盘")
+                    all_rows = []
+                    for _, m in all_today_df.iterrows():
+                        eid = m.get("event_id")
+                        try: eid = int(eid)
+                        except: continue
+                        actual = actual_results.get(eid) or actual_results.get(str(eid))
+                        if not actual:
+                            all_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "预测结果": m.get("预测结果"), "实际比分": "未结束/无数据"})
+                            continue
+                        actual_str = f"{actual['home']}-{actual['away']}"
+                        pred_result = str(m.get("预测结果", ""))
+                        win_str = "—"
+                        if pred_result in ("主胜", "和局", "客胜"):
+                            win_hit, _ = judge_prediction_hit(pred_result, actual)
+                            win_str = "✅" if win_hit else "❌"
+                        all_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "预测结果": pred_result, "实际比分": actual_str, "胜负命中": win_str})
+                    if all_rows:
+                        st.dataframe(pd.DataFrame(all_rows), use_container_width=True, hide_index=True)
+
+                st.divider()
+                dl_buffer = io.BytesIO()
+                with pd.ExcelWriter(dl_buffer, engine='openpyxl') as w:
+                    if review_rows: pd.DataFrame(review_rows).drop(columns=["_odds_val"], errors="ignore").to_excel(w, sheet_name="推荐复盘", index=False)
+                    if 'all_rows' in locals() and all_rows: pd.DataFrame(all_rows).to_excel(w, sheet_name="全部预测复盘", index=False)
+                    if not review_rows and 'all_rows' not in locals(): pd.DataFrame({"说明": ["无数据"]}).to_excel(w, sheet_name="说明", index=False)
+                st.download_button("📥 下载复盘报告 Excel", data=dl_buffer.getvalue(), file_name=f"复盘_{date_str}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", key="dl_review_upload")
+
         except Exception as e:
             st.error(f"读取 Excel 失败：{e}")
             import traceback
             st.code(traceback.format_exc())
 
-# ========== Tab 6：历史回测 ==========
-# ========== Tab 7：高置信清单 ==========
 st.caption("⚠️ v5.7：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
