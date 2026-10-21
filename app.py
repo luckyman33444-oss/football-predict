@@ -1499,6 +1499,25 @@ with tab5:
             if st.button("🔍 开始复盘", type="primary", key="btn_review_upload") or _auto_trigger:
                 with st.spinner("正在拉取实际比分..."):
                     actual_results, fetch_errors = fetch_actual_results(date_str)
+                    # V5.96 修复：跨日拉取，解决欧冠等凌晨赛事因时差导致拉不到赛果的问题
+                    try:
+                        _dt = datetime.strptime(date_str, "%Y-%m-%d")
+                        _prev = (_dt - timedelta(days=1)).strftime("%Y-%m-%d")
+                        _next = (_dt + timedelta(days=1)).strftime("%Y-%m-%d")
+                        _res_prev, _ = fetch_actual_results(_prev)
+                        _res_next, _ = fetch_actual_results(_next)
+                        if _res_prev: actual_results.update(_res_prev)
+                        if _res_next: actual_results.update(_res_next)
+                    except Exception:
+                        pass
+                    # 强制统一键类型为 int，防止字典取不到值
+                    _clean_res = {}
+                    for _k, _v in actual_results.items():
+                        try:
+                            _clean_res[int(_k)] = _v
+                        except (ValueError, TypeError):
+                            pass
+                    actual_results = _clean_res
                 if fetch_errors:
                     with st.expander("⚠️ 数据拉取提示"):
                         for e in fetch_errors: st.write(f"- {e}")
