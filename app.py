@@ -970,20 +970,16 @@ with tab2:
                         }
                         _tsa_ou_601 = tsa_odds_map.get(eid) or {}
                         _ou_lines_601 = _tsa_ou_601.get("real_ou_lines", {})
-                        _ou_dir_601 = "—"
-                        if _ou_lines_601:
-                            _valid_601 = []
-                            for k, v in _ou_lines_601.items():
-                                try: _valid_601.append((float(k), v["over"], v["under"]))
-                                except: pass
-                            if _valid_601:
-                                _best_601 = min(_valid_601, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
-                                _lf, _ov, _un = _best_601
-                                _ou_dir_601 = f"大{_lf:g}" if float(_ov) < float(_un) else f"小{_lf:g}"
-                        if _ou_dir_601 == "—":
-                            _po = row.get("_prob_over_pct")
-                            if _po is not None:
-                                _ou_dir_601 = "大2.5" if _po >= 50 else "小2.5"
+                        # V6.1 终极修复：大小球方向直接跟最终比分死绑定，彻底消灭精神分裂
+                        _main_s = str(adj_main_score).split("-")
+                        if len(_main_s) == 2 and _main_s[0].isdigit() and _main_s[1].isdigit():
+                            _total_goals = int(_main_s[0]) + int(_main_s[1])
+                            if _total_goals >= 3:
+                                _ou_dir_601 = "大2.5"
+                            else:
+                                _ou_dir_601 = "小2.5"
+                        else:
+                            _ou_dir_601 = "—"
                         matches_data.append({
                             "event_id": eid, "比赛": f"{row['主队']} vs {row['客队']}",
                             "时间": row["时间"], "联赛": row["联赛"], "等级": grade,
