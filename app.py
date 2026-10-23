@@ -883,26 +883,48 @@ with tab2:
                             _tsa_ah = str(_tsa_ah_t2.get("real_ah_line", "0"))
                             try: _ah_val = float(_tsa_ah)
                             except: _ah_val = 0.0
+                            # 新增超深盘判断
                             is_deep = abs(_ah_val) >= 1.5
+                            is_super_deep = abs(_ah_val) >= 2.75
                             
                             if is_over_dna:
                                 _b = [(3,1,0.5), (2,2,0.3), (3,2,0.2)]
                             elif is_under_dna:
                                 _b = [(0,0,0.5), (1,0,0.3), (0,1,0.2)]
-                            elif _is_over:
-                                if _adj_dir_now == "主胜":
-                                    _b = [(3,0,0.5), (3,1,0.3), (2,0,0.2)] if is_deep else [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
-                                elif _adj_dir_now == "客胜":
-                                    _b = [(0,3,0.5), (1,3,0.3), (0,2,0.2)] if is_deep else [(1,2,0.5), (1,3,0.3), (0,3,0.2)]
-                                else:
-                                    _b = [(1,1,0.5), (2,2,0.3), (3,3,0.2)]
-                            else:
-                                if _adj_dir_now == "主胜":
-                                    _b = [(2,0,0.5), (3,0,0.3), (3,1,0.2)] if is_deep else [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
-                                elif _adj_dir_now == "客胜":
-                                    _b = [(0,2,0.5), (0,3,0.3), (1,3,0.2)] if is_deep else [(0,1,0.5), (0,2,0.3), (1,1,0.2)]
-                                else:
-                                    _b = [(0,0,0.5), (1,1,0.3), (2,2,0.2)]
+                                elif _is_over:
+        if _adj_dir_now == "主胜":
+            if is_super_deep:
+                _b = [(4,0,0.5), (4,1,0.3), (5,0,0.2)]
+            elif is_deep:
+                _b = [(3,0,0.5), (3,1,0.3), (2,0,0.2)]
+            else:
+                _b = [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
+        elif _adj_dir_now == "客胜":
+            if is_super_deep:
+                _b = [(0,4,0.5), (1,4,0.3), (0,5,0.2)]
+            elif is_deep:
+                _b = [(0,3,0.5), (1,3,0.3), (0,2,0.2)]
+            else:
+                _b = [(1,2,0.5), (1,3,0.3), (0,3,0.2)]
+        else:
+            _b = [(1,1,0.5), (2,2,0.3), (3,3,0.2)]
+    else:
+        if _adj_dir_now == "主胜":
+            if is_super_deep:
+                _b = [(3,0,0.5), (4,0,0.3), (3,1,0.2)]
+            elif is_deep:
+                _b = [(2,0,0.5), (3,0,0.3), (3,1,0.2)]
+            else:
+                _b = [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
+        elif _adj_dir_now == "客胜":
+            if is_super_deep:
+                _b = [(0,3,0.5), (0,4,0.3), (1,3,0.2)]
+            elif is_deep:
+                _b = [(0,2,0.5), (0,3,0.3), (1,3,0.2)]
+            else:
+                _b = [(0,1,0.5), (0,2,0.3), (1,1,0.2)]
+        else:
+            _b = [(0,0,0.5), (1,1,0.3), (2,2,0.2)]
                             
                             adj_scores = _b
                             adj_main_score = f"{adj_scores[0][0]}-{adj_scores[0][1]}" if adj_scores else "—"
