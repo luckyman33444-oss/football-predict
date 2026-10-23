@@ -39,7 +39,7 @@ def generate_daily():
     def calc_score(row):
         ph, pa = row.get("_prob_home", 0) or 0, row.get("_prob_away", 0) or 0
         gap = abs(ph - pa)
-        if gap < 15: return -99  # 基础门槛太低，直接踢
+        if gap < 20: return -99  # V5.90: 门槛从 15 提升到 20，过滤低质量场次
         
         # 方向冲突剔除
         res = row.get("预测结果", "—")
@@ -110,8 +110,14 @@ def generate_daily():
                         except: pass
                     valid_lines.sort()
                     if valid_lines:
-                        best = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
-                        lf, ov, un = best
+                        # 修复：优先找 2.5 线
+                        _best_line = None
+                        for _v in valid_lines:
+                            if _v[0] == 2.5:
+                                _best_line = _v; break
+                        if not _best_line or (min(_best_line[1], _best_line[2]) > 1.65):
+                            _best_line = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
+                        lf, ov, un = _best_line
                         is_over = float(ov) < float(un)
                         inv = (1/ov) + (1/un)
                         po, pu = (1/ov)/inv, (1/un)/inv
@@ -124,15 +130,15 @@ def generate_daily():
                         
                         # 比分池分配
                         if direction == "主胜":
-                            if is_deep: main_s, alt_s = "3-0", "3-1"
+                            if is_deep: main_s, alt_s = "2-0", "3-0"
                             elif is_over: main_s, alt_s = "2-1", "3-1"
                             else: main_s, alt_s = "1-0", "2-0"
                         elif direction == "客胜":
-                            if is_deep: main_s, alt_s = "0-3", "1-3"
+                            if is_deep: main_s, alt_s = "0-2", "0-3"
                             elif is_over: main_s, alt_s = "1-2", "1-3"
                             else: main_s, alt_s = "0-1", "0-2"
                             
-        # DNA 强制干预
+        # DNA 强制干预（最高优先级）
         t1, t2 = str(row["主队"]), str(row["客队"])
         if t1 in _over_dna or t2 in _over_dna:
             main_s, alt_s = "3-1", "2-2"
@@ -193,7 +199,6 @@ def generate_daily():
     filename = f"推荐_{today_str.replace('-', '')}_{datetime.now(CST).strftime('%H%M')}.xlsx"
     df_out = pd.DataFrame(output_rows, columns=['存档时间', '推荐场次', '当天全部预测场次', '核心比赛', '场次', '比赛', '联赛', '等级', '时间', 'event_id', '模型判断', '模型概率', '下注建议', '调整后方向', '调整后概率', '市场方向', '市场差', '亚盘置信', '调整后比分1', '调整后比分2', '赔率', '大小球方向', '比分1', '比分2', '盘口走势', '方向一致', '角色', '主队排名', '客队排名', '真实亚盘', '真实大小球', '真实1X2', '状态', '预测结果', '大小球', '主胜', '和局', '客胜', '主力比分', '备选比分', '第三比分'])
     
-    # ===== 核心修复：解决 Excel 不支持带时区的时间格式问题 =====
     def _remove_tz(_df):
         for col in _df.columns:
             if pd.api.types.is_datetime64_any_dtype(_df[col]):
@@ -203,12 +208,10 @@ def generate_daily():
 
     df_out = _remove_tz(df_out)
     
-    # 生成全量预测数据
     df_all_out = df.copy()
     df_all_out = df_all_out.rename(columns={"预测结果": "模型判断", "大小球方向": "大小球"})
     df_all_out = _remove_tz(df_all_out)
 
-    # 路径 1: Codespace 的 output/ 文件夹
     os.makedirs("output", exist_ok=True)
     path1 = os.path.join("output", filename)
     with pd.ExcelWriter(path1, engine='openpyxl') as writer:
@@ -216,7 +219,6 @@ def generate_daily():
         df_all_out.to_excel(writer, index=False, sheet_name="全量预测")
     print(f"\n🎯 推荐报表已保存至云端: {path1} (已包含全量预测)")
 
-    # 路径 2: 保存到 Windows 桌面
     if platform.system() == "Windows":
         desktop_path = os.path.join(os.path.expanduser("~"), "Desktop", filename)
         try:
