@@ -53,15 +53,23 @@ def _sync_scores_tsa(df):
             valid_lines.sort()
             if not valid_lines: return row.get("主力比分", "—"), row.get("备选比分", "—")
             
-            best = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
-            _, ov, un = best
+            # 修复 1：优先找主流的 2.5 线，如果大/小某一方赔率极低（<1.65），直接锁定
+            _best_line = None
+            for _v in valid_lines:
+                if _v[0] == 2.5:
+                    _best_line = _v
+                    break
+            
+            # 如果没有 2.5 线，或者 2.5 线赔率接近（都大于1.65），才用动态最接近 50% 的逻辑
+            if not _best_line or (min(_best_line[1], _best_line[2]) > 1.65):
+                _best_line = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
+            
+            _, ov, un = _best_line
             _is_over = ov < un
             
             _ah_line = str(_d.get("real_ah_line", "0"))
-            try:
-                _ah_val = float(_ah_line)
-            except:
-                _ah_val = 0.0
+            try: _ah_val = float(_ah_line)
+            except: _ah_val = 0.0
             is_deep = abs(_ah_val) >= 1.5
 
             _t1 = str(row.get("主队", ""))
@@ -69,15 +77,20 @@ def _sync_scores_tsa(df):
             is_over_dna = (_t1 in _over_dna or _t2 in _over_dna)
             is_under_dna = (_t1 in _under_dna or _t2 in _under_dna)
 
+            # 修复 2：DNA 绝对优先
+            if is_over_dna:
+                return "3-1", "2-2"
+            if is_under_dna:
+                return "0-0", "1-0"
+
+            # 修复 3：深盘必须覆盖亚盘
             if _is_over:
-                if is_over_dna: return "3-1", "2-2"
-                elif _dir == "主胜": return ("3-0", "3-1") if is_deep else ("2-1", "3-1")
+                if _dir == "主胜": return ("3-0", "3-1") if is_deep else ("2-1", "3-1")
                 elif _dir == "客胜": return ("0-3", "1-3") if is_deep else ("1-2", "1-3")
                 else: return "1-1", "2-2"
             else:
-                if is_under_dna: return "0-0", "1-0"
-                elif _dir == "主胜": return ("2-0", "1-0") if is_deep else ("1-0", "2-0")
-                elif _dir == "客胜": return ("0-2", "0-1") if is_deep else ("0-1", "0-2")
+                if _dir == "主胜": return ("2-0", "3-0") if is_deep else ("1-0", "2-0")
+                elif _dir == "客胜": return ("0-2", "0-3") if is_deep else ("0-1", "0-2")
                 else: return "0-0", "1-1"
         except Exception:
             pass
@@ -248,8 +261,14 @@ def render_all_matches(df_all):
                                     except: pass
                                 valid_lines.sort()
                                 if valid_lines:
-                                    best = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
-                                    lf, ov, un = best
+                                    _best_line = None
+                                    for _v in valid_lines:
+                                        if _v[0] == 2.5:
+                                            _best_line = _v; break
+                                    if not _best_line or (min(_best_line[1], _best_line[2]) > 1.65):
+                                        _best_line = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
+                                    
+                                    lf, ov, un = _best_line
                                     _inv = (1/ov) + (1/un)
                                     _po = (1/ov)/_inv
                                     _pu = (1/un)/_inv
@@ -447,8 +466,13 @@ def render_high_confidence(df_all):
                         except: pass
                     valid_lines.sort()
                     if valid_lines:
-                        best = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
-                        lf, ov, un = best
+                        _best_line = None
+                        for _v in valid_lines:
+                            if _v[0] == 2.5:
+                                _best_line = _v; break
+                        if not _best_line or (min(_best_line[1], _best_line[2]) > 1.65):
+                            _best_line = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
+                        lf, ov, un = _best_line
                         _inv = (1/ov) + (1/un)
                         _po = (1/ov)/_inv
                         _pu = (1/un)/_inv
@@ -625,7 +649,7 @@ with tab2:
                     _pa = row.get("_prob_away") or 0
                     _gap = abs(_ph - _pa)
                     
-                    if _gap < 15: return -1
+                    if _gap < 20: return -1
                     _a_dir = row.get("预测结果", "—")
                     if _a_dir not in ("主胜", "客胜", "和局"): return -1
                     if _a_dir == "主胜" and _ph < 50: return -1
@@ -838,8 +862,13 @@ with tab2:
                                     try: valid_lines.append((float(k), v["over"], v["under"]))
                                     except: pass
                                 if valid_lines:
-                                    best = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
-                                    lf, ov, un = best
+                                    _best_line = None
+                                    for _v in valid_lines:
+                                        if _v[0] == 2.5:
+                                            _best_line = _v; break
+                                    if not _best_line or (min(_best_line[1], _best_line[2]) > 1.65):
+                                        _best_line = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
+                                    lf, ov, un = _best_line
                                     _is_over = float(ov) < float(un)
                             if _is_over is None:
                                 _is_over = adj_pred["over25"] >= 0.5
@@ -852,28 +881,26 @@ with tab2:
                             _b = []
                             _tsa_ah_t2 = tsa_odds_map.get(eid) or {}
                             _tsa_ah = str(_tsa_ah_t2.get("real_ah_line", "0"))
-                            try:
-                                _ah_val = float(_tsa_ah)
-                            except:
-                                _ah_val = 0.0
+                            try: _ah_val = float(_tsa_ah)
+                            except: _ah_val = 0.0
                             is_deep = abs(_ah_val) >= 1.5
                             
-                            if _is_over:
-                                if is_over_dna:
-                                    _b = [(3,1,0.5), (2,2,0.3), (3,2,0.2)]
-                                elif _adj_dir_now == "主胜":
+                            if is_over_dna:
+                                _b = [(3,1,0.5), (2,2,0.3), (3,2,0.2)]
+                            elif is_under_dna:
+                                _b = [(0,0,0.5), (1,0,0.3), (0,1,0.2)]
+                            elif _is_over:
+                                if _adj_dir_now == "主胜":
                                     _b = [(3,0,0.5), (3,1,0.3), (2,0,0.2)] if is_deep else [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
                                 elif _adj_dir_now == "客胜":
                                     _b = [(0,3,0.5), (1,3,0.3), (0,2,0.2)] if is_deep else [(1,2,0.5), (1,3,0.3), (0,3,0.2)]
                                 else:
                                     _b = [(1,1,0.5), (2,2,0.3), (3,3,0.2)]
                             else:
-                                if is_under_dna:
-                                    _b = [(0,0,0.5), (1,0,0.3), (0,1,0.2)]
-                                elif _adj_dir_now == "主胜":
-                                    _b = [(2,0,0.5), (1,0,0.3), (1,1,0.2)] if is_deep else [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
+                                if _adj_dir_now == "主胜":
+                                    _b = [(2,0,0.5), (3,0,0.3), (3,1,0.2)] if is_deep else [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
                                 elif _adj_dir_now == "客胜":
-                                    _b = [(0,2,0.5), (0,1,0.3), (1,1,0.2)] if is_deep else [(0,1,0.5), (0,2,0.3), (1,1,0.2)]
+                                    _b = [(0,2,0.5), (0,3,0.3), (1,3,0.2)] if is_deep else [(0,1,0.5), (0,2,0.3), (1,1,0.2)]
                                 else:
                                     _b = [(0,0,0.5), (1,1,0.3), (2,2,0.2)]
                             
