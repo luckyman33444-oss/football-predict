@@ -25,10 +25,13 @@ def _get_tsa_ou_lines(eid):
 
 
 def _sync_scores_tsa(df):
-    """用 TSA 真实大小球强制纠偏比分"""
+    """用 TSA 真实大小球强制纠偏比分（全逻辑统一版）"""
     import pandas as pd
     _tsa_map = load_tsa_mapping()
     
+    _over_dna = ["瓦杜兹", "博多闪耀", "伯尔尼年轻人", "浦和红钻", "苏黎世", "巴塞罗那", "锡永", "图恩", "卡托维兹", "阿贾克斯", "新英格兰革命", "哥伦布机员", "布莱克本", "西汉姆联", "绍森德联", "诺维奇", "塔姆沃思", "克卢日大学", "波特兰伐木者", "辛辛那提FC"]
+    _under_dna = ["埃克塞特城", "圣洛伦索", "里斯特拉", "皮特什蒂阿尔杰什", "维拉诺瓦", "底特律城", "布拉德福德", "圣格奥尔基塞普西", "河流联", "普罗夫迪夫火车头", "东京绿茵", "飓风", "贝尔格拉诺", "巴拉克中央", "代格福什", "庞特普雷塔", "塔尔萨FC", "奥克兰根", "库奥皮奥", "百万富翁"]
+
     def _get_scores(row):
         eid = row.get("event_id")
         _dir = row.get("预测结果", "—")
@@ -50,19 +53,32 @@ def _sync_scores_tsa(df):
             valid_lines.sort()
             if not valid_lines: return row.get("主力比分", "—"), row.get("备选比分", "—")
             
-            # 动态主盘口计算
             best = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
             _, ov, un = best
             _is_over = ov < un
             
+            _ah_line = str(_d.get("real_ah_line", "0"))
+            try:
+                _ah_val = float(_ah_line)
+            except:
+                _ah_val = 0.0
+            is_deep = abs(_ah_val) >= 1.5
+
+            _t1 = str(row.get("主队", ""))
+            _t2 = str(row.get("客队", ""))
+            is_over_dna = (_t1 in _over_dna or _t2 in _over_dna)
+            is_under_dna = (_t1 in _under_dna or _t2 in _under_dna)
+
             if _is_over:
-                if _dir == "主胜": return "2-1", "3-1"
-                if _dir == "客胜": return "1-2", "1-3"
-                if _dir == "和局": return "1-1", "2-2"
+                if is_over_dna: return "3-1", "2-2"
+                elif _dir == "主胜": return ("3-0", "3-1") if is_deep else ("2-1", "3-1")
+                elif _dir == "客胜": return ("0-3", "1-3") if is_deep else ("1-2", "1-3")
+                else: return "1-1", "2-2"
             else:
-                if _dir == "主胜": return "1-0", "2-0"
-                if _dir == "客胜": return "0-1", "0-2"
-                if _dir == "和局": return "0-0", "1-1"
+                if is_under_dna: return "0-0", "1-0"
+                elif _dir == "主胜": return ("2-0", "1-0") if is_deep else ("1-0", "2-0")
+                elif _dir == "客胜": return ("0-2", "0-1") if is_deep else ("0-1", "0-2")
+                else: return "0-0", "1-1"
         except Exception:
             pass
         return row.get("主力比分", "—"), row.get("备选比分", "—")
@@ -169,7 +185,7 @@ def render_all_matches(df_all):
         sel_leagues = st.multiselect("筛选联赛（不选则显示全部）", all_leagues, default=[], key="lg1")
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
-        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.67：市场亚盘 + 市场差/大小球强度筛选")
+        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.90：市场亚盘 + 市场差/大小球强度筛选")
         if not df.empty:
             df = df.copy()
             df["第三比分"] = df["_scores_list"].apply(lambda x: x[2][0] if isinstance(x, list) and len(x) > 2 else "—")
@@ -495,7 +511,7 @@ def render_high_confidence(df_all):
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v5.67（全中文 + 亚洲盘 + 市场强度筛选）")
+st.title("⚽ 足球预测 v5.90（全中文 + 亚洲盘 + 市场强度筛选）")
 tab1, tab2, tab4, tab5 = st.tabs(["[T1] 今日预测", "[T2] 3串1核心", "[T3] 搜索队名", "[T4] 赛后复盘"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
@@ -633,7 +649,8 @@ with tab2:
                     return _gap + _bonus
                 core_df["_conf"] = core_df.apply(calc_conf, axis=1) if not core_df.empty else pd.Series(dtype=float)
                 other_df["_conf"] = other_df.apply(calc_conf, axis=1) if not other_df.empty else pd.Series(dtype=float)
-                if not other_df.empty: other_df = other_df[other_df["_conf"] >= 0]
+                if not other_df.empty: 
+                    other_df = other_df.sort_values("_conf", ascending=False)
                 n_core_in_window = len(core_df)
                 if n_core_in_window >= 3:
                     selected = core_df.sort_values("_conf", ascending=False).head(3)
@@ -946,7 +963,7 @@ with tab2:
                         st.error(f"🔴 **警示：以下 {len(f_matches)} 场为 F 级联赛**（回测命中率 <50%），下注请谨慎：")
                         for fm in f_matches: st.write(f"- {fm['比赛']}（{fm['联赛']}）")
                     st.subheader("🎯 模型对比 & 亚盘方向")
-                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/DC/融合/封顶 ｜ v5.67")
+                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/DC/融合/封顶 ｜ v5.90")
                     compare_rows = []
                     for i, md in enumerate(matches_data, 1):
                         mc = md.get("model_compare", {})
@@ -1190,9 +1207,10 @@ with tab2:
                                 _shield_candidates.append((_top[1], _md, _top[0], _top[2], _src, "无兼容TSA盘口，用模型最优"))
 
                     if _shield_candidates:
-                        _shield_candidates = [x for x in _shield_candidates if x[0] >= 0.60]
+                        _shield_candidates = [x for x in _shield_candidates if x[0] >= 0.58]
                         if not _shield_candidates:
-                            st.warning("🛡️ **今日无合适防守盘口**：所有兼容盘口概率均低于 60%。建议放弃盾。")
+                            st.warning("🛡️ **今日无合适防守盘口**：所有兼容盘口概率均低于 58%。建议放弃盾。")
+                            
                         _group_good = [x for x in _shield_candidates if x[3] >= 1.50]
                         _group_bad = [x for x in _shield_candidates if x[3] < 1.50]
                         if _group_good:
@@ -1650,4 +1668,4 @@ with tab5:
             import traceback
             st.code(traceback.format_exc())
 
-st.caption("⚠️ v5.67：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
+st.caption("⚠️ v5.90：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
