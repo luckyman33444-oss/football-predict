@@ -1622,14 +1622,24 @@ with tab5:
                             score1_hit = judge_score_hit(score1, actual); score2_hit = judge_score_hit(score2, actual)
                             score3_hit = judge_score_hit(score3, actual)
                             _any3 = "✅" if (score1_hit == "✅" or score2_hit == "✅" or score3_hit == "✅") else "❌"
-                            all_rows.append({"比赛": m["比赛"], "联赛": m["联赛"], "预测结果": pred_result, "大小球": ou_dir,
-                                             "实际比分": actual_str, "主力比分": score1, "备选比分": score2, "第三比分": score3,
-                                             "胜负命中": win_str, "大小球命中": ou_str,
-                                             "比分1命中": score1_hit, "比分2命中": score2_hit, "比分3命中": score3_hit,
-                                             "比分前3命中": _any3})
-                        if all_rows:
-                            all_review_df = pd.DataFrame(all_rows)
-                            st.dataframe(all_review_df, use_container_width=True, hide_index=True)
+                            
+                            _match_name = m.get("比赛", f"{m.get('主队', '')} vs {m.get('客队', '')}")
+                            all_rows.append({
+                                "比赛": _match_name, 
+                                "联赛": m.get("联赛", "—"), 
+                                "预测结果": pred_result, 
+                                "大小球": ou_dir,
+                                "实际比分": actual_str, 
+                                "主力比分": score1, 
+                                "备选比分": score2, 
+                                "第三比分": score3,
+                                "胜负命中": win_str, 
+                                "大小球命中": ou_str,
+                                "比分1命中": score1_hit, 
+                                "比分2命中": score2_hit, 
+                                "比分3命中": score3_hit,
+                                "比分前3命中": _any3
+                            })
                             wg2 = [r for r in all_rows if r["胜负命中"] in ("✅", "❌")]
                             wh2 = len([r for r in wg2 if r["胜负命中"] == "✅"]); wr2 = wh2 / len(wg2) if wg2 else 0
                             og2 = [r for r in all_rows if r["大小球命中"] in ("✅", "❌")]
