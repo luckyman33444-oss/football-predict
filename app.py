@@ -53,14 +53,11 @@ def _sync_scores_tsa(df):
             valid_lines.sort()
             if not valid_lines: return row.get("主力比分", "—"), row.get("备选比分", "—")
             
-            # 修复 1：优先找主流的 2.5 线，如果大/小某一方赔率极低（<1.65），直接锁定
             _best_line = None
             for _v in valid_lines:
                 if _v[0] == 2.5:
                     _best_line = _v
                     break
-            
-            # 如果没有 2.5 线，或者 2.5 线赔率接近（都大于1.65），才用动态最接近 50% 的逻辑
             if not _best_line or (min(_best_line[1], _best_line[2]) > 1.65):
                 _best_line = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
             
@@ -71,26 +68,37 @@ def _sync_scores_tsa(df):
             try: _ah_val = float(_ah_line)
             except: _ah_val = 0.0
             is_deep = abs(_ah_val) >= 1.5
+            is_super_deep = abs(_ah_val) >= 2.75
 
             _t1 = str(row.get("主队", ""))
             _t2 = str(row.get("客队", ""))
             is_over_dna = (_t1 in _over_dna or _t2 in _over_dna)
             is_under_dna = (_t1 in _under_dna or _t2 in _under_dna)
 
-            # 修复 2：DNA 绝对优先
             if is_over_dna:
                 return "3-1", "2-2"
             if is_under_dna:
                 return "0-0", "1-0"
 
-            # 修复 3：深盘必须覆盖亚盘
             if _is_over:
-                if _dir == "主胜": return ("3-0", "3-1") if is_deep else ("2-1", "3-1")
-                elif _dir == "客胜": return ("0-3", "1-3") if is_deep else ("1-2", "1-3")
+                if _dir == "主胜":
+                    if is_super_deep: return "4-0", "4-1"
+                    elif is_deep: return "3-0", "3-1"
+                    else: return "2-1", "3-1"
+                elif _dir == "客胜":
+                    if is_super_deep: return "0-4", "1-4"
+                    elif is_deep: return "0-3", "1-3"
+                    else: return "1-2", "1-3"
                 else: return "1-1", "2-2"
             else:
-                if _dir == "主胜": return ("2-0", "3-0") if is_deep else ("1-0", "2-0")
-                elif _dir == "客胜": return ("0-2", "0-3") if is_deep else ("0-1", "0-2")
+                if _dir == "主胜":
+                    if is_super_deep: return "3-0", "4-0"
+                    elif is_deep: return "2-0", "3-0"
+                    else: return "1-0", "2-0"
+                elif _dir == "客胜":
+                    if is_super_deep: return "0-3", "0-4"
+                    elif is_deep: return "0-2", "0-3"
+                    else: return "0-1", "0-2"
                 else: return "0-0", "1-1"
         except Exception:
             pass
@@ -123,59 +131,15 @@ st.set_page_config(page_title="足球预测", page_icon="⚽", layout="wide")
 
 st.markdown("""
 <style>
-/* 赛博主题 2026-10-17（纯紫版） */
-h1 {
-    background: linear-gradient(90deg, #bf00ff, #ff40aa);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    text-shadow: 0 0 30px rgba(191,0,255,0.6);
-    font-weight: 700;
-    letter-spacing: 2px;
-}
-h2, h3 {
-    color: #bf00ff;
-    text-shadow: 0 0 10px rgba(191,0,255,0.5);
-    border-left: 3px solid #bf00ff;
-    padding-left: 10px;
-}
-.stButton > button {
-    background: linear-gradient(135deg, #bf00ff, #8a00cc);
-    border: 1px solid #bf00ff;
-    color: #ffffff;
-    font-weight: 600;
-    box-shadow: 0 0 15px rgba(191,0,255,0.5);
-    transition: all 0.2s;
-}
-.stButton > button:hover {
-    background: linear-gradient(135deg, #d040ff, #a020ee);
-    box-shadow: 0 0 25px rgba(191,0,255,0.9);
-    color: #ffffff;
-}
-div[data-testid="stDataFrame"] {
-    border: 1px solid #bf00ff55;
-    box-shadow: 0 0 20px rgba(191,0,255,0.2);
-    border-radius: 8px;
-}
-div[data-testid="stDataFrame"] thead tr th {
-    background: #1a0a2a !important;
-    border-bottom: 2px solid #bf00ff !important;
-    color: #d8a0ff !important;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-}
-div[data-testid="stDataFrame"] tbody tr {
-    border-bottom: 1px solid rgba(191,0,255,0.15);
-}
-div[data-testid="stMetric"] {
-    background: linear-gradient(135deg, #141420, #0a0a12);
-    border: 1px solid #bf00ff55;
-    border-radius: 8px;
-    box-shadow: 0 0 10px rgba(191,0,255,0.15);
-}
-section[data-testid="stSidebar"] {
-    background: #0a0a12;
-    border-right: 1px solid #bf00ff55;
-}
+h1 { background: linear-gradient(90deg, #bf00ff, #ff40aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 30px rgba(191,0,255,0.6); font-weight: 700; letter-spacing: 2px; }
+h2, h3 { color: #bf00ff; text-shadow: 0 0 10px rgba(191,0,255,0.5); border-left: 3px solid #bf00ff; padding-left: 10px; }
+.stButton > button { background: linear-gradient(135deg, #bf00ff, #8a00cc); border: 1px solid #bf00ff; color: #ffffff; font-weight: 600; box-shadow: 0 0 15px rgba(191,0,255,0.5); transition: all 0.2s; }
+.stButton > button:hover { background: linear-gradient(135deg, #d040ff, #a020ee); box-shadow: 0 0 25px rgba(191,0,255,0.9); color: #ffffff; }
+div[data-testid="stDataFrame"] { border: 1px solid #bf00ff55; box-shadow: 0 0 20px rgba(191,0,255,0.2); border-radius: 8px; }
+div[data-testid="stDataFrame"] thead tr th { background: #1a0a2a !important; border-bottom: 2px solid #bf00ff !important; color: #d8a0ff !important; font-weight: 700; letter-spacing: 0.5px; }
+div[data-testid="stDataFrame"] tbody tr { border-bottom: 1px solid rgba(191,0,255,0.15); }
+div[data-testid="stMetric"] { background: linear-gradient(135deg, #141420, #0a0a12); border: 1px solid #bf00ff55; border-radius: 8px; box-shadow: 0 0 10px rgba(191,0,255,0.15); }
+section[data-testid="stSidebar"] { background: #0a0a12; border-right: 1px solid #bf00ff55; }
 .stRadio > div { color: #bf00ff; }
 </style>
 """, unsafe_allow_html=True)
@@ -198,7 +162,7 @@ def render_all_matches(df_all):
         sel_leagues = st.multiselect("筛选联赛（不选则显示全部）", all_leagues, default=[], key="lg1")
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]
         st.success(f"**{sel_date}** 共 {len(df)} 场比赛（北京时间）")
-        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v5.90：市场亚盘 + 市场差/大小球强度筛选")
+        st.caption("💡 S=高可信 A=可信 B=普通 F=低可信 ｜ v6.1：市场亚盘 + 市场差/大小球强度筛选")
         if not df.empty:
             df = df.copy()
             df["第三比分"] = df["_scores_list"].apply(lambda x: x[2][0] if isinstance(x, list) and len(x) > 2 else "—")
@@ -535,7 +499,7 @@ def render_high_confidence(df_all):
 if "core_matches" not in st.session_state:
     st.session_state.core_matches = []
 
-st.title("⚽ 足球预测 v5.90（全中文 + 亚洲盘 + 市场强度筛选）")
+st.title("⚽ 足球预测 v6.1（全中文 + 亚洲盘 + 市场强度筛选）")
 tab1, tab2, tab4, tab5 = st.tabs(["[T1] 今日预测", "[T2] 3串1核心", "[T3] 搜索队名", "[T4] 赛后复盘"])
 
 if not BSD_TOKEN: st.error("⚠️ 未检测到 BSD_TOKEN")
@@ -878,52 +842,39 @@ with tab2:
                             is_over_dna = (_t1 in _over_dna or _t2 in _over_dna)
                             is_under_dna = (_t1 in _under_dna or _t2 in _under_dna)
                             
-                            _b = []
                             _tsa_ah_t2 = tsa_odds_map.get(eid) or {}
                             _tsa_ah = str(_tsa_ah_t2.get("real_ah_line", "0"))
                             try: _ah_val = float(_tsa_ah)
                             except: _ah_val = 0.0
-                            # 新增超深盘判断
                             is_deep = abs(_ah_val) >= 1.5
                             is_super_deep = abs(_ah_val) >= 2.75
                             
-                                                        # DNA 绝对优先
+                            _b = []
+                            
                             if is_over_dna:
                                 _b = [(3,1,0.5), (2,2,0.3), (3,2,0.2)]
                             elif is_under_dna:
                                 _b = [(0,0,0.5), (1,0,0.3), (0,1,0.2)]
                             elif _is_over:
                                 if _adj_dir_now == "主胜":
-                                    if is_super_deep:
-                                        _b = [(4,0,0.5), (4,1,0.3), (5,0,0.2)]
-                                    elif is_deep:
-                                        _b = [(3,0,0.5), (3,1,0.3), (2,0,0.2)]
-                                    else:
-                                        _b = [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
+                                    if is_super_deep: _b = [(4,0,0.5), (4,1,0.3), (5,0,0.2)]
+                                    elif is_deep: _b = [(3,0,0.5), (3,1,0.3), (2,0,0.2)]
+                                    else: _b = [(2,1,0.5), (3,1,0.3), (3,0,0.2)]
                                 elif _adj_dir_now == "客胜":
-                                    if is_super_deep:
-                                        _b = [(0,4,0.5), (1,4,0.3), (0,5,0.2)]
-                                    elif is_deep:
-                                        _b = [(0,3,0.5), (1,3,0.3), (0,2,0.2)]
-                                    else:
-                                        _b = [(1,2,0.5), (1,3,0.3), (0,3,0.2)]
+                                    if is_super_deep: _b = [(0,4,0.5), (1,4,0.3), (0,5,0.2)]
+                                    elif is_deep: _b = [(0,3,0.5), (1,3,0.3), (0,2,0.2)]
+                                    else: _b = [(1,2,0.5), (1,3,0.3), (0,3,0.2)]
                                 else:
                                     _b = [(1,1,0.5), (2,2,0.3), (3,3,0.2)]
                             else:
                                 if _adj_dir_now == "主胜":
-                                    if is_super_deep:
-                                        _b = [(3,0,0.5), (4,0,0.3), (3,1,0.2)]
-                                    elif is_deep:
-                                        _b = [(2,0,0.5), (3,0,0.3), (3,1,0.2)]
-                                    else:
-                                        _b = [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
+                                    if is_super_deep: _b = [(3,0,0.5), (4,0,0.3), (3,1,0.2)]
+                                    elif is_deep: _b = [(2,0,0.5), (3,0,0.3), (3,1,0.2)]
+                                    else: _b = [(1,0,0.5), (2,0,0.3), (1,1,0.2)]
                                 elif _adj_dir_now == "客胜":
-                                    if is_super_deep:
-                                        _b = [(0,3,0.5), (0,4,0.3), (1,3,0.2)]
-                                    elif is_deep:
-                                        _b = [(0,2,0.5), (0,3,0.3), (1,3,0.2)]
-                                    else:
-                                        _b = [(0,1,0.5), (0,2,0.3), (1,1,0.2)]
+                                    if is_super_deep: _b = [(0,3,0.5), (0,4,0.3), (1,3,0.2)]
+                                    elif is_deep: _b = [(0,2,0.5), (0,3,0.3), (1,3,0.2)]
+                                    else: _b = [(0,1,0.5), (0,2,0.3), (1,1,0.2)]
                                 else:
                                     _b = [(0,0,0.5), (1,1,0.3), (2,2,0.2)]
                             
@@ -968,9 +919,7 @@ with tab2:
                             "final_xg_h": final_xg_h, "final_xg_a": final_xg_a, "adj_pred": adj_pred,
                             "ah_line": ah_line, "ah_note": ah_note, "score_dir": score_dir,
                         }
-                        _tsa_ou_601 = tsa_odds_map.get(eid) or {}
-                        _ou_lines_601 = _tsa_ou_601.get("real_ou_lines", {})
-                        # V6.1 终极修复：大小球方向直接跟最终比分死绑定，彻底消灭精神分裂
+                        # 大小球方向直接跟最终比分死绑定
                         _main_s = str(adj_main_score).split("-")
                         if len(_main_s) == 2 and _main_s[0].isdigit() and _main_s[1].isdigit():
                             _total_goals = int(_main_s[0]) + int(_main_s[1])
@@ -980,6 +929,7 @@ with tab2:
                                 _ou_dir_601 = "小2.5"
                         else:
                             _ou_dir_601 = "—"
+                            
                         matches_data.append({
                             "event_id": eid, "比赛": f"{row['主队']} vs {row['客队']}",
                             "时间": row["时间"], "联赛": row["联赛"], "等级": grade,
@@ -1011,7 +961,7 @@ with tab2:
                         st.error(f"🔴 **警示：以下 {len(f_matches)} 场为 F 级联赛**（回测命中率 <50%），下注请谨慎：")
                         for fm in f_matches: st.write(f"- {fm['比赛']}（{fm['联赛']}）")
                     st.subheader("🎯 模型对比 & 亚盘方向")
-                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/DC/融合/封顶 ｜ v5.90")
+                    st.caption("原模型 = 只用 Bzzoiro 给的 xG ｜ 调整后 = 加上阵容/战意/DC/融合/封顶 ｜ v6.1")
                     compare_rows = []
                     for i, md in enumerate(matches_data, 1):
                         mc = md.get("model_compare", {})
@@ -1464,13 +1414,24 @@ with tab5:
                         show_cols = list(dict.fromkeys(show_cols))
                         df_to_show = rec_df[show_cols].loc[:, ~rec_df[show_cols].columns.duplicated()]
                         st.dataframe(df_to_show, use_container_width=True, hide_index=True)
-                if "预测结果" in full_meta.columns and "event_id" in full_meta.columns:
-                    all_mask = (full_meta["预测结果"].notna() &
-                                (full_meta["预测结果"].astype(str).str.strip() != "—") &
-                                (full_meta["预测结果"].astype(str).str.strip() != "") &
-                                (full_meta["预测结果"].astype(str).str.strip() != "nan") &
-                                full_meta["event_id"].notna())
-                    all_today_df = full_meta[all_mask].copy()
+                
+                # 兼容处理：如果存在全量预测 Sheet（云端生成的），直接读它！
+                if "全量预测" in sheet_names:
+                    all_today_df = pd.read_excel(uploaded_file, sheet_name="全量预测")
+                    if "预测结果" not in all_today_df.columns and "模型判断" in all_today_df.columns:
+                        all_today_df = all_today_df.rename(columns={"模型判断": "预测结果"})
+                else:
+                    # 否则，读取基本信息里混着的全量数据（网页端生成的）
+                    _pred_col = "预测结果" if "预测结果" in full_meta.columns else ("模型判断" if "模型判断" in full_meta.columns else None)
+                    if _pred_col and "event_id" in full_meta.columns:
+                        all_mask = (full_meta[_pred_col].notna() &
+                                    (full_meta[_pred_col].astype(str).str.strip() != "—") &
+                                    (full_meta[_pred_col].astype(str).str.strip() != "") &
+                                    (full_meta[_pred_col].astype(str).str.strip() != "nan") &
+                                    full_meta["event_id"].notna())
+                        all_today_df = full_meta[all_mask].copy()
+                
+                if all_today_df is not None and not all_today_df.empty:
                     if rec_df is not None and len(rec_df) > 0 and "event_id" in rec_df.columns:
                         rec_ids = set()
                         for x in rec_df["event_id"].dropna():
@@ -1480,6 +1441,7 @@ with tab5:
                             try: return int(x) in rec_ids
                             except: return False
                         all_today_df = all_today_df[~all_today_df["event_id"].apply(is_in_rec)]
+                    
                     st.markdown(f"### 📋 当天其余预测 **{len(all_today_df)} 场**")
                     if len(all_today_df) > 0:
                         with st.expander("展开查看"):
@@ -1566,8 +1528,10 @@ with tab5:
                                 else: roi_str = "—"; roi_delta = "无有效赔率"
                                 _valid_recs = [r for r in review_rows if r["实际比分"] != "未结束/无数据"]
                                 if len(_valid_recs) >= 3:
-                                    _all_hit = all((r.get("比分1命中") == "✅") or (r.get("比分2命中") == "✅") for r in _valid_recs[:3])
-                                    _combo_str = "✅ 全中" if _all_hit else "❌ 未全中"
+                                    _hit_count = sum(1 for r in _valid_recs[:3] if (r.get("比分1命中") == "✅") or (r.get("比分2命中") == "✅"))
+                                    if _hit_count == 3: _combo_str = "✅ 全中"
+                                    elif _hit_count > 0: _combo_str = f"✅ 命中 {_hit_count}/3 场"
+                                    else: _combo_str = "❌ 未全中"
                                 else:
                                     _combo_str = f"仅 {len(_valid_recs)} 场完赛"
                                 c1, c2, c3, c4, c5 = st.columns(5)
@@ -1627,6 +1591,8 @@ with tab5:
                                 bucket_rows.append({"模型置信度": label, "场次": n, "理论命中率": f"{theory:.1f}%",
                                                     "实际命中率": f"{actual:.1f}% ({hits}/{n})", "偏差": diff_str})
                             st.dataframe(pd.DataFrame(bucket_rows), use_container_width=True, hide_index=True)
+                    
+                    # 处理全量预测复盘
                     if review_scope in ("复盘当天全部预测", "两者都复盘") and all_today_df is not None and len(all_today_df) > 0:
                         st.markdown("### 📋 当天全部预测复盘")
                         for _, m in all_today_df.iterrows():
@@ -1716,4 +1682,4 @@ with tab5:
             import traceback
             st.code(traceback.format_exc())
 
-st.caption("⚠️ v5.90：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
+st.caption("⚠️ v6.1：全中文 + 亚洲盘 + 市场强度筛选。数据永远在你手中。")
