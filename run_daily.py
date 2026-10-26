@@ -5,7 +5,7 @@ import platform
 from datetime import datetime, timedelta
 from engine import (
     fetch_all_predictions, parse_prediction, load_tsa_mapping, 
-    fetch_or_load_tsa_odds, parse_tsa_odds_summary
+    fetch_or_load_tsa_odds, parse_tsa_odds_summary, fmt_odds
 )
 from data import CST
 
@@ -66,6 +66,15 @@ def generate_daily():
     # 选出前 3 场
     top3 = valid_df.head(3).copy()
     
+    # === 新增：强校验拦截，如果 TSA 映射全挂，直接罢工，不生成废表 ===
+    _valid_tsa_count = 0
+    for _, r in top3.iterrows():
+        if tsa_map.get(int(r["event_id"])): _valid_tsa_count += 1
+    if _valid_tsa_count == 0:
+        print("🚨 致命错误：所有场次均未匹配到 TSA 真实盘口！可能是 TSA 接口宕机或 ID 映射失败。本次不生成废表！")
+        return
+    # =======================================================
+
     if len(top3) < 3:
         print(f"⚠️ 今天符合条件的优质场次不足 3 场，已启动强制补位（可能包含低分场次）。")
     else:
@@ -88,6 +97,7 @@ def generate_daily():
         eid = row["event_id"]
         mid = tsa_map.get(int(eid))
         ah_str, ou_str = "—", "—"
+        _ou_dir = "—"
         
         # 默认比分池
         main_s, alt_s = "1-0", "2-0"
@@ -122,19 +132,23 @@ def generate_daily():
                         inv = (1/ov) + (1/un)
                         po, pu = (1/ov)/inv, (1/un)/inv
                         ou_str = f"{lf:g}球 | 大{ov}({po*100:.0f}%) / 小{un}({pu*100:.0f}%)"
+                        _ou_dir = f"大{lf:g}" if is_over else f"小{lf:g}"
                         
                         # 计算深盘
                         try: ah_abs = abs(float(odds.get("real_ah_line", 0)))
                         except: ah_abs = 0
                         is_deep = ah_abs >= 1.5
+                        is_super_deep = ah_abs >= 2.75
                         
                         # 比分池分配
                         if direction == "主胜":
-                            if is_deep: main_s, alt_s = "2-0", "3-0"
+                            if is_super_deep: main_s, alt_s = "4-0", "4-1"
+                            elif is_deep: main_s, alt_s = "2-0", "3-0"
                             elif is_over: main_s, alt_s = "2-1", "3-1"
                             else: main_s, alt_s = "1-0", "2-0"
                         elif direction == "客胜":
-                            if is_deep: main_s, alt_s = "0-2", "0-3"
+                            if is_super_deep: main_s, alt_s = "0-4", "1-4"
+                            elif is_deep: main_s, alt_s = "0-2", "0-3"
                             elif is_over: main_s, alt_s = "1-2", "1-3"
                             else: main_s, alt_s = "0-1", "0-2"
                             
@@ -145,11 +159,29 @@ def generate_daily():
         elif t1 in _under_dna or t2 in _under_dna:
             main_s, alt_s = "0-0", "1-0"
             
-        # 计算命中率占位
+        # 计算真实概率和赔率
         _p = row.get("_prob_home", 0) or 0
         _pa = row.get("_prob_away", 0) or 0
         _gap = abs(_p - _pa)
         _mkt = "主胜" if _p >= _pa else "客胜"
+        
+        _odds_hw = None; _odds_aw = None
+        if mid and 'odds' in locals() and odds:
+            _odds_hw = odds.get("real_h")
+            _odds_aw = odds.get("real_a")
+            
+        _best_opt_prob = 0
+        _best_opt_odds = "—"
+        
+        if direction == "主胜":
+            _best_opt_prob = _p
+            _best_opt_odds = _odds_hw if _odds_hw else "—"
+        elif direction == "客胜":
+            _best_opt_prob = _pa
+            _best_opt_odds = _odds_aw if _odds_aw else "—"
+        elif direction == "和局":
+            _best_opt_prob = row.get("_prob_draw", 0) or 0
+            _best_opt_odds = odds.get("real_d") if mid and 'odds' in locals() and odds else "—"
 
         output_rows.append({
             "存档时间": f"{today_str} 16:00",
@@ -163,17 +195,17 @@ def generate_daily():
             "时间": row["时间"],
             "event_id": int(row["event_id"]),
             "模型判断": direction,
-            "模型概率": "—",
+            "模型概率": f"{_best_opt_prob:.1f}%" if _best_opt_prob else "—",
             "下注建议": "🟢 可下" if row["_score"] > 20 else "🟡 小注",
             "调整后方向": direction,
-            "调整后概率": "—",
+            "调整后概率": f"{_best_opt_prob:.1f}%" if _best_opt_prob else "—",
             "市场方向": _mkt,
             "市场差": round(_gap, 1),
             "亚盘置信": "🔒 高" if _gap > 35 else "✅ 中",
             "调整后比分1": main_s,
             "调整后比分2": alt_s,
-            "赔率": "—",
-            "大小球方向": "—",
+            "赔率": fmt_odds(_best_opt_odds),
+            "大小球方向": _ou_dir,
             "比分1": main_s,
             "比分2": alt_s,
             "盘口走势": "—",
@@ -209,6 +241,7 @@ def generate_daily():
     df_out = _remove_tz(df_out)
     
     df_all_out = df.copy()
+    # 这里保留原来的改名，同时为了兼容，不删除原始的列，而是新增
     df_all_out = df_all_out.rename(columns={"预测结果": "模型判断", "大小球方向": "大小球"})
     df_all_out = _remove_tz(df_all_out)
 
