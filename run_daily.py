@@ -241,7 +241,6 @@ def generate_daily():
     df_out = _remove_tz(df_out)
     
     df_all_out = df.copy()
-    # 这里保留原来的改名，同时为了兼容，不删除原始的列，而是新增
     df_all_out = df_all_out.rename(columns={"预测结果": "模型判断", "大小球方向": "大小球"})
     df_all_out = _remove_tz(df_all_out)
 
