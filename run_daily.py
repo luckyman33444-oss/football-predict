@@ -240,8 +240,50 @@ def generate_daily():
 
     df_out = _remove_tz(df_out)
     
-    df_all_out = df.copy()
-    df_all_out = df_all_out.rename(columns={"预测结果": "模型判断", "大小球方向": "大小球"})
+        df_all_out = df.copy()
+    df_all_out = df_all_out.rename(columns={"预测结果": "模型判断"})
+    
+    # === 新增：全量抓取真实亚盘与大小球，让复盘有数据 ===
+    def _get_real_ou_str(_lines):
+        if not _lines: return "—"
+        valid_lines = []
+        for k, v in _lines.items():
+            try: valid_lines.append((float(k), v["over"], v["under"]))
+            except: pass
+        if not valid_lines: return "—"
+        _best_line = None
+        for _v in valid_lines:
+            if _v[0] == 2.5:
+                _best_line = _v; break
+        if not _best_line or (min(_best_line[1], _best_line[2]) > 1.65):
+            _best_line = min(valid_lines, key=lambda x: abs((1/x[1]) / ((1/x[1]) + (1/x[2])) - 0.5))
+        lf, ov, un = _best_line
+        _inv = (1/ov) + (1/un)
+        _po = (1/ov)/_inv
+        _pu = (1/un)/_inv
+        return f"{lf:g}球 | 大{ov}({_po*100:.0f}%) / 小{un}({_pu*100:.0f}%)"
+
+    _real_ah_list = []
+    _real_ou_list = []
+    for idx, r in df_all_out.iterrows():
+        _eid = r.get("event_id")
+        _mid = tsa_map.get(int(_eid)) if _eid else None
+        if _mid:
+            _raw = fetch_or_load_tsa_odds(_mid)
+            if _raw:
+                _od = parse_tsa_odds_summary(_raw)
+                _ah = f"{_od['real_ah_line']} ({_od.get('real_ah_home')}/{_od.get('real_ah_away')})" if _od.get("real_ah_line") else "—"
+                _real_ah_list.append(_ah)
+                _real_ou_list.append(_get_real_ou_str(_od.get("real_ou_lines", {})))
+            else:
+                _real_ah_list.append("—")
+                _real_ou_list.append("—")
+        else:
+            _real_ah_list.append("—")
+            _real_ou_list.append("—")
+    df_all_out["真实亚盘"] = _real_ah_list
+    df_all_out["真实大小球"] = _real_ou_list
+    # =======================================================
     df_all_out = _remove_tz(df_all_out)
 
     os.makedirs("output", exist_ok=True)
