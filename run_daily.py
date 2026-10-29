@@ -240,7 +240,7 @@ def generate_daily():
 
     df_out = _remove_tz(df_out)
     
-        df_all_out = df.copy()
+    df_all_out = df.copy()
     df_all_out = df_all_out.rename(columns={"预测结果": "模型判断"})
     
     # === 新增：全量抓取真实亚盘与大小球，让复盘有数据 ===
@@ -284,6 +284,7 @@ def generate_daily():
     df_all_out["真实亚盘"] = _real_ah_list
     df_all_out["真实大小球"] = _real_ou_list
     # =======================================================
+    
     df_all_out = _remove_tz(df_all_out)
 
     os.makedirs("output", exist_ok=True)
