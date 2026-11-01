@@ -39,9 +39,8 @@ def generate_daily():
     def calc_score(row):
         ph, pa = row.get("_prob_home", 0) or 0, row.get("_prob_away", 0) or 0
         gap = abs(ph - pa)
-        if gap < 20: return -99  # V5.90: 门槛从 15 提升到 20，过滤低质量场次
+        if gap < 20: return -99
         
-        # 方向冲突剔除
         res = row.get("预测结果", "—")
         if res == "主胜" and ph < pa: return -99
         if res == "客胜" and ph >= pa: return -99
@@ -59,22 +58,9 @@ def generate_daily():
         return score
 
     df["_score"] = df.apply(calc_score, axis=1)
-    
-    # 过滤掉绝对不碰的垃圾场（-99）
     valid_df = df[df["_score"] > -99].sort_values("_score", ascending=False)
-    
-    # 选出前 3 场
     top3 = valid_df.head(3).copy()
     
-    # === 新增：强校验拦截，如果 TSA 映射全挂，直接罢工，不生成废表 ===
-    _valid_tsa_count = 0
-    for _, r in top3.iterrows():
-        if tsa_map.get(int(r["event_id"])): _valid_tsa_count += 1
-    if _valid_tsa_count == 0:
-        print("🚨 致命错误：所有场次均未匹配到 TSA 真实盘口！可能是 TSA 接口宕机或 ID 映射失败。本次不生成废表！")
-        return
-    # =======================================================
-
     if len(top3) < 3:
         print(f"⚠️ 今天符合条件的优质场次不足 3 场，已启动强制补位（可能包含低分场次）。")
     else:
@@ -99,7 +85,6 @@ def generate_daily():
         ah_str, ou_str = "—", "—"
         _ou_dir = "—"
         
-        # 默认比分池
         main_s, alt_s = "1-0", "2-0"
         direction = row["预测结果"]
         
@@ -107,11 +92,9 @@ def generate_daily():
             raw = fetch_or_load_tsa_odds(mid)
             if raw:
                 odds = parse_tsa_odds_summary(raw)
-                # 真实亚盘
                 if odds.get("real_ah_line"):
                     ah_str = f"{odds['real_ah_line']} ({odds.get('real_ah_home')}/{odds.get('real_ah_away')})"
                 
-                # 真实大小球主盘口计算
                 ou_lines = odds.get("real_ou_lines", {})
                 if ou_lines:
                     valid_lines = []
@@ -120,7 +103,6 @@ def generate_daily():
                         except: pass
                     valid_lines.sort()
                     if valid_lines:
-                        # 修复：优先找 2.5 线
                         _best_line = None
                         for _v in valid_lines:
                             if _v[0] == 2.5:
@@ -134,13 +116,11 @@ def generate_daily():
                         ou_str = f"{lf:g}球 | 大{ov}({po*100:.0f}%) / 小{un}({pu*100:.0f}%)"
                         _ou_dir = f"大{lf:g}" if is_over else f"小{lf:g}"
                         
-                        # 计算深盘
                         try: ah_abs = abs(float(odds.get("real_ah_line", 0)))
                         except: ah_abs = 0
                         is_deep = ah_abs >= 1.5
                         is_super_deep = ah_abs >= 2.75
                         
-                        # 比分池分配
                         if direction == "主胜":
                             if is_super_deep: main_s, alt_s = "4-0", "4-1"
                             elif is_deep: main_s, alt_s = "2-0", "3-0"
@@ -152,14 +132,12 @@ def generate_daily():
                             elif is_over: main_s, alt_s = "1-2", "1-3"
                             else: main_s, alt_s = "0-1", "0-2"
                             
-        # DNA 强制干预（最高优先级）
         t1, t2 = str(row["主队"]), str(row["客队"])
         if t1 in _over_dna or t2 in _over_dna:
             main_s, alt_s = "3-1", "2-2"
         elif t1 in _under_dna or t2 in _under_dna:
             main_s, alt_s = "0-0", "1-0"
             
-        # 计算真实概率和赔率
         _p = row.get("_prob_home", 0) or 0
         _pa = row.get("_prob_away", 0) or 0
         _gap = abs(_p - _pa)
@@ -243,7 +221,6 @@ def generate_daily():
     df_all_out = df.copy()
     df_all_out = df_all_out.rename(columns={"预测结果": "模型判断"})
     
-    # === 新增：全量抓取真实亚盘与大小球，让复盘有数据 ===
     def _get_real_ou_str(_lines):
         if not _lines: return "—"
         valid_lines = []
@@ -283,7 +260,6 @@ def generate_daily():
             _real_ou_list.append("—")
     df_all_out["真实亚盘"] = _real_ah_list
     df_all_out["真实大小球"] = _real_ou_list
-    # =======================================================
     
     df_all_out = _remove_tz(df_all_out)
 
