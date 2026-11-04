@@ -950,15 +950,19 @@ def parse_prediction(p):
     prob_draw = mr.get("prob_draw") or 0
     prob_away = mr.get("prob_away") or 0
     _mkt = "主胜" if prob_home >= prob_away else "客胜"
-    if xg_h is None or xg_a is None:
-        _final_dir = _mkt
+    # V6.3 核心铁律：市场永远最优，直接取概率最大的一项
+    _ph_val = float(prob_home) if pd.notna(prob_home) else 0
+    _pd_val = float(prob_draw) if pd.notna(prob_draw) else 0
+    _pa_val = float(prob_away) if pd.notna(prob_away) else 0
+    
+    if _ph_val == 0 and _pa_val == 0:
+        _final_dir = "—"
+    elif _ph_val >= _pa_val and _ph_val >= _pd_val:
+        _final_dir = "主胜"
+    elif _pa_val >= _ph_val and _pa_val >= _pd_val:
+        _final_dir = "客胜"
     else:
-        try:
-            _xs = "主" if float(xg_h) >= float(xg_a) else "客"
-            _ms = "主" if prob_home >= prob_away else "客"
-            _final_dir = _mkt if _xs != _ms else (pred["best_result"] if pred else "—")
-        except Exception:
-            _final_dir = _mkt
+        _final_dir = "和局"
     prob_over25_raw = ou.get("prob_over_25")
     if prob_over25_raw is not None:
         try: p_over = float(prob_over25_raw)
@@ -1014,8 +1018,13 @@ def parse_prediction(p):
         except: return str(v)
         
     _mkt_judge = "—"
-    if prob_home > prob_away: _mkt_judge = "主胜"
-    elif prob_away > prob_home: _mkt_judge = "客胜"
+    try:
+        _ph = float(prob_home) if pd.notna(prob_home) else 0
+        _pa = float(prob_away) if pd.notna(prob_away) else 0
+        if _ph > _pa: _mkt_judge = "主胜"
+        elif _pa > _ph: _mkt_judge = "客胜"
+    except:
+        pass
     
     return {
         "event_id": ev.get("id"), "event_date": event_date, "kickoff_dt": kickoff_dt, "时间": time_str,

@@ -161,7 +161,7 @@ def render_all_matches(df_all):
             default_idx = future[0] if future else len(available_dates) - 1
         sel_label = st.selectbox("选择日期", date_options, index=default_idx, key="date1")
         sel_date = sel_label.split("（")[0]
-        df = df_all[df_all["event_date"] == sel_date].copy()
+        df = df_all[(df_all["event_date"] == sel_date) & (df_all["状态"] != "延期") & (df_all["状态"] != "取消")].copy()
         all_leagues = sorted(df["联赛"].unique())
         sel_leagues = st.multiselect("筛选联赛（不选则显示全部）", all_leagues, default=[], key="lg1")
         if sel_leagues: df = df[df["联赛"].isin(sel_leagues)]

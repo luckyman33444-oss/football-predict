@@ -134,6 +134,19 @@ LEAGUE_CN = {
 
 # ============ 球队中文名 ============
 TEAM_CN = {
+    "Iğdır FK": "伊迪尔FK",
+    "Bodrum FK": "博德鲁姆",
+    "Ümraniyespor": "乌姆拉尼耶",
+    "Antalyaspor": "安塔利亚体育",
+    "Bursaspor": "布尔萨体育",
+    "Keçiörengücü": "凯奇奥伦古库",
+    "Manisa FK": "马尼萨FK",
+    "Vanspor FK": "凡城体育",
+    "Sivasspor": "锡瓦斯体育",
+    "Muğlaspor": "穆拉体育",
+    "Esenler Erokspor": "埃森勒体育",
+    "Koninklijke Sporting Hasselt": "哈瑟尔特",
+
     "Club Portugalete": "波图加莱特",
     "SD Amorebieta": "阿莫雷别塔",
     "Deportiva Minera": "米内拉体育",
