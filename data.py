@@ -74,6 +74,13 @@ LEAGUE_GRADE = {
 
 # ============ 联赛中文名 ============
 LEAGUE_CN = {
+    "Pro League": "比甲",
+    "Challenger Pro League": "比乙",
+    "Eerste Divisie": "荷乙",
+    "Copa do Brasil": "巴西杯",
+    "Trendyol 1. Lig": "土甲",
+    "Superettan": "瑞典甲",
+
     # 批次2
     "Conference League": "欧协联",
     "Copa Libertadores": "解放者杯",
@@ -127,6 +134,12 @@ LEAGUE_CN = {
 
 # ============ 球队中文名 ============
 TEAM_CN = {
+    "RSCA Futures U23": "安德莱赫特U23",
+    "Koninklijke Lierse Sportkring": "利尔斯",
+    "AS FAR Rabat": "拉巴特FUS",
+    "Real Unión Club": "皇家联合",
+    "UD Logroñés": "洛格罗尼奥",
+
     # 批次3（ESPN 匹配补）
     "Unión (Santa Fe)": "圣菲联",
     "Instituto (Córdoba)": "科尔多瓦学院",
