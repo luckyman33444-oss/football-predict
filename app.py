@@ -303,6 +303,7 @@ def render_all_matches(df_all):
                     return _m
                 display_df["市场判断"] = display_df.apply(_mkt_warn, axis=1)
             display_df = display_df.fillna("—")
+            display_df = display_df.fillna("—")
             display_df.insert(0, "加入核心", df["event_id"].isin(st.session_state.core_matches).values)
             def _bet_advice_col(r):
                 _m = max(r.get("_prob_home") or 0, r.get("_prob_draw") or 0, r.get("_prob_away") or 0)

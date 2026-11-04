@@ -309,6 +309,9 @@ def apply_motivation_adjustment(xg_h, xg_a, home_tier, away_tier):
 
 def team_cn(name):
     if not name: return "?"
+    # 优先找全名
+    if name in TEAM_CN: return TEAM_CN[name]
+    
     base = name
     suffix = ""
     for tag in [" U21", " U20", " U19", " U18", " U17", " U23"]:
@@ -946,9 +949,10 @@ def parse_prediction(p):
     if _tier == "friendly": _rho = DIXON_COLES_RHO.get("friendly", -0.13)
     else: _rho = DIXON_COLES_RHO.get(_trust, -0.13)
     pred = predict_full_dc(xg_h, xg_a, rho=_rho)
-    prob_home = mr.get("prob_home") or 0
-    prob_draw = mr.get("prob_draw") or 0
-    prob_away = mr.get("prob_away") or 0
+    _ph_raw = mr.get("prob_home"); _pd_raw = mr.get("prob_draw"); _pa_raw = mr.get("prob_away")
+    prob_home = float(_ph_raw) if pd.notna(_ph_raw) else 0.0
+    prob_draw = float(_pd_raw) if pd.notna(_pd_raw) else 0.0
+    prob_away = float(_pa_raw) if pd.notna(_pa_raw) else 0.0
     _mkt = "主胜" if prob_home >= prob_away else "客胜"
     # V6.3 核心铁律：市场永远最优，直接取概率最大的一项
     _ph_val = float(prob_home) if pd.notna(prob_home) else 0
