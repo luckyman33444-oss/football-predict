@@ -949,7 +949,6 @@ def parse_prediction(p):
     prob_home = mr.get("prob_home") or 0
     prob_draw = mr.get("prob_draw") or 0
     prob_away = mr.get("prob_away") or 0
-    # V5.14: 提前计算最终方向（原 app.py _final_dir 逻辑）
     _mkt = "主胜" if prob_home >= prob_away else "客胜"
     if xg_h is None or xg_a is None:
         _final_dir = _mkt
@@ -960,7 +959,6 @@ def parse_prediction(p):
             _final_dir = _mkt if _xs != _ms else (pred["best_result"] if pred else "—")
         except Exception:
             _final_dir = _mkt
-
     prob_over25_raw = ou.get("prob_over_25")
     if prob_over25_raw is not None:
         try: p_over = float(prob_over25_raw)
@@ -976,43 +974,23 @@ def parse_prediction(p):
             else: over_label, over_pct = "小球", 100 - p_over
         else: over_label, over_pct = "—", 0
     if pred:
-        # V5.6 A+: 模型前3 ∪ 全局8池（选边法）
-        # V5.14: 比分选池按模型方向（主胜/客胜/和局）过滤，解决方向与比分矛盾
-
         _m_dir = _final_dir
-
         _pool_over = pred["over_scores"]
-
         _pool_under = pred["under_scores"]
-
         if _m_dir == "主胜":
-
             _pool_over = pred.get("main_over", _pool_over)
-
             _pool_under = pred.get("main_under", _pool_under)
-
         elif _m_dir == "客胜":
-
             _pool_over = pred.get("away_over", _pool_over)
-
             _pool_under = pred.get("away_under", _pool_under)
-
         elif _m_dir == "和局":
-
             _draw_scores = [s for s in pred["top_scores"] if s[0] == s[1]]
-
             if not _draw_scores: _draw_scores = [(1, 1, 0.1), (0, 0, 0.05), (2, 2, 0.05)]
-
             _pool_over = _draw_scores
-
             _pool_under = _draw_scores
-
         if over_label == "大球": _base = _pool_over
-
         elif over_label == "小球": _base = _pool_under
-
         else: _base = pred["top_scores"]
-
         _merged = list(_base[:3])
         _exist = {(h, a) for h, a, _ in _merged}
         for _h, _a in [(1,1),(1,0),(2,1),(0,1),(0,0),(2,0),(1,2),(2,2)]:
@@ -1026,7 +1004,7 @@ def parse_prediction(p):
     h1 = pred["h1"] if pred else "—"
     h2 = pred["h2"] if pred else "—"
     if pred:
-        model_result = _final_dir  # 统一返回修正后的方向
+        model_result = _final_dir
     else:
         model_result = "—"
     status_map = {"finished": "已结束", "notstarted": "未开始", "upcoming": "未开始", "live": "进行中", "inprogress": "进行中", "postponed": "延期", "canceled": "取消"}
@@ -1034,6 +1012,11 @@ def parse_prediction(p):
         if v is None: return "—"
         try: return f"{float(v):.1f}%"
         except: return str(v)
+        
+    _mkt_judge = "—"
+    if prob_home > prob_away: _mkt_judge = "主胜"
+    elif prob_away > prob_home: _mkt_judge = "客胜"
+    
     return {
         "event_id": ev.get("id"), "event_date": event_date, "kickoff_dt": kickoff_dt, "时间": time_str,
         "联赛": league_name_cn, "联赛等级": _grade, "状态": status_map.get(ev.get("status", ""), ""),
@@ -1046,7 +1029,7 @@ def parse_prediction(p):
         "模型和局": fp(pred["d"]*100) if pred else "—",
         "模型客胜": fp(pred["aw"]*100) if pred else "—",
         "市场和局_pct": round(prob_draw, 1) if prob_draw else None,
-        "市场判断": ("主胜" if pd.notna(prob_home) and pd.notna(prob_away) and prob_home > prob_away else ("客胜" if pd.notna(prob_home) and pd.notna(prob_away) and prob_away > prob_home else "—")) > (prob_away or 0) else ("客胜" if (prob_away or 0) > (prob_home or 0) else "—")),
+        "市场判断": _mkt_judge,
         "高置信": ("⭐⭐⭐" if (prob_draw or 100) < 20 else ("⭐⭐" if (prob_draw or 100) < 22 else ("⭐" if (prob_draw or 100) < 25 else "—"))),
         "上半场": h1, "下半场": h2,
         "主胜": fp(prob_home), "和局": fp(prob_draw), "客胜": fp(prob_away),
