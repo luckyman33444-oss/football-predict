@@ -1038,7 +1038,7 @@ def parse_prediction(p):
         "模型和局": fp(pred["d"]*100) if pred else "—",
         "模型客胜": fp(pred["aw"]*100) if pred else "—",
         "市场和局_pct": round(prob_draw, 1) if prob_draw else None,
-        "市场判断": _mkt_judge,
+        "市场判断": ("主胜" if (prob_home or 0) > (prob_away or 0) else ("客胜" if (prob_away or 0) > (prob_home or 0) else "—")),
         "高置信": ("⭐⭐⭐" if (prob_draw or 100) < 20 else ("⭐⭐" if (prob_draw or 100) < 22 else ("⭐" if (prob_draw or 100) < 25 else "—"))),
         "上半场": h1, "下半场": h2,
         "主胜": fp(prob_home), "和局": fp(prob_draw), "客胜": fp(prob_away),
