@@ -1637,6 +1637,7 @@ with tab5:
                             all_rows.append({
                                 "比赛": _match_name, 
                                 "联赛": m.get("联赛", "—"), 
+                                "模型概率": m.get("模型概率", "—"),
                                 "预测结果": pred_result, 
                                 "实际比分": actual_str, 
                                 "真实亚盘": _real_ah_str,
