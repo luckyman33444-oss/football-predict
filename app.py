@@ -76,9 +76,13 @@ def _sync_scores_tsa(df):
             is_under_dna = (_t1 in _under_dna or _t2 in _under_dna)
 
             if is_over_dna:
-                return "3-1", "2-2"
+                if _dir == "客胜": return "1-3", "2-3"
+                elif _dir == "和局": return "2-2", "1-1"
+                else: return "3-1", "2-2"
             if is_under_dna:
-                return "0-0", "1-0"
+                if _dir == "客胜": return "0-1", "0-2"
+                elif _dir == "和局": return "0-0", "1-1"
+                else: return "1-0", "2-0"
 
             if _is_over:
                 if _dir == "主胜":
