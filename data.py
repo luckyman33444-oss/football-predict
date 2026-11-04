@@ -134,6 +134,21 @@ LEAGUE_CN = {
 
 # ============ 球队中文名 ============
 TEAM_CN = {
+    "Club Portugalete": "波图加莱特",
+    "SD Amorebieta": "阿莫雷别塔",
+    "Deportiva Minera": "米内拉体育",
+    "FC Cartagena": "卡塔赫纳",
+    "Utebo FC": "乌特博",
+    "Reus FC Reddis": "雷乌斯",
+    "Barakaldo CF": "巴拉卡尔多",
+    "Calvo Sotelo Puertollano": "卡尔沃索特洛",
+    "CD Badajoz": "巴达霍斯",
+    "RSCA Futures U23": "安德莱赫特U23",
+    "Koninklijke Lierse Sportkring": "利尔斯",
+    "AS FAR Rabat": "拉巴特FUS",
+    "Real Unión Club": "皇家联合",
+    "UD Logroñés": "洛格罗尼奥",
+
     "RSCA Futures U23": "安德莱赫特U23",
     "Koninklijke Lierse Sportkring": "利尔斯",
     "AS FAR Rabat": "拉巴特FUS",
