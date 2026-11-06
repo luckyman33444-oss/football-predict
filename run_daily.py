@@ -24,9 +24,12 @@ def generate_daily():
     df = pd.DataFrame(parsed)
     if df.empty: return
     
-    # 过滤今天未开始的比赛
-    df = df[(df["event_date"].isin([today_str, tomorrow_str])) & (df["状态"] == "未开始")].copy()
-    print(f"✅ 获取到 {len(df)} 场未开始的比赛")
+    # 过滤未来 24 小时内未开始的比赛
+    now = datetime.now(CST)
+    end_window = now + timedelta(hours=24)
+    df = df[df["kickoff_dt"].notna()].copy()
+    df = df[(df["状态"] == "未开始") & (df["kickoff_dt"] >= now) & (df["kickoff_dt"] <= end_window)].copy()
+    print(f"✅ 获取到未来 24 小时内 {len(df)} 场未开始的比赛")
     
     # 2. 计算选场分数
     _today_map = datetime.now(CST).strftime("%Y-%m-%d")
