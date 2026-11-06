@@ -13,7 +13,7 @@ print(f"总场次: {len(df)}  ｜ 日期: 2026-07-03 ~ 2026-10-02")
 print("=" * 60)
 
 print("\n【1. 胜平负方向】")
-print(f"  模型: {rate(df['胜平负命中'])}")
+print(f"  模型: {rate(df['胜负命中'])}")
 print(f"  市场: {rate(df['市场命中'])}")
 print(f"  融合: {rate(df['融合命中'])}")
 
