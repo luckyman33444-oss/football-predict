@@ -29,12 +29,13 @@ def generate_daily():
     print(f"✅ 获取到 {len(df)} 场未开始的比赛")
     
     # 2. 计算选场分数
-    try:
-        _today_map = datetime.now(CST).strftime("%Y-%m-%d")
-        build_mapping_for_dates(_today_map, _today_map, save=True)
-    except Exception:
-        pass
+    _today_map = datetime.now(CST).strftime("%Y-%m-%d")
+    build_mapping_for_dates(_today_map, _today_map, save=True)
     tsa_map = load_tsa_mapping()
+    if len(tsa_map) == 0:
+        print("🚨 致命错误：TSA映射表为空！可能是 Token 失效、接口断网或比赛未开售。强制停止生成废表！")
+        import sys
+        sys.exit(1)
     
     _trust_leagues = ["西甲", "英超", "土超", "法甲", "丹超", "葡超"]
     _caution_leagues = ["沙特联", "Liga Portugal 2", "日职联", "巴甲", "美职联", "哥伦比亚甲"]
