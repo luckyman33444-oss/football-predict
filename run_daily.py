@@ -267,6 +267,10 @@ def generate_daily():
     df_all_out["真实亚盘"] = _real_ah_list
     df_all_out["真实大小球"] = _real_ou_list
     
+    # 终极保镖：检查全量盘口是否全空
+    if all(x == "—" for x in _real_ah_list):
+        raise Exception("🚨 致命错误：全量比赛均未抓取到真实亚盘，为防止生成废表，系统强制中止！")
+    
     df_all_out = _remove_tz(df_all_out)
 
     os.makedirs("output", exist_ok=True)
