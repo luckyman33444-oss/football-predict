@@ -1,5 +1,9 @@
 import pandas as pd
-import re
+import os
+
+if not os.path.exists('detail.csv'):
+    print("❌ 没找到 detail.csv，请先跑 run_bt.py")
+    exit()
 
 df = pd.read_csv('detail.csv')
 rows = []
@@ -22,55 +26,41 @@ else:
     _range = "—"
 rows.append({"板块": "概览", "指标": "日期范围", "命中": "", "样本": _range, "命中率": ""})
 
-# 1 胜平负
-for col, name in [('胜负命中','模型'),('市场命中','市场'),('融合命中','融合')]:
-    h, n, r = rate(df[col]); add("胜平负", name, h, n, r)
+# 1 胜平负 (V6.3 只认绝对臣服市场的胜负推荐)
+h, n, r = rate(df['胜负命中']); add("胜负", "V6.3 最终方向", h, n, r)
 
-# 2 亚盘
-h, n, r = rate(df['亚盘命中']); add("亚盘", "模型", h, n, r)
-h, n, r = rate(df['市场亚盘命中']); add("亚盘", "市场", h, n, r)
+# 2 大小球
+h, n, r = rate(df['大小球命中']); add("大小球", "V6.3 最终方向", h, n, r)
 
-# 3 大小球
-h, n, r = rate(df['大小球命中']); add("大小球", "模型", h, n, r)
-h, n, r = rate(df['市场大小球命中']); add("大小球", "市场", h, n, r)
-
-# 4 比分
+# 3 比分
 for col, name in [('主力比分命中','主力'),('备选比分命中','备选')]:
     v = df[col].dropna()
-    full = (v=='✅完全对').sum()
-    add("比分", f"{name}·完全对", int(full), len(v), f"{full/len(v)*100:.1f}%")
-    dirok = v.isin(['✅完全对','⚠️方向对']).sum()
-    add("比分", f"{name}·方向对", int(dirok), len(v), f"{dirok/len(v)*100:.1f}%")
+    if len(v) > 0:
+        full = (v=='✅完全对').sum()
+        add("比分", f"{name}·完全对", int(full), len(v), f"{full/len(v)*100:.1f}%")
+        dirok = v.isin(['✅完全对','⚠️方向对']).sum()
+        add("比分", f"{name}·方向对", int(dirok), len(v), f"{dirok/len(v)*100:.1f}%")
+
 s = df['前3命中'].dropna()
-ok = s.isin(['✅','是','True',True]).sum()
-add("比分", "前3候选", int(ok), len(s), f"{ok/len(s)*100:.1f}%")
+if len(s) > 0:
+    ok = s.isin(['✅','是','True',True]).sum()
+    add("比分", "前3候选", int(ok), len(s), f"{ok/len(s)*100:.1f}%")
 
-# 5 强信号筛选器
-df['市场差'] = (df['市场主胜'] - df['市场客胜']).abs()
-df['大小球强度'] = df['市场大小球概率'].apply(lambda x: max(x, 100-x) if pd.notna(x) else None)
+# 4 筛选器 (按市场差分档)
+if "市场差" in df.columns:
+    for lo, hi, lb in [(0,10,"差<10"),(10,20,"差10-20"),(20,35,"差20-35"),(35,101,"差≥35★")]:
+        sub = df[(df['市场差']>=lo)&(df['市场差']<hi)]
+        h, n, r = rate(sub['胜负命中']); add("筛选器·主客和", lb, h, n, r)
 
-for lo, hi, lb in [(0,10,"差<10"),(10,20,"差10-20"),(20,35,"差20-35"),(35,101,"差≥35★")]:
-    sub = df[(df['市场差']>=lo)&(df['市场差']<hi)]
-    h, n, r = rate(sub['市场命中']); add("筛选器·主客和", lb, h, n, r)
-
-for lo, hi, lb in [(0,55,"<55"),(55,60,"55-60"),(60,65,"60-65★"),(65,101,"≥65★★")]:
-    sub = df[(df['大小球强度']>=lo)&(df['大小球强度']<hi)]
-    h, n, r = rate(sub['市场大小球命中']); add("筛选器·大小球", lb, h, n, r)
-
-for lo, hi, lb in [(0,10,"差<10"),(10,20,"差10-20"),(20,35,"差20-35"),(35,101,"差≥35★")]:
-    sub = df[(df['市场差']>=lo)&(df['市场差']<hi)]
-    h, n, r = rate(sub['市场亚盘命中']); add("筛选器·亚盘", lb, h, n, r)
-
-sub = df[df['市场和局'] < 22]
-h, n, r = rate(sub['市场命中']); add("筛选器·高置信", "和局<22", h, n, r)
-
-# 6 按等级
-for g, sub in df.groupby('等级'):
-    h, n, r = rate(sub['市场命中']); add(f"等级{g}", "胜平负", h, n, r)
-    h, n, r = rate(sub['市场大小球命中']); add(f"等级{g}", "大小球", h, n, r)
-    h, n, r = rate(sub['市场亚盘命中']); add(f"等级{g}", "亚盘", h, n, r)
+# 5 按等级
+if "等级" in df.columns:
+    for g, sub in df.groupby('等级'):
+        h, n, r = rate(sub['胜负命中']); add(f"等级{g}", "胜平负", h, n, r)
+        h, n, r = rate(sub['大小球命中']); add(f"等级{g}", "大小球", h, n, r)
 
 rep = pd.DataFrame(rows)
 rep.to_csv("report_v58.csv", index=False, encoding="utf-8-sig")
-print("✅ 已生成 report_v58.csv")
+print("\n" + "="*50)
+print("✅ V6.3 纯净版大样本回测报告已生成")
+print("="*50)
 print(rep.to_string(index=False))
