@@ -2,9 +2,8 @@ name: Daily Football Predict
 
 on:
   schedule:
-    # 每天北京时间早上 08:00 运行 (UTC 00:00)
-    - cron: '0 7 * * *'
-  workflow_dispatch: # 允许手动点击运行
+    - cron: '0 7 * * *' # 北京时间 15:00
+  workflow_dispatch:
 
 jobs:
   build:
@@ -32,10 +31,12 @@ jobs:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: python run_daily.py
 
-      - name: Commit and Push changes
+      - name: Commit and Push changes (Fixed Sync Bug)
         run: |
           git config --global user.name 'actions-user'
           git config --global user.email 'actions-user@users.noreply.github.com'
           git add output/
-          git commit -m "Auto: 更新每日推荐报表" || echo "No changes to commit"
-          git push
+          git commit -m "Auto: 更新每日推荐报表 [skip ci]" || echo "No changes to commit"
+          
+          # 核心修复：如果推送失败，先拉取远端，再尝试推送（防止仓库有新提交导致冲突）
+          git push || (git pull --rebase origin main && git push)
